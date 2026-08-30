@@ -10,6 +10,8 @@ Direction: A native Android interpretation of the Elecraft KX3 faceplate within 
 
 Current surface truth: MainActivity also hosts Spots/Neural DX, logging, settings, CW macros, and spectrum-related presentation. The previous “no Panadapter, separate Spots, or Digital surface” constraint was stale. WSJT-X parsing exists in the shared core but is not a current top-level client claim.
 
+Morse contract: Android exposes a native Morse training deck with TX groups, callsign copy, and adaptive single-character recognition. The amber instrument face presents the live prompt and scoring truth; settings and user-selected M32 Pocket setup remain secondary. Training must stay local-first and non-transmitting, and M32 USB setup must not be presented as proof of HID, paddle, audio, or RF behaviour.
+
 Home contract: Android Home is the native OpenHamClock-inspired operations clock, not a duplicate web application. It uses the existing station and service settings, keeps a world activity map dominant, surrounds it with compact observed instrumentation, and routes deeper actions to DX, Portable, and Progress. Wide screens form one fixed three-column console; compact screens stack the same information without hiding provider-unavailable states.
 
 Safety constraints: Preserve observed radio truth, per-action confirmation/arming for potentially transmitting controls, session-bounded CW macro arming, permanent Emergency RX/abort access, and no blind retry of transmit or edge-triggered CAT commands.

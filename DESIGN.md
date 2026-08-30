@@ -26,6 +26,8 @@ Dense radio information is intentional. Do not turn the operator console into a 
 
 Android implements the KX3-style console, the broader Neural DX workspace, Portable Chase, and POTA Activate. Apple implements a native iPad-focused navigation and radio/log/DX/panadapter flow. Their destination sets need not be forced into artificial parity; durable behaviour and evidence must remain clear.
 
+Android Morse is a Flightline training deck: one amber measurement surface owns the active prompt and session truth, while trainer selection, settings, and M32 Pocket connection retain native Compose controls. It stays visibly separate from transmit authority; USB starts only the M32 training keyer and never implies radio, audio-hardware, or RF acceptance.
+
 Android Home is a native Flightline interpretation of the OpenHamClock operating overview. Expanded tablets use a fixed three-column console: compact DE/weather/band instrumentation, a dominant live world map with reporting paths, and a dense DX/PSK/portable/satellite activity rail. Compact devices preserve the same order in a vertical stack. It consumes the existing RigWeave station, radio, cluster, Neural DX, portable, logging, and provider state; it must never create a parallel settings authority or imply live data where a provider is unavailable.
 
 On Android, Panadapter is a first-class expanded destination and a segmented Radio subview on compact layouts so the existing six-item bottom navigation remains stable. The Flightline instrument keeps spectrum/waterfall dominant and unscrolled, offers a draggable split or either pane alone, and separates view gestures from explicit marker QSY actions. Setup and diagnostics may scroll; the live instrument does not.

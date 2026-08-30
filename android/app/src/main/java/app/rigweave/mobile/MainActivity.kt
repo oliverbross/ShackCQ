@@ -14,6 +14,7 @@ import app.rigweave.mobile.radio.hamlib.HamlibModelDescriptor
 import app.rigweave.mobile.radio.hamlib.hamlibManufacturerGroups
 import app.rigweave.mobile.radio.hamlib.searchHamlibModels
 import app.rigweave.mobile.rotator.*
+import app.rigweave.mobile.morse.MorseScreen
 
 import android.Manifest
 import android.content.ClipData
@@ -158,7 +159,7 @@ private val Danger = Color(0xFFE4544D)
 )
 
 private enum class Destination(val label: String) {
-    HOME("Home"), RADIO("Radio"), REMOTE("Remote"), DIGI("Digi"), CONTEST("Contest"), BAND_MAPS("Band Maps"), PANADAPTER("Panadapter"), EQ("EQ"), LOGBOOK("Logbook"), PROGRESS("Intelligence"), SYNC("Sync"), PRESETS("Presets"), DX("DX"), PORTABLE("Portable"), OPERATIONS("Operations"), ROTATOR("Rotator"), GROUPS_IO("Groups.io"), SETTINGS("Settings")
+    HOME("Home"), RADIO("Radio"), REMOTE("Remote"), DIGI("Digi"), MORSE("Morse"), CONTEST("Contest"), BAND_MAPS("Band Maps"), PANADAPTER("Panadapter"), EQ("EQ"), LOGBOOK("Logbook"), PROGRESS("Intelligence"), SYNC("Sync"), PRESETS("Presets"), DX("DX"), PORTABLE("Portable"), OPERATIONS("Operations"), ROTATOR("Rotator"), GROUPS_IO("Groups.io"), SETTINGS("Settings")
 }
 private enum class SettingsSection(val label: String) {
     RADIO("Radio"), LOG("Log"), CLUSTER("Cluster"), MACROS("Macros"), ALERTS("Alerts"),
@@ -1069,6 +1070,7 @@ private fun navIcon(item: Destination) = when (item) {
     Destination.RADIO -> Icons.Outlined.SettingsInputAntenna
     Destination.REMOTE -> Icons.Outlined.Router
     Destination.DIGI -> Icons.Outlined.GraphicEq
+    Destination.MORSE -> Icons.Outlined.SpatialAudioOff
     Destination.CONTEST -> Icons.Outlined.EmojiEvents
     Destination.BAND_MAPS -> Icons.Outlined.StackedLineChart
     Destination.PANADAPTER -> Icons.Outlined.WaterfallChart
@@ -1365,6 +1367,7 @@ private fun navIcon(item: Destination) = when (item) {
         Destination.DIGI -> DigiRfPathWrapper(rfObservations) {
             IntegratedDigiWorkspace(integratedDigiPage, setIntegratedDigiPage, digi, radio, compact, chaser)
         }
+        Destination.MORSE -> MorseScreen()
         Destination.CONTEST -> if (app.contestEnabled) IntegratedContestWorkspace(contest, keyer.snapshot(), bandMaps, features,
             onOpenLogbook = openLogbook,
             onOpenSettings = openSettings) else EqUnavailableScreen("Contest is hidden in Settings", openSettings)

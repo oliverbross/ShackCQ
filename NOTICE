@@ -9,6 +9,14 @@ See docs/phase-0/LICENSING_AND_NEXUS_ASSESSMENT.md for the Phase 0
 dependency/provenance assessment. Each distributed release must also provide
 release-specific dependency, notice, build, and corresponding-source records.
 
+The Android Morse trainers adapt behaviour from MorseTrainerPro at immutable
+commit fec23ca14aff61aa1064f2635c6dd38e888501f5, distributed under the MIT
+License, Copyright 2025 Oliver Bross. The native Kotlin implementation omits
+the website runtime, assets, accounts, analytics, hosted datasets, and service
+dependencies. M32 Pocket protocol interoperability was reviewed against
+oliverbross/MTP-M32-pocket at be2d4a23f5939f5cab412286489e0e328ddbf309.
+See docs/android/MORSE_TRAINERS_PROVENANCE.md.
+
 The Android/Windows integration uses the single reviewed Hamlib 4.7.2 source
 tree recorded in core/third_party/hamlib/SOURCE_MANIFEST.json; the integration
 does not add a duplicate source or package Hamlib command-line executables.
