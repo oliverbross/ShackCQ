@@ -134,29 +134,69 @@ class MorseAudioPlayer {
 }
 
 enum class M32ConnectionState { DISCONNECTED, CONNECTING, READY, ERROR }
+enum class M32ConnectionRoute { USB, BLE }
 
 class M32PocketController(context: Context) {
-    private val transport = UsbRadioTransport(context.applicationContext, "rigweave-m32-usb")
+    private val usbTransport = UsbRadioTransport(context.applicationContext, "rigweave-m32-usb")
+    private val bleTransport = M32BleSerialTransport(context.applicationContext)
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var readerJob: Job? = null
     private var previousSerialOutput: Int? = null
     var devices by mutableStateOf(emptyList<SerialDeviceDescriptor>()); private set
     var selectedSessionKey by mutableStateOf<String?>(null); private set
+    var bleDevices by mutableStateOf(emptyList<M32BleDevice>()); private set
+    var selectedBleAddress by mutableStateOf<String?>(null); private set
+    var selectedRoute by mutableStateOf(M32ConnectionRoute.BLE); private set
     var state by mutableStateOf(M32ConnectionState.DISCONNECTED); private set
-    var detail by mutableStateOf("Connect USB, or pair M32 Pocket as a Bluetooth keyboard."); private set
+    var detail by mutableStateOf("Use BLE Serial for the full M32 protocol, or choose a USB device."); private set
     var reportedWpm by mutableStateOf<Int?>(null); private set
     var inputChunk by mutableStateOf(""); private set
     var inputRevision by mutableLongStateOf(0L); private set
 
-    fun scan() {
-        devices = transport.refreshCandidates()
-        if (devices.isEmpty()) detail = "No USB serial device detected · Bluetooth/HID input still works."
+    fun scanUsb() {
+        selectedRoute = M32ConnectionRoute.USB
+        devices = usbTransport.refreshCandidates()
+        if (devices.isEmpty()) detail = "No USB serial device detected. Use BLE Serial on this tablet."
     }
 
-    fun select(sessionKey: String) { selectedSessionKey = sessionKey }
+    suspend fun scanBle() {
+        selectedRoute = M32ConnectionRoute.BLE
+        detail = "Searching for Morserino-32…"
+        runCatching { bleTransport.scan() }
+            .onSuccess { found ->
+                bleDevices = found
+                if (found.size == 1) selectedBleAddress = found.single().address
+                detail = if (found.isEmpty()) {
+                    "No M32 found. On M32 set Bluetooth Use to BLE Serial, then try again."
+                } else "Select Morserino-32, keep it at the main menu, then connect."
+            }
+            .onFailure { error ->
+                state = M32ConnectionState.ERROR
+                detail = "Bluetooth search failed: ${error.message ?: error.javaClass.simpleName}"
+            }
+    }
+
+    fun selectUsb(sessionKey: String) {
+        selectedSessionKey = sessionKey
+        selectedRoute = M32ConnectionRoute.USB
+    }
+
+    fun selectBle(address: String) {
+        selectedBleAddress = address
+        selectedRoute = M32ConnectionRoute.BLE
+    }
+
+    fun bluetoothPermissionDenied() {
+        state = M32ConnectionState.ERROR
+        detail = "Bluetooth permission is required to find and connect to Morserino-32."
+    }
 
     suspend fun connect(targetWpm: Int) {
         state = M32ConnectionState.CONNECTING
+        if (selectedRoute == M32ConnectionRoute.BLE) connectBle(targetWpm) else connectUsb(targetWpm)
+    }
+
+    private suspend fun connectUsb(targetWpm: Int) {
         detail = "Requesting USB access…"
         val key = selectedSessionKey ?: devices.singleOrNull()?.sessionKey
         if (key == null) {
@@ -164,19 +204,39 @@ class M32PocketController(context: Context) {
             detail = if (devices.isEmpty()) "No USB serial device detected." else "Select the M32 Pocket USB device first."
             return
         }
-        if (!transport.selectCandidate(key)) {
+        if (!usbTransport.selectCandidate(key)) {
             state = M32ConnectionState.ERROR; detail = "The selected USB device disappeared."; return
         }
-        when (val result = transport.connectRaw(null, 115_200)) {
+        when (val result = usbTransport.connectRaw(null, 115_200)) {
             is UsbResult.Connected -> configureM32(targetWpm)
             is UsbResult.PermissionRequired -> { state = M32ConnectionState.ERROR; detail = result.detail }
             is UsbResult.Unavailable -> { state = M32ConnectionState.ERROR; detail = result.detail }
         }
     }
 
+    private suspend fun connectBle(targetWpm: Int) {
+        val address = selectedBleAddress ?: bleDevices.singleOrNull()?.address
+        if (address == null) {
+            state = M32ConnectionState.ERROR
+            detail = "Find and select Morserino-32 first."
+            return
+        }
+        detail = "Connecting to M32 BLE Serial…"
+        runCatching { bleTransport.connect(address) }
+            .onSuccess {
+                detail = "On the M32 main menu, press FN when ‘Allow connect?’ appears."
+                configureM32(targetWpm)
+            }
+            .onFailure { error ->
+                state = M32ConnectionState.ERROR
+                detail = "M32 Bluetooth connection failed: ${error.message ?: error.javaClass.simpleName}"
+                bleTransport.disconnect()
+            }
+    }
+
     private suspend fun configureM32(targetWpm: Int) {
         runCatching {
-            command("put device/protocol/on")
+            command("put device/protocol/on", if (selectedRoute == M32ConnectionRoute.BLE) 23_000 else 700)
             command("put control/speed/${targetWpm.coerceIn(5, 60)}")
             val serialOutput = command("get config/serialOut")
             val serialOutputValue = Regex("\"value\"\\s*:\\s*(\\d+)").find(serialOutput)?.groupValues?.get(1)?.toIntOrNull()
@@ -197,12 +257,12 @@ class M32PocketController(context: Context) {
             }
             reportedWpm = targetWpm.coerceIn(5, 60)
             state = M32ConnectionState.READY
-            detail = "M32 Pocket ready at ${reportedWpm} WPM · keyed characters stream directly over USB."
+            detail = "M32 Pocket ready at ${reportedWpm} WPM · keyed characters stream over ${selectedRoute.name}."
             startInputReader()
         }.onFailure { error ->
             state = M32ConnectionState.ERROR
             detail = "M32 setup failed closed: ${error.message ?: error.javaClass.simpleName}"
-            transport.disconnect()
+            disconnectTransport()
         }
     }
 
@@ -213,7 +273,7 @@ class M32PocketController(context: Context) {
         previousSerialOutput?.let { value -> runCatching { command("put config/serialOut/$value", 500) } }
         previousSerialOutput = null
         runCatching { command("put device/protocol/off", 500) }
-        transport.disconnect()
+        disconnectTransport()
         state = M32ConnectionState.DISCONNECTED
         reportedWpm = null
         detail = "M32 Pocket disconnected."
@@ -225,9 +285,12 @@ class M32PocketController(context: Context) {
         readerJob?.cancel()
         readerJob = ioScope.launch {
             while (isActive && state == M32ConnectionState.READY) {
-                val bytes = runCatching { transport.rawRead(256, 180) }.getOrElse {
+                val bytes = runCatching {
+                    if (selectedRoute == M32ConnectionRoute.BLE) bleTransport.read(180)
+                    else usbTransport.rawRead(256, 180)
+                }.getOrElse {
                     state = M32ConnectionState.ERROR
-                    detail = "M32 USB input stopped: ${it.message ?: it.javaClass.simpleName}"
+                    detail = "M32 ${selectedRoute.name} input stopped: ${it.message ?: it.javaClass.simpleName}"
                     break
                 }
                 if (bytes.isEmpty()) continue
@@ -242,8 +305,19 @@ class M32PocketController(context: Context) {
         }
     }
 
-    private suspend fun command(value: String, timeout: Int = 700): String =
-        transport.rawExchange("$value\n".toByteArray(Charsets.UTF_8), timeout).toString(Charsets.UTF_8)
+    private suspend fun command(value: String, timeout: Int = 700): String {
+        val response = if (selectedRoute == M32ConnectionRoute.BLE) {
+            bleTransport.exchange(value, timeout.toLong()).toString(Charsets.UTF_8)
+        } else usbTransport.rawExchange("$value\n".toByteArray(Charsets.UTF_8), timeout).toString(Charsets.UTF_8)
+        val error = extractJsonObjects(response).firstOrNull { "\"error\"" in it }
+        check(error == null) { error ?: "M32 command failed." }
+        return response
+    }
+
+    private suspend fun disconnectTransport() {
+        usbTransport.disconnect()
+        bleTransport.disconnect()
+    }
 }
 
 internal fun extractJsonObjects(value: String): List<String> {

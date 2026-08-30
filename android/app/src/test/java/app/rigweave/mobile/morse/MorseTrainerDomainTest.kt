@@ -59,4 +59,17 @@ class MorseTrainerDomainTest {
         assertEquals(2, values.size)
         assertTrue(values[1].contains("CW Keyer"))
     }
+
+    @Test fun m32BleWritesAreSplitAtDefaultGattPayloadBoundary() {
+        val chunks = m32BleWriteChunks(ByteArray(45) { it.toByte() })
+        assertEquals(listOf(20, 20, 5), chunks.map(ByteArray::size))
+        assertEquals((0 until 45).map(Int::toByte), chunks.flatMap { it.asList() })
+    }
+
+    @Test fun m32BleHandshakeWaitsPastConfirmationForDeviceDecision() {
+        val confirmation = "{\"message\":{\"content\":\"CONFIRM ON DEVICE\"}}"
+        assertFalse(m32BleResponseComplete("put device/protocol/on", confirmation))
+        assertTrue(m32BleResponseComplete("put device/protocol/on", confirmation + "{\"device\":{\"protocol\":\"1.4\"}}"))
+        assertTrue(m32BleResponseComplete("put device/protocol/on", "{\"error\":{\"content\":\"DEVICE BUSY\"}}"))
+    }
 }

@@ -1,5 +1,10 @@
 package app.rigweave.mobile.morse
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -27,6 +32,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
@@ -281,7 +287,18 @@ private fun MorseMachineTrainer(settings: MorseTrainerSettings, m32: M32PocketCo
 @Composable
 private fun M32Panel(controller: M32PocketController, settings: MorseTrainerSettings, modifier: Modifier) {
     val scope = rememberCoroutineScope()
-    var menuOpen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var usbMenuOpen by remember { mutableStateOf(false) }
+    var bleMenuOpen by remember { mutableStateOf(false) }
+    val bluetoothPermissions = remember {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+    }
+    val scanBle = { scope.launch { controller.scanBle(); bleMenuOpen = true } }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+        if (bluetoothPermissions.all { result[it] == true || ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) scanBle()
+        else controller.bluetoothPermissionDenied()
+    }
     Surface(modifier, shape = RoundedCornerShape(12.dp), color = MorsePanel) {
         Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState())) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -300,13 +317,26 @@ private fun M32Panel(controller: M32PocketController, settings: MorseTrainerSett
             Spacer(Modifier.height(12.dp))
             Text(controller.detail, color = MorseMuted, fontSize = 13.sp)
             Spacer(Modifier.height(14.dp))
-            OutlinedButton(onClick = { controller.scan(); menuOpen = true }, modifier = Modifier.fillMaxWidth()) {
+            OutlinedButton(onClick = { controller.scanUsb(); usbMenuOpen = true }, modifier = Modifier.fillMaxWidth()) {
                 Icon(Icons.Outlined.Usb, null); Spacer(Modifier.width(8.dp)); Text(controller.devices.firstOrNull { it.sessionKey == controller.selectedSessionKey }?.displayName ?: "Choose USB device")
             }
-            DropdownMenu(menuOpen, { menuOpen = false }) {
-                if (controller.devices.isEmpty()) DropdownMenuItem({ Text("No serial devices") }, onClick = { menuOpen = false }, enabled = false)
+            DropdownMenu(usbMenuOpen, { usbMenuOpen = false }) {
+                if (controller.devices.isEmpty()) DropdownMenuItem({ Text("No serial devices") }, onClick = { usbMenuOpen = false }, enabled = false)
                 controller.devices.forEach { device -> DropdownMenuItem({ Column { Text(device.displayName); Text(device.identityLine, fontSize = 11.sp) } },
-                    onClick = { controller.select(device.sessionKey); menuOpen = false }) }
+                    onClick = { controller.selectUsb(device.sessionKey); usbMenuOpen = false }) }
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = {
+                if (bluetoothPermissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) scanBle()
+                else permissionLauncher.launch(bluetoothPermissions)
+            }, modifier = Modifier.fillMaxWidth()) {
+                Icon(Icons.Outlined.BluetoothSearching, null); Spacer(Modifier.width(8.dp))
+                Text(controller.bleDevices.firstOrNull { it.address == controller.selectedBleAddress }?.name ?: "Find M32 via Bluetooth")
+            }
+            DropdownMenu(bleMenuOpen, { bleMenuOpen = false }) {
+                if (controller.bleDevices.isEmpty()) DropdownMenuItem({ Text("No Morserino-32 found") }, onClick = { bleMenuOpen = false }, enabled = false)
+                controller.bleDevices.forEach { device -> DropdownMenuItem({ Column { Text(device.name); Text("BLE Serial", fontSize = 11.sp) } },
+                    onClick = { controller.selectBle(device.address); bleMenuOpen = false }) }
             }
             Spacer(Modifier.height(8.dp))
             if (controller.state == M32ConnectionState.READY) OutlinedButton(onClick = { scope.launch { controller.disconnect() } },
@@ -317,11 +347,12 @@ private fun M32Panel(controller: M32PocketController, settings: MorseTrainerSett
             HorizontalDivider(Modifier.padding(vertical = 16.dp), color = MorseLine)
             Text("INPUT ROUTES", color = MorseAmber, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
             Spacer(Modifier.height(8.dp))
+            InputRoute("BLE Serial", "Full M32 protocol: device setup, WPM control, keyer start and keyed characters")
             InputRoute("USB serial", "Configures protocol v1.4 and streams keyed characters at 115,200 baud")
             InputRoute("Bluetooth HID", "Paired keyboard characters go directly into the active answer field")
             InputRoute("On-screen keyboard", "Always available when no device is connected")
             Spacer(Modifier.height(12.dp))
-            Text("USB connection never keys a radio. It only opens the M32 training keyer.", color = MorseMuted, fontSize = 12.sp)
+            Text("M32 connections never key a radio. They only open the M32 training keyer.", color = MorseMuted, fontSize = 12.sp)
         }
     }
 }
