@@ -21,7 +21,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import kotlin.math.PI
 import kotlin.math.sin
@@ -238,23 +237,13 @@ class M32PocketController(context: Context) {
         runCatching {
             command("put device/protocol/on", if (selectedRoute == M32ConnectionRoute.BLE) 23_000 else 700)
             command("put control/speed/${targetWpm.coerceIn(5, 60)}")
-            val serialOutput = command("get config/serialOut")
+            val serialOutput = command("get config/Serial Output")
             val serialOutputValue = Regex("\"value\"\\s*:\\s*(\\d+)").find(serialOutput)?.groupValues?.get(1)?.toIntOrNull()
             previousSerialOutput = serialOutputValue?.takeUnless { it in setOf(1, 3, 5) }
-            if (previousSerialOutput != null) command("put config/serialOut/1")
-            val menus = command("get menus", 1_200)
-            val keyerNumber = extractJsonObjects(menus).asSequence().mapNotNull { raw -> runCatching { JSONObject(raw) }.getOrNull() }
-                .flatMap { json -> sequence {
-                    val values = json.optJSONArray("menus") ?: return@sequence
-                    repeat(values.length()) { yield(values.optJSONObject(it)) }
-                } }.filterNotNull().firstOrNull { menu ->
-                    menu.optBoolean("executable", true) && menu.optString("content").matches(Regex("(?i).*CW Keyer.*"))
-                }?.optInt("menu number", -1)?.takeIf { it >= 0 }
-            if (keyerNumber != null) command("put menu/start now/$keyerNumber", 1_200)
-            else {
-                command("put menu/start/1")
-                runCatching { command("put menu/activate/1") }
-            }
+            if (previousSerialOutput != null) command("put config/Serial Output/1")
+            // CW Keyer is protocol-stable menu 1. Avoid transferring the complete
+            // multi-kilobyte menu catalogue over 20-byte BLE notifications.
+            command("put menu/start now/1")
             reportedWpm = targetWpm.coerceIn(5, 60)
             state = M32ConnectionState.READY
             detail = "M32 Pocket ready at ${reportedWpm} WPM · keyed characters stream over ${selectedRoute.name}."
@@ -270,7 +259,7 @@ class M32PocketController(context: Context) {
         readerJob?.cancelAndJoin()
         readerJob = null
         runCatching { command("put menu/stop/1", 500) }
-        previousSerialOutput?.let { value -> runCatching { command("put config/serialOut/$value", 500) } }
+        previousSerialOutput?.let { value -> runCatching { command("put config/Serial Output/$value", 500) } }
         previousSerialOutput = null
         runCatching { command("put device/protocol/off", 500) }
         disconnectTransport()
@@ -306,11 +295,16 @@ class M32PocketController(context: Context) {
     }
 
     private suspend fun command(value: String, timeout: Int = 700): String {
-        val response = if (selectedRoute == M32ConnectionRoute.BLE) {
-            bleTransport.exchange(value, timeout.toLong()).toString(Charsets.UTF_8)
-        } else usbTransport.rawExchange("$value\n".toByteArray(Charsets.UTF_8), timeout).toString(Charsets.UTF_8)
+        val effectiveTimeout = if (selectedRoute == M32ConnectionRoute.BLE) maxOf(timeout, 3_000) else timeout
+        val response = try {
+            if (selectedRoute == M32ConnectionRoute.BLE) {
+                bleTransport.exchange(value, effectiveTimeout.toLong()).toString(Charsets.UTF_8)
+            } else usbTransport.rawExchange("$value\n".toByteArray(Charsets.UTF_8), effectiveTimeout).toString(Charsets.UTF_8)
+        } catch (error: Exception) {
+            throw IllegalStateException("$value failed: ${error.message ?: error::class.simpleName}", error)
+        }
         val error = extractJsonObjects(response).firstOrNull { "\"error\"" in it }
-        check(error == null) { error ?: "M32 command failed." }
+        check(error == null) { "$value failed: ${error ?: "M32 command failed."}" }
         return response
     }
 
