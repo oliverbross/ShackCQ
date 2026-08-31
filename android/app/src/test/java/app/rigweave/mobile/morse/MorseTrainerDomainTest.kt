@@ -25,8 +25,10 @@ class MorseTrainerDomainTest {
     @Test fun txPracticeScoresExactGroupsAndCharacters() {
         val session = TxPracticeSession(MorseTrainerSettings(sessionSize = 5, groupLength = 2, kochCharacters = 2), Random(7))
         val first = session.current!!.expected
-        assertTrue(session.submit(first)!!)
-        assertFalse(session.submit("ZZ")!!)
+        assertTrue(session.submit(first)!!.correct)
+        assertFalse(session.submit("ZZ")!!.correct)
+        assertFalse(session.submit("ZZ")!!.correct)
+        assertFalse(session.submit("ZZ")!!.correct)
         assertEquals(1, session.perfectGroups)
         assertEquals(50, session.accuracyPercent)
     }
@@ -52,6 +54,70 @@ class MorseTrainerDomainTest {
     @Test fun adaptiveWeightRaisesMissedCharacters() {
         assertEquals(1.0, CharacterProgress().weight, 0.0001)
         assertTrue(CharacterProgress(correct = 1, incorrect = 4).weight > CharacterProgress(correct = 4, incorrect = 1).weight)
+    }
+
+    @Test fun txPracticeKeepsWrongItemForThreeAttemptsAndReportsFailure() {
+        val session = TxPracticeSession(listOf("CQ", "TEST"), maxAttempts = 3, startedAtMillis = 1_000)
+        assertFalse(session.submit("QQ", 100)!!.advanced)
+        assertFalse(session.submit("CC", 200)!!.advanced)
+        val third = session.submit("ZZ", 300)!!
+        assertTrue(third.advanced)
+        assertEquals("TEST", session.current!!.expected)
+        assertEquals(1, session.failed)
+        assertEquals(0, session.eventuallyCorrect)
+        assertTrue(session.characterErrors > 0)
+    }
+
+    @Test fun txPracticeTracksAttemptBreakdownAndSkip() {
+        val session = TxPracticeSession(listOf("CQ", "DE", "OM"), maxAttempts = 3)
+        assertTrue(session.submit("CQ")!!.correct)
+        assertFalse(session.submit("DX")!!.correct)
+        assertTrue(session.submit("DE")!!.correct)
+        assertEquals("OM", session.skip())
+        assertTrue(session.isComplete)
+        assertEquals(1, session.firstTryCorrect)
+        assertEquals(1, session.secondTryCorrect)
+        assertEquals(1, session.failed)
+    }
+
+    @Test fun callsignDifficultyFiltersRealCorpusShapes() {
+        assertTrue(callsignMatchesDifficulty("K1A", CallsignDifficulty.THREE))
+        assertFalse(callsignMatchesDifficulty("K1A/P", CallsignDifficulty.THREE))
+        assertTrue(callsignMatchesDifficulty("OM0RX/P", CallsignDifficulty.PORTABLE))
+        assertTrue(callsignMatchesDifficulty("VK9ABC", CallsignDifficulty.SIX_PLUS))
+    }
+
+    @Test fun callsignSessionTracksResponseAndCharacterDifferences() {
+        val session = CallsignSession(listOf("OM0RX", "K1A"), speedWpm = 28, startedAtMillis = 1_000)
+        assertFalse(session.submit("OM0RY", 900)!!)
+        assertTrue(session.submit("K1A", 1_100)!!)
+        assertEquals(50, session.accuracyPercent)
+        assertEquals(1_400, session.score)
+        assertEquals(1, session.attempts.first().differences.size)
+        assertEquals(1_000, session.averageResponseMillis)
+    }
+
+    @Test fun morseMachineConfusableModeRestrictsPromptsToPair() {
+        val settings = MorseTrainerSettings(machineDrillMode = MachineDrillMode.CONFUSABLES, machineConfusablePair = "U/D")
+        val session = MorseMachineSession(settings, random = Random(3))
+        repeat(30) {
+            assertTrue(session.current in setOf('U', 'D'))
+            session.answer(session.current)
+        }
+    }
+
+    @Test fun morseMachineLessonPromotesAfterMastery() {
+        val settings = MorseTrainerSettings(machineSet = MachineCharacterSet.KOCH, machineTrainingMode = MachineTrainingMode.LESSON, machineLesson = 1)
+        val session = MorseMachineSession(settings, random = Random(4))
+        val initial = session.activeCharacters.size
+        repeat(80) { session.answer(session.current) }
+        assertTrue(session.activeCharacters.size > initial)
+        assertTrue(session.lesson > 1)
+    }
+
+    @Test fun japaneseMachineCharactersMapToDocumentedLatinMorse() {
+        assertEquals(MorseCode.pattern('I'), MorseCode.pattern('い'))
+        assertEquals(MorseCode.pattern('Z'), MorseCode.pattern('チ'))
     }
 
     @Test fun m32JsonStreamExtractionHandlesNoiseAndNestedObjects() {

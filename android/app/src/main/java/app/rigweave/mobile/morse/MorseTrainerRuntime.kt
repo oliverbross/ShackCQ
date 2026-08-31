@@ -24,6 +24,7 @@ import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import kotlin.math.PI
 import kotlin.math.sin
+import kotlin.random.Random
 
 class MorseTrainerStore(context: Context) {
     private val prefs = context.getSharedPreferences("rigweave-morse", Context.MODE_PRIVATE)
@@ -37,13 +38,47 @@ class MorseTrainerStore(context: Context) {
             putInt("pitch_hz", settings.pitchHz)
             putInt("volume_percent", settings.volumePercent)
             putInt("session_size", settings.sessionSize)
-            putInt("koch_characters", settings.kochCharacters)
-            putInt("group_length", settings.groupLength)
+            putInt("callsign_session_size", settings.callsignSessionSize)
+            putString("tx_mode", settings.txMode.name)
+            putString("tx_word_length", settings.txWordLength.name)
+            putInt("tx_max_attempts", settings.txMaxAttempts)
             putString("callsign_difficulty", settings.callsignDifficulty.name)
             putInt("callsign_repeats", settings.callsignRepeats)
+            putString("repeat_delay_mode", settings.repeatDelayMode.name)
+            putInt("repeat_delay_millis", settings.repeatDelayMillis)
+            putString("noise_level", settings.noiseLevel.name)
+            putInt("audio_filter_hz", settings.audioFilterHz)
+            putString("machine_set", settings.machineSet.name)
+            putString("machine_training_mode", settings.machineTrainingMode.name)
+            putString("machine_drill_mode", settings.machineDrillMode.name)
+            putInt("machine_lesson", settings.machineLesson)
             putString("machine_characters", settings.machineCharacters)
+            putString("machine_confusable_pair", settings.machineConfusablePair)
+            putBoolean("machine_buzzer", settings.machineBuzzer)
+            putBoolean("machine_show_morse", settings.machineShowMorse)
         }
     }
+
+    fun loadMachineProgress(): Map<Char, CharacterProgress> = prefs.getString("machine_progress", "").orEmpty()
+        .split(';').mapNotNull { row ->
+            val fields = row.split(':')
+            val character = fields.getOrNull(0)?.firstOrNull() ?: return@mapNotNull null
+            val correct = fields.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
+            val incorrect = fields.getOrNull(2)?.toIntOrNull() ?: return@mapNotNull null
+            val response = fields.getOrNull(3)?.toLongOrNull() ?: 0L
+            val samples = fields.getOrNull(4)?.toIntOrNull() ?: 0
+            character to CharacterProgress(correct, incorrect, response, samples)
+        }.toMap()
+
+    fun saveMachineProgress(progress: Map<Char, CharacterProgress>) {
+        prefs.edit { putString("machine_progress", progress.entries.joinToString(";") { (character, value) ->
+            "$character:${value.correct}:${value.incorrect}:${value.responseMillis}:${value.samples}"
+        }) }
+    }
+
+    private inline fun <reified T : Enum<T>> enumValue(key: String, fallback: T): T = runCatching {
+        enumValueOf<T>(prefs.getString(key, fallback.name).orEmpty())
+    }.getOrDefault(fallback)
 
     private fun load() = MorseTrainerSettings(
         characterWpm = prefs.getInt("character_wpm", 20),
@@ -51,13 +86,24 @@ class MorseTrainerStore(context: Context) {
         pitchHz = prefs.getInt("pitch_hz", 600),
         volumePercent = prefs.getInt("volume_percent", 70),
         sessionSize = prefs.getInt("session_size", 25),
-        kochCharacters = prefs.getInt("koch_characters", 12),
-        groupLength = prefs.getInt("group_length", 5),
-        callsignDifficulty = runCatching {
-            CallsignDifficulty.valueOf(prefs.getString("callsign_difficulty", CallsignDifficulty.FIVE.name).orEmpty())
-        }.getOrDefault(CallsignDifficulty.FIVE),
+        callsignSessionSize = prefs.getInt("callsign_session_size", 25),
+        txMode = enumValue("tx_mode", TxContentMode.REAL_WORDS),
+        txWordLength = enumValue("tx_word_length", TxWordLength.ANY),
+        txMaxAttempts = prefs.getInt("tx_max_attempts", 3),
+        callsignDifficulty = enumValue("callsign_difficulty", CallsignDifficulty.FIVE),
         callsignRepeats = prefs.getInt("callsign_repeats", 1),
-        machineCharacters = prefs.getString("machine_characters", "KMURESNAPTLWIOGJHFVBYXCQZ1234567890").orEmpty(),
+        repeatDelayMode = enumValue("repeat_delay_mode", RepeatDelayMode.AUTO),
+        repeatDelayMillis = prefs.getInt("repeat_delay_millis", 1_500),
+        noiseLevel = enumValue("noise_level", MorseNoiseLevel.OFF),
+        audioFilterHz = prefs.getInt("audio_filter_hz", 700),
+        machineSet = enumValue("machine_set", MachineCharacterSet.KOCH),
+        machineTrainingMode = enumValue("machine_training_mode", MachineTrainingMode.LESSON),
+        machineDrillMode = enumValue("machine_drill_mode", MachineDrillMode.ADAPTIVE),
+        machineLesson = prefs.getInt("machine_lesson", 1),
+        machineCharacters = prefs.getString("machine_characters", "KM").orEmpty(),
+        machineConfusablePair = prefs.getString("machine_confusable_pair", "U/D").orEmpty(),
+        machineBuzzer = prefs.getBoolean("machine_buzzer", true),
+        machineShowMorse = prefs.getBoolean("machine_show_morse", false),
     ).normalized()
 }
 
@@ -70,17 +116,27 @@ class MorseAudioPlayer {
         val sampleRate = 16_000
         val dotSeconds = 1.2 / safe.characterWpm
         val samples = ByteArrayOutputStream()
+        val random = Random(text.hashCode())
+        val noiseMix = safe.noiseLevel.amplitude
+        val filterAlpha = (2.0 * PI * safe.audioFilterHz / sampleRate).coerceIn(0.02, 0.45)
+        var filteredNoise = 0.0
+        fun writeSample(signal: Double) {
+            val white = random.nextDouble(-1.0, 1.0)
+            filteredNoise += filterAlpha * (white - filteredNoise)
+            val mixed = (signal + filteredNoise * noiseMix).coerceIn(-1.0, 1.0)
+            val sample = (mixed * Short.MAX_VALUE).toInt().toShort()
+            samples.write(sample.toInt() and 0xff)
+            samples.write((sample.toInt() shr 8) and 0xff)
+        }
         fun tone(seconds: Double) {
             val count = (seconds * sampleRate).toInt().coerceAtLeast(1)
             repeat(count) { index ->
                 val envelope = minOf(1.0, index / 64.0, (count - index) / 64.0).coerceAtLeast(0.0)
-                val sample = (sin(2.0 * PI * safe.pitchHz * index / sampleRate) * Short.MAX_VALUE *
-                    (safe.volumePercent / 100.0) * 0.45 * envelope).toInt().toShort()
-                samples.write(sample.toInt() and 0xff)
-                samples.write((sample.toInt() shr 8) and 0xff)
+                writeSample(sin(2.0 * PI * safe.pitchHz * index / sampleRate) *
+                    (safe.volumePercent / 100.0) * 0.45 * envelope)
             }
         }
-        fun silence(seconds: Double) { repeat((seconds * sampleRate).toInt().coerceAtLeast(0) * 2) { samples.write(0) } }
+        fun silence(seconds: Double) { repeat((seconds * sampleRate).toInt().coerceAtLeast(0)) { writeSample(0.0) } }
         val encoded = MorseCode.encode(text)
         repeat(repeats.coerceIn(1, 3)) { repeatIndex ->
             encoded.forEachIndexed { characterIndex, pattern ->
@@ -100,7 +156,10 @@ class MorseAudioPlayer {
                     }
                 }
             }
-            if (repeatIndex + 1 < repeats) silence(1.5)
+            if (repeatIndex + 1 < repeats) {
+                val autoDelay = text.length * 60.0 / (5.0 * safe.effectiveWpm) * 1.5
+                silence(if (safe.repeatDelayMode == RepeatDelayMode.CUSTOM) safe.repeatDelayMillis / 1_000.0 else autoDelay)
+            }
         }
         val pcm = samples.toByteArray()
         if (pcm.isEmpty()) return@withContext

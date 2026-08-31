@@ -16,6 +16,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.BluetoothSearching
+import androidx.compose.material.icons.automirrored.outlined.KeyboardReturn
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,7 +36,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private val MorseGraphite = Color(0xFF111519)
 private val MorsePanel = Color(0xFF1B2228)
@@ -53,17 +58,23 @@ fun MorseScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val store = remember { MorseTrainerStore(context.applicationContext) }
+    val corpus = remember { MorseCorpusRepository(context.applicationContext) }
     val audio = remember { MorseAudioPlayer() }
     val m32 = remember { M32PocketController(context.applicationContext) }
     var trainer by rememberSaveable { mutableStateOf(MorseTrainerKind.TX) }
     var showSettings by rememberSaveable { mutableStateOf(false) }
     var audioJob by remember { mutableStateOf<Job?>(null) }
 
-    DisposableEffect(Unit) { onDispose { audioJob?.cancel(); audio.stop(); m32.dispose() } }
-    fun play(text: String, repeats: Int = 1) {
+    fun stopPlayback() {
         audioJob?.cancel()
+        audioJob = null
+        audio.stop()
+    }
+    fun play(text: String, repeats: Int = 1) {
+        stopPlayback()
         audioJob = scope.launch { audio.play(text, store.settings, repeats) }
     }
+    DisposableEffect(Unit) { onDispose { stopPlayback(); m32.dispose() } }
 
     BoxWithConstraints(Modifier.fillMaxSize().background(MorseGraphite).testTag("morse-screen")) {
         val wide = maxWidth >= 840.dp
@@ -81,7 +92,7 @@ fun MorseScreen() {
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 MorseTrainerKind.entries.forEach { item ->
-                    FilterChip(selected = trainer == item, onClick = { audio.stop(); trainer = item },
+                    FilterChip(selected = trainer == item, onClick = { stopPlayback(); trainer = item },
                         label = { Text(item.label) }, leadingIcon = {
                             Icon(when (item) {
                                 MorseTrainerKind.TX -> Icons.Outlined.Keyboard
@@ -95,26 +106,26 @@ fun MorseScreen() {
             Spacer(Modifier.height(12.dp))
             if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.weight(1.7f).fillMaxHeight()) {
-                    TrainerSurface(trainer, store.settings, m32, ::play)
+                    TrainerSurface(trainer, store, corpus, m32, ::play, ::stopPlayback)
                 }
                 M32Panel(m32, store.settings, Modifier.weight(0.8f).fillMaxHeight())
             } else Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1.55f).fillMaxWidth()) { TrainerSurface(trainer, store.settings, m32, ::play) }
+                Box(Modifier.weight(1.55f).fillMaxWidth()) { TrainerSurface(trainer, store, corpus, m32, ::play, ::stopPlayback) }
                 Spacer(Modifier.height(12.dp))
                 M32Panel(m32, store.settings, Modifier.weight(0.85f).fillMaxWidth())
             }
         }
     }
-    if (showSettings) MorseSettingsDialog(store.settings, store::update) { showSettings = false }
+    if (showSettings) AdvancedMorseSettingsDialog(store.settings, store::update) { showSettings = false }
 }
 
 @Composable
-private fun TrainerSurface(kind: MorseTrainerKind, settings: MorseTrainerSettings, m32: M32PocketController, play: (String, Int) -> Unit) {
+private fun TrainerSurface(kind: MorseTrainerKind, store: MorseTrainerStore, corpus: MorseCorpusRepository, m32: M32PocketController, play: (String, Int) -> Unit, stopPlayback: () -> Unit) {
     Surface(Modifier.fillMaxSize(), shape = RoundedCornerShape(12.dp), color = MorsePanel, tonalElevation = 0.dp) {
         when (kind) {
-            MorseTrainerKind.TX -> TxTrainer(settings, m32)
-            MorseTrainerKind.CALLSIGN -> CallsignTrainer(settings, m32, play)
-            MorseTrainerKind.MACHINE -> MorseMachineTrainer(settings, m32, play)
+            MorseTrainerKind.TX -> AdvancedTxTrainer(store.settings, corpus, m32)
+            MorseTrainerKind.CALLSIGN -> AdvancedCallsignTrainer(store.settings, corpus, m32, play, stopPlayback)
+            MorseTrainerKind.MACHINE -> AdvancedMorseMachineTrainer(store, m32, play, stopPlayback)
         }
     }
 }
@@ -127,7 +138,7 @@ private fun TxTrainer(settings: MorseTrainerSettings, m32: M32PocketController) 
     val active = session
     fun submitAnswer(value: String = answer) {
         val result = session?.submit(value) ?: return
-        feedback = if (result) "Correct · clean group" else "Check spacing and character order"
+        feedback = if (result.correct) "Correct · clean group" else "Check spacing and character order"
         answer = ""
     }
     LaunchedEffect(m32.inputRevision) {
@@ -158,7 +169,7 @@ private fun TxTrainer(settings: MorseTrainerSettings, m32: M32PocketController) 
             label = { Text("Sent group / M32 USB or HID input") },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submitAnswer() }),
-            trailingIcon = { IconButton(onClick = ::submitAnswer, enabled = answer.isNotBlank()) { Icon(Icons.Outlined.KeyboardReturn, "Submit group") } })
+            trailingIcon = { IconButton(onClick = ::submitAnswer, enabled = answer.isNotBlank()) { Icon(Icons.AutoMirrored.Outlined.KeyboardReturn, "Submit group") } })
         Spacer(Modifier.height(10.dp))
         Text(feedback, color = when { feedback.startsWith("Correct") -> MorseHealthy; feedback.startsWith("Check") -> MorseDanger; else -> MorseMuted },
             textAlign = TextAlign.Center)
@@ -212,7 +223,7 @@ private fun CallsignTrainer(settings: MorseTrainerSettings, m32: M32PocketContro
             label = { Text("Copied callsign") },
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Characters, imeAction = ImeAction.Done),
             keyboardActions = KeyboardActions(onDone = { submitAnswer() }),
-            trailingIcon = { IconButton(onClick = ::submitAnswer, enabled = answer.isNotBlank()) { Icon(Icons.Outlined.KeyboardReturn, "Submit callsign") } })
+            trailingIcon = { IconButton(onClick = ::submitAnswer, enabled = answer.isNotBlank()) { Icon(Icons.AutoMirrored.Outlined.KeyboardReturn, "Submit callsign") } })
         Spacer(Modifier.height(10.dp))
         Text(feedback, color = when { feedback == "Correct" -> MorseHealthy; feedback.startsWith("Sent") -> MorseDanger; else -> MorseMuted })
         Spacer(Modifier.height(14.dp))
@@ -243,7 +254,7 @@ private fun MorseMachineTrainer(settings: MorseTrainerSettings, m32: M32PocketCo
         val expected = running.current
         val matches = running.answer(character)
         reveal = expected
-        feedback = if (matches) "Correct · next character" else "That was $expected · it will return more often"
+        feedback = if (matches?.correct == true) "Correct · next character" else "That was $expected · it will return more often"
         playCurrent()
     }
     LaunchedEffect(m32.inputRevision) {
@@ -330,7 +341,7 @@ private fun M32Panel(controller: M32PocketController, settings: MorseTrainerSett
                 if (bluetoothPermissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }) scanBle()
                 else permissionLauncher.launch(bluetoothPermissions)
             }, modifier = Modifier.fillMaxWidth()) {
-                Icon(Icons.Outlined.BluetoothSearching, null); Spacer(Modifier.width(8.dp))
+                Icon(Icons.AutoMirrored.Outlined.BluetoothSearching, null); Spacer(Modifier.width(8.dp))
                 Text(controller.bleDevices.firstOrNull { it.address == controller.selectedBleAddress }?.name ?: "Find M32 via Bluetooth")
             }
             DropdownMenu(bleMenuOpen, { bleMenuOpen = false }) {
