@@ -133,7 +133,7 @@ class MorseAudioPlayer {
             repeat(count) { index ->
                 val envelope = minOf(1.0, index / 64.0, (count - index) / 64.0).coerceAtLeast(0.0)
                 writeSample(sin(2.0 * PI * safe.pitchHz * index / sampleRate) *
-                    (safe.volumePercent / 100.0) * 0.45 * envelope)
+                    (safe.volumePercent / 100.0) * 0.80 * envelope)
             }
         }
         fun silence(seconds: Double) { repeat((seconds * sampleRate).toInt().coerceAtLeast(0)) { writeSample(0.0) } }
@@ -164,7 +164,7 @@ class MorseAudioPlayer {
         val pcm = samples.toByteArray()
         if (pcm.isEmpty()) return@withContext
         val track = AudioTrack.Builder()
-            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+            .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
             .setAudioFormat(AudioFormat.Builder().setSampleRate(sampleRate).setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                 .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
@@ -173,9 +173,15 @@ class MorseAudioPlayer {
             .setTransferMode(AudioTrack.MODE_STATIC)
             .build()
         active = track
-        track.write(pcm, 0, pcm.size)
+        track.setVolume(1.0f)
+        val written = track.write(pcm, 0, pcm.size, AudioTrack.WRITE_BLOCKING)
+        if (written <= 0) {
+            active = null
+            track.release()
+            return@withContext
+        }
         track.play()
-        val durationMillis = (pcm.size / 2L) * 1_000L / sampleRate
+        val durationMillis = (written / 2L) * 1_000L / sampleRate
         delay(durationMillis + 80)
         if (active !== track) return@withContext
         active = null
