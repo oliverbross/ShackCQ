@@ -33,6 +33,8 @@ enum class CallsignDifficulty(val label: String) {
     THREE("3 chars"), FOUR("4 chars"), FIVE("5 chars"), SIX_PLUS("6+ chars"), PORTABLE("Portable"), ALL("All"), CWOPS("CWOps")
 }
 
+enum class CallsignSourceMode(val label: String) { DIFFICULTY("Difficulty deck"), REVIEW("Due / weak calls") }
+
 enum class RepeatDelayMode(val label: String) { AUTO("Automatic"), CUSTOM("Custom") }
 
 enum class MorseNoiseLevel(val label: String, val amplitude: Double) {
@@ -60,6 +62,11 @@ data class MorseTrainerSettings(
     val volumePercent: Int = 70,
     val sessionSize: Int = 25,
     val callsignSessionSize: Int = 25,
+    val callsignSourceMode: CallsignSourceMode = CallsignSourceMode.DIFFICULTY,
+    val callsignCharacterWpm: Int = 28,
+    val callsignEffectiveWpm: Int = 8,
+    val callsignPitchHz: Int = 550,
+    val callsignVolumePercent: Int = 60,
     val txMode: TxContentMode = TxContentMode.REAL_WORDS,
     val txWordLength: TxWordLength = TxWordLength.ANY,
     val txMaxAttempts: Int = 3,
@@ -71,6 +78,11 @@ data class MorseTrainerSettings(
     val repeatDelayMillis: Int = 1_500,
     val noiseLevel: MorseNoiseLevel = MorseNoiseLevel.OFF,
     val audioFilterHz: Int = 700,
+    val callsignNoiseLevel: MorseNoiseLevel = MorseNoiseLevel.S3,
+    val callsignAudioFilterHz: Int = 700,
+    val machineWpm: Int = 20,
+    val machinePitchHz: Int = 600,
+    val machineVolumePercent: Int = 70,
     val machineSet: MachineCharacterSet = MachineCharacterSet.KOCH,
     val machineTrainingMode: MachineTrainingMode = MachineTrainingMode.LESSON,
     val machineDrillMode: MachineDrillMode = MachineDrillMode.ADAPTIVE,
@@ -97,17 +109,42 @@ data class MorseTrainerSettings(
             volumePercent = volumePercent.coerceIn(0, 100),
             sessionSize = sessionSize.coerceIn(5, 200),
             callsignSessionSize = callsignSessionSize.coerceIn(1, 200),
+            callsignCharacterWpm = callsignCharacterWpm.coerceIn(5, 60),
+            callsignEffectiveWpm = callsignEffectiveWpm.coerceIn(5, callsignCharacterWpm.coerceIn(5, 60)),
+            callsignPitchHz = callsignPitchHz.coerceIn(300, 1_000),
+            callsignVolumePercent = callsignVolumePercent.coerceIn(0, 100),
             txMaxAttempts = txMaxAttempts.coerceIn(1, 3),
             kochCharacters = kochCharacters.coerceIn(2, KOCH_SEQUENCE.length),
             groupLength = groupLength.coerceIn(1, 8),
             callsignRepeats = if (callsignRepeats >= 3) 3 else 1,
             repeatDelayMillis = repeatDelayMillis.coerceIn(500, 5_000),
             audioFilterHz = audioFilterHz.coerceIn(300, 1_200),
+            callsignAudioFilterHz = callsignAudioFilterHz.coerceIn(300, 1_200),
+            machineWpm = machineWpm.coerceIn(5, 40),
+            machinePitchHz = machinePitchHz.coerceIn(300, 1_000),
+            machineVolumePercent = machineVolumePercent.coerceIn(10, 100),
             machineLesson = machineLesson.coerceIn(1, max(1, safeSet.length - 1)),
             machineCharacters = custom,
             machineConfusablePair = pair,
         )
     }
+
+    fun callsignAudio(): MorseTrainerSettings = copy(
+        characterWpm = callsignCharacterWpm,
+        effectiveWpm = callsignEffectiveWpm,
+        pitchHz = callsignPitchHz,
+        volumePercent = callsignVolumePercent,
+        noiseLevel = callsignNoiseLevel,
+        audioFilterHz = callsignAudioFilterHz,
+    )
+
+    fun machineAudio(): MorseTrainerSettings = copy(
+        characterWpm = machineWpm,
+        effectiveWpm = machineWpm,
+        pitchHz = machinePitchHz,
+        volumePercent = machineVolumePercent,
+        noiseLevel = MorseNoiseLevel.OFF,
+    )
 }
 
 const val KOCH_SEQUENCE = "KMURESNAPTLWI.JZ=FOY,VG5/Q92H38B?47C1D60X"

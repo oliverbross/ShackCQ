@@ -1,5 +1,6 @@
 package app.rigweave.mobile.morse
 
+import java.util.UUID
 import kotlin.random.Random
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -137,5 +138,41 @@ class MorseTrainerDomainTest {
         assertFalse(m32BleResponseComplete("put device/protocol/on", confirmation))
         assertTrue(m32BleResponseComplete("put device/protocol/on", confirmation + "{\"device\":{\"protocol\":\"1.4\"}}"))
         assertTrue(m32BleResponseComplete("put device/protocol/on", "{\"error\":{\"content\":\"DEVICE BUSY\"}}"))
+    }
+
+    @Test fun m32BleScanRejectsUnnamedNearbyDevicesButAcceptsNameOrNordicUart() {
+        assertFalse(m32BleAdvertisementMatches(null, emptyList()))
+        assertFalse(m32BleAdvertisementMatches("Headphones", emptyList()))
+        assertTrue(m32BleAdvertisementMatches("M32 Pocket", emptyList()))
+        assertTrue(m32BleAdvertisementMatches(null, listOf(M32BleSerialTransport.NUS_SERVICE_UUID)))
+        assertFalse(m32BleAdvertisementMatches(null, listOf(UUID.randomUUID())))
+    }
+
+    @Test fun trainerAudioProfilesRemainIndependent() {
+        val settings = MorseTrainerSettings(
+            characterWpm = 18, pitchHz = 700,
+            callsignCharacterWpm = 31, callsignEffectiveWpm = 9, callsignPitchHz = 525, callsignVolumePercent = 45,
+            machineWpm = 24, machinePitchHz = 650, machineVolumePercent = 80,
+        )
+        assertEquals(31, settings.callsignAudio().characterWpm)
+        assertEquals(9, settings.callsignAudio().effectiveWpm)
+        assertEquals(525, settings.callsignAudio().pitchHz)
+        assertEquals(24, settings.machineAudio().characterWpm)
+        assertEquals(24, settings.machineAudio().effectiveWpm)
+        assertEquals(650, settings.machineAudio().pitchHz)
+        assertEquals(18, settings.characterWpm)
+    }
+
+    @Test fun trainerSpecificRangesNormalizeToMorseTrainerProLimits() {
+        val safe = MorseTrainerSettings(
+            callsignCharacterWpm = 80, callsignEffectiveWpm = 2, callsignPitchHz = 100,
+            machineWpm = 90, machinePitchHz = 1_500, machineVolumePercent = 0,
+        ).normalized()
+        assertEquals(60, safe.callsignCharacterWpm)
+        assertEquals(5, safe.callsignEffectiveWpm)
+        assertEquals(300, safe.callsignPitchHz)
+        assertEquals(40, safe.machineWpm)
+        assertEquals(1_000, safe.machinePitchHz)
+        assertEquals(10, safe.machineVolumePercent)
     }
 }

@@ -26,9 +26,23 @@ import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
 
+data class MorseSessionRecord(
+    val trainer: MorseTrainerKind,
+    val endedAtMillis: Long,
+    val durationMillis: Long,
+    val total: Int,
+    val correct: Int,
+    val accuracyPercent: Int,
+    val score: Int = 0,
+    val detail: String = "",
+)
+
+data class CallsignProgress(val correct: Int = 0, val incorrect: Int = 0, val hard: Boolean = false, val suspended: Boolean = false)
+
 class MorseTrainerStore(context: Context) {
     private val prefs = context.getSharedPreferences("rigweave-morse", Context.MODE_PRIVATE)
     var settings by mutableStateOf(load()); private set
+    var historyRevision by mutableLongStateOf(0L); private set
 
     fun update(value: MorseTrainerSettings) {
         settings = value.normalized()
@@ -39,6 +53,11 @@ class MorseTrainerStore(context: Context) {
             putInt("volume_percent", settings.volumePercent)
             putInt("session_size", settings.sessionSize)
             putInt("callsign_session_size", settings.callsignSessionSize)
+            putString("callsign_source_mode", settings.callsignSourceMode.name)
+            putInt("callsign_character_wpm", settings.callsignCharacterWpm)
+            putInt("callsign_effective_wpm", settings.callsignEffectiveWpm)
+            putInt("callsign_pitch_hz", settings.callsignPitchHz)
+            putInt("callsign_volume_percent", settings.callsignVolumePercent)
             putString("tx_mode", settings.txMode.name)
             putString("tx_word_length", settings.txWordLength.name)
             putInt("tx_max_attempts", settings.txMaxAttempts)
@@ -48,6 +67,11 @@ class MorseTrainerStore(context: Context) {
             putInt("repeat_delay_millis", settings.repeatDelayMillis)
             putString("noise_level", settings.noiseLevel.name)
             putInt("audio_filter_hz", settings.audioFilterHz)
+            putString("callsign_noise_level", settings.callsignNoiseLevel.name)
+            putInt("callsign_audio_filter_hz", settings.callsignAudioFilterHz)
+            putInt("machine_wpm", settings.machineWpm)
+            putInt("machine_pitch_hz", settings.machinePitchHz)
+            putInt("machine_volume_percent", settings.machineVolumePercent)
             putString("machine_set", settings.machineSet.name)
             putString("machine_training_mode", settings.machineTrainingMode.name)
             putString("machine_drill_mode", settings.machineDrillMode.name)
@@ -76,6 +100,72 @@ class MorseTrainerStore(context: Context) {
         }) }
     }
 
+    fun resetMachineProgress() {
+        prefs.edit { remove("machine_progress") }
+        historyRevision++
+    }
+
+    fun saveSession(record: MorseSessionRecord) {
+        val encoded = listOf(
+            record.trainer.name, record.endedAtMillis, record.durationMillis, record.total,
+            record.correct, record.accuracyPercent, record.score,
+            record.detail.replace('|', '/').replace('\n', ' '),
+        ).joinToString("|")
+        val rows = (prefs.getString("session_history", "").orEmpty().lineSequence().filter(String::isNotBlank).toList() + encoded)
+            .takeLast(150)
+        prefs.edit { putString("session_history", rows.joinToString("\n")) }
+        historyRevision++
+    }
+
+    fun sessionHistory(trainer: MorseTrainerKind): List<MorseSessionRecord> {
+        historyRevision // Compose observation
+        return prefs.getString("session_history", "").orEmpty().lineSequence().mapNotNull { row ->
+            val field = row.split('|', limit = 8)
+            val kind = runCatching { MorseTrainerKind.valueOf(field.getOrNull(0).orEmpty()) }.getOrNull() ?: return@mapNotNull null
+            MorseSessionRecord(
+                trainer = kind,
+                endedAtMillis = field.getOrNull(1)?.toLongOrNull() ?: return@mapNotNull null,
+                durationMillis = field.getOrNull(2)?.toLongOrNull() ?: 0,
+                total = field.getOrNull(3)?.toIntOrNull() ?: 0,
+                correct = field.getOrNull(4)?.toIntOrNull() ?: 0,
+                accuracyPercent = field.getOrNull(5)?.toIntOrNull() ?: 0,
+                score = field.getOrNull(6)?.toIntOrNull() ?: 0,
+                detail = field.getOrNull(7).orEmpty(),
+            )
+        }.filter { it.trainer == trainer }.sortedByDescending(MorseSessionRecord::endedAtMillis).toList()
+    }
+
+    fun callsignProgress(): Map<String, CallsignProgress> = prefs.getString("callsign_progress", "").orEmpty()
+        .split(';').mapNotNull { row ->
+            val field = row.split(':')
+            val call = field.getOrNull(0)?.takeIf(String::isNotBlank) ?: return@mapNotNull null
+            call to CallsignProgress(field.getOrNull(1)?.toIntOrNull() ?: 0, field.getOrNull(2)?.toIntOrNull() ?: 0,
+                field.getOrNull(3) == "1", field.getOrNull(4) == "1")
+        }.toMap()
+
+    fun reviewCallsigns(): List<String> = callsignProgress().entries.filterNot { it.value.suspended }
+        .sortedWith(compareByDescending<Map.Entry<String, CallsignProgress>> { it.value.hard }
+            .thenByDescending { it.value.incorrect - it.value.correct }).map(Map.Entry<String, CallsignProgress>::key)
+
+    fun recordCallsign(callsign: String, correct: Boolean) = updateCallsign(callsign) { prior ->
+        if (correct) prior.copy(correct = prior.correct + 1) else prior.copy(incorrect = prior.incorrect + 1)
+    }
+
+    fun setCallsignHard(callsign: String, hard: Boolean) = updateCallsign(callsign) { it.copy(hard = hard) }
+    fun setCallsignSuspended(callsign: String, suspended: Boolean) = updateCallsign(callsign) { it.copy(suspended = suspended) }
+    fun resetCallsign(callsign: String) = updateCallsign(callsign) { CallsignProgress() }
+
+    private fun updateCallsign(callsign: String, transform: (CallsignProgress) -> CallsignProgress) {
+        val normalized = callsign.uppercase().trim()
+        if (normalized.isBlank()) return
+        val values = callsignProgress().toMutableMap()
+        values[normalized] = transform(values[normalized] ?: CallsignProgress())
+        prefs.edit { putString("callsign_progress", values.entries.joinToString(";") { (call, value) ->
+            "$call:${value.correct}:${value.incorrect}:${if (value.hard) 1 else 0}:${if (value.suspended) 1 else 0}"
+        }) }
+        historyRevision++
+    }
+
     private inline fun <reified T : Enum<T>> enumValue(key: String, fallback: T): T = runCatching {
         enumValueOf<T>(prefs.getString(key, fallback.name).orEmpty())
     }.getOrDefault(fallback)
@@ -87,6 +177,11 @@ class MorseTrainerStore(context: Context) {
         volumePercent = prefs.getInt("volume_percent", 70),
         sessionSize = prefs.getInt("session_size", 25),
         callsignSessionSize = prefs.getInt("callsign_session_size", 25),
+        callsignSourceMode = enumValue("callsign_source_mode", CallsignSourceMode.DIFFICULTY),
+        callsignCharacterWpm = prefs.getInt("callsign_character_wpm", 28),
+        callsignEffectiveWpm = prefs.getInt("callsign_effective_wpm", 8),
+        callsignPitchHz = prefs.getInt("callsign_pitch_hz", 550),
+        callsignVolumePercent = prefs.getInt("callsign_volume_percent", 60),
         txMode = enumValue("tx_mode", TxContentMode.REAL_WORDS),
         txWordLength = enumValue("tx_word_length", TxWordLength.ANY),
         txMaxAttempts = prefs.getInt("tx_max_attempts", 3),
@@ -96,6 +191,11 @@ class MorseTrainerStore(context: Context) {
         repeatDelayMillis = prefs.getInt("repeat_delay_millis", 1_500),
         noiseLevel = enumValue("noise_level", MorseNoiseLevel.OFF),
         audioFilterHz = prefs.getInt("audio_filter_hz", 700),
+        callsignNoiseLevel = enumValue("callsign_noise_level", MorseNoiseLevel.S3),
+        callsignAudioFilterHz = prefs.getInt("callsign_audio_filter_hz", 700),
+        machineWpm = prefs.getInt("machine_wpm", 20),
+        machinePitchHz = prefs.getInt("machine_pitch_hz", 600),
+        machineVolumePercent = prefs.getInt("machine_volume_percent", 70),
         machineSet = enumValue("machine_set", MachineCharacterSet.KOCH),
         machineTrainingMode = enumValue("machine_training_mode", MachineTrainingMode.LESSON),
         machineDrillMode = enumValue("machine_drill_mode", MachineDrillMode.ADAPTIVE),
@@ -201,6 +301,7 @@ enum class M32ConnectionState { DISCONNECTED, CONNECTING, READY, ERROR }
 enum class M32ConnectionRoute { USB, BLE }
 
 class M32PocketController(context: Context) {
+    private val prefs = context.getSharedPreferences("rigweave-m32", Context.MODE_PRIVATE)
     private val usbTransport = UsbRadioTransport(context.applicationContext, "rigweave-m32-usb")
     private val bleTransport = M32BleSerialTransport(context.applicationContext)
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -209,8 +310,10 @@ class M32PocketController(context: Context) {
     var devices by mutableStateOf(emptyList<SerialDeviceDescriptor>()); private set
     var selectedSessionKey by mutableStateOf<String?>(null); private set
     var bleDevices by mutableStateOf(emptyList<M32BleDevice>()); private set
-    var selectedBleAddress by mutableStateOf<String?>(null); private set
-    var selectedRoute by mutableStateOf(M32ConnectionRoute.BLE); private set
+    var selectedBleAddress by mutableStateOf(prefs.getString("ble_address", null)); private set
+    var selectedRoute by mutableStateOf(runCatching {
+        M32ConnectionRoute.valueOf(prefs.getString("route", M32ConnectionRoute.BLE.name).orEmpty())
+    }.getOrDefault(M32ConnectionRoute.BLE)); private set
     var state by mutableStateOf(M32ConnectionState.DISCONNECTED); private set
     var detail by mutableStateOf("Use BLE Serial for the full M32 protocol, or choose a USB device."); private set
     var reportedWpm by mutableStateOf<Int?>(null); private set
@@ -225,11 +328,15 @@ class M32PocketController(context: Context) {
 
     suspend fun scanBle() {
         selectedRoute = M32ConnectionRoute.BLE
+        prefs.edit { putString("route", selectedRoute.name) }
         detail = "Searching for Morserino-32…"
         runCatching { bleTransport.scan() }
             .onSuccess { found ->
-                bleDevices = found
-                if (found.size == 1) selectedBleAddress = found.single().address
+                val remembered = selectedBleAddress?.let { address ->
+                    found.firstOrNull { it.address == address } ?: M32BleDevice(address, prefs.getString("ble_name", "Morserino-32").orEmpty())
+                }
+                bleDevices = (found + listOfNotNull(remembered)).distinctBy(M32BleDevice::address)
+                if (found.size == 1) selectBle(found.single().address)
                 detail = if (found.isEmpty()) {
                     "No M32 found. On M32 set Bluetooth Use to BLE Serial, then try again."
                 } else "Select Morserino-32, keep it at the main menu, then connect."
@@ -243,11 +350,14 @@ class M32PocketController(context: Context) {
     fun selectUsb(sessionKey: String) {
         selectedSessionKey = sessionKey
         selectedRoute = M32ConnectionRoute.USB
+        prefs.edit { putString("route", selectedRoute.name) }
     }
 
     fun selectBle(address: String) {
         selectedBleAddress = address
         selectedRoute = M32ConnectionRoute.BLE
+        val name = bleDevices.firstOrNull { it.address == address }?.name ?: "Morserino-32"
+        prefs.edit { putString("route", selectedRoute.name); putString("ble_address", address); putString("ble_name", name) }
     }
 
     fun bluetoothPermissionDenied() {
@@ -279,6 +389,7 @@ class M32PocketController(context: Context) {
     }
 
     private suspend fun connectBle(targetWpm: Int) {
+        if (selectedBleAddress == null && bleDevices.isEmpty()) scanBle()
         val address = selectedBleAddress ?: bleDevices.singleOrNull()?.address
         if (address == null) {
             state = M32ConnectionState.ERROR
@@ -286,7 +397,17 @@ class M32PocketController(context: Context) {
             return
         }
         detail = "Connecting to M32 BLE Serial…"
-        runCatching { bleTransport.connect(address) }
+        runCatching {
+            var lastFailure: Throwable? = null
+            repeat(2) { attempt ->
+                val result = runCatching { bleTransport.connect(address) }
+                if (result.isSuccess) return@runCatching
+                lastFailure = result.exceptionOrNull()
+                bleTransport.disconnect()
+                if (attempt == 0) { detail = "M32 did not answer; retrying BLE Serial…"; delay(700) }
+            }
+            throw lastFailure ?: IllegalStateException("M32 BLE connection failed.")
+        }
             .onSuccess {
                 detail = "On the M32 main menu, press FN when ‘Allow connect?’ appears."
                 configureM32(targetWpm)

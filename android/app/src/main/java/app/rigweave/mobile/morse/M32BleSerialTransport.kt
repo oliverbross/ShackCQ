@@ -11,12 +11,10 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.ScanCallback
-import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
 import android.os.Build
-import android.os.ParcelUuid
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -40,6 +38,11 @@ internal fun m32BleResponseComplete(command: String, response: String): Boolean 
     } else objects.isNotEmpty()
 }
 
+internal fun m32BleAdvertisementMatches(name: String?, serviceUuids: List<UUID>): Boolean =
+    M32BleSerialTransport.NUS_SERVICE_UUID in serviceUuids ||
+        name?.contains("Morserino", ignoreCase = true) == true ||
+        name?.contains("M32", ignoreCase = true) == true
+
 /** Nordic UART Service transport used by M32 firmware when Bluetooth Use = BLE Serial. */
 @SuppressLint("MissingPermission")
 class M32BleSerialTransport(context: Context) {
@@ -58,7 +61,10 @@ class M32BleSerialTransport(context: Context) {
         val scanFailure = AtomicReference<String?>(null)
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
-                val name = result.scanRecord?.deviceName ?: result.device.name ?: "Morserino-32"
+                val advertisedName = result.scanRecord?.deviceName ?: result.device.name
+                val serviceUuids = result.scanRecord?.serviceUuids.orEmpty().map { it.uuid }
+                if (!m32BleAdvertisementMatches(advertisedName, serviceUuids)) return
+                val name = advertisedName ?: "Morserino-32"
                 found[result.device.address] = M32BleDevice(result.device.address, name)
             }
 
@@ -70,9 +76,8 @@ class M32BleSerialTransport(context: Context) {
                 scanFailure.set("BLE scan failed ($errorCode).")
             }
         }
-        val filter = ScanFilter.Builder().setServiceUuid(ParcelUuid(NUS_SERVICE_UUID)).build()
         val settings = ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY).build()
-        scanner.startScan(listOf(filter), settings, callback)
+        scanner.startScan(null, settings, callback)
         try { delay(durationMs) } finally { runCatching { scanner.stopScan(callback) } }
         scanFailure.get()?.let { error(it) }
         return found.values.toList()
@@ -80,6 +85,7 @@ class M32BleSerialTransport(context: Context) {
 
     suspend fun connect(address: String) {
         disconnect()
+        delay(350)
         while (incoming.tryReceive().isSuccess) Unit
         val device = adapter?.getRemoteDevice(address) ?: error("Bluetooth is unavailable.")
         val ready = CompletableDeferred<Unit>()
@@ -192,6 +198,10 @@ class M32BleSerialTransport(context: Context) {
     private fun failConnect(message: String) {
         connectResult?.completeExceptionally(IllegalStateException(message))
         writeResult?.completeExceptionally(IllegalStateException(message))
+        rx = null
+        gatt?.runCatching { disconnect() }
+        gatt?.close()
+        gatt = null
     }
 
     companion object {

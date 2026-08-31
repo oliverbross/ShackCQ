@@ -70,9 +70,14 @@ fun MorseScreen() {
         audioJob = null
         audio.stop()
     }
-    fun play(text: String, repeats: Int = 1) {
+    fun play(kind: MorseTrainerKind, text: String, repeats: Int = 1) {
         stopPlayback()
-        audioJob = scope.launch { audio.play(text, store.settings, repeats) }
+        val profile = when (kind) {
+            MorseTrainerKind.TX -> store.settings
+            MorseTrainerKind.CALLSIGN -> store.settings.callsignAudio()
+            MorseTrainerKind.MACHINE -> store.settings.machineAudio()
+        }
+        audioJob = scope.launch { audio.play(text, profile, repeats) }
     }
     DisposableEffect(Unit) { onDispose { stopPlayback(); m32.dispose() } }
 
@@ -106,26 +111,26 @@ fun MorseScreen() {
             Spacer(Modifier.height(12.dp))
             if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.weight(1.7f).fillMaxHeight()) {
-                    TrainerSurface(trainer, store, corpus, m32, ::play, ::stopPlayback)
+                    TrainerSurface(trainer, store, corpus, m32, ::play, ::stopPlayback) { showSettings = true }
                 }
-                M32Panel(m32, store.settings, Modifier.weight(0.8f).fillMaxHeight())
+                M32Panel(m32, store.settings, trainer, Modifier.weight(0.8f).fillMaxHeight())
             } else Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1.55f).fillMaxWidth()) { TrainerSurface(trainer, store, corpus, m32, ::play, ::stopPlayback) }
+                Box(Modifier.weight(1.55f).fillMaxWidth()) { TrainerSurface(trainer, store, corpus, m32, ::play, ::stopPlayback) { showSettings = true } }
                 Spacer(Modifier.height(12.dp))
-                M32Panel(m32, store.settings, Modifier.weight(0.85f).fillMaxWidth())
+                M32Panel(m32, store.settings, trainer, Modifier.weight(0.85f).fillMaxWidth())
             }
         }
     }
-    if (showSettings) AdvancedMorseSettingsDialog(store.settings, store::update) { showSettings = false }
+    if (showSettings) AdvancedMorseSettingsDialog(store.settings, trainer, store::update) { showSettings = false }
 }
 
 @Composable
-private fun TrainerSurface(kind: MorseTrainerKind, store: MorseTrainerStore, corpus: MorseCorpusRepository, m32: M32PocketController, play: (String, Int) -> Unit, stopPlayback: () -> Unit) {
+private fun TrainerSurface(kind: MorseTrainerKind, store: MorseTrainerStore, corpus: MorseCorpusRepository, m32: M32PocketController, play: (MorseTrainerKind, String, Int) -> Unit, stopPlayback: () -> Unit, openSettings: () -> Unit) {
     Surface(Modifier.fillMaxSize(), shape = RoundedCornerShape(12.dp), color = MorsePanel, tonalElevation = 0.dp) {
         when (kind) {
-            MorseTrainerKind.TX -> AdvancedTxTrainer(store.settings, corpus, m32)
-            MorseTrainerKind.CALLSIGN -> AdvancedCallsignTrainer(store.settings, corpus, m32, play, stopPlayback)
-            MorseTrainerKind.MACHINE -> AdvancedMorseMachineTrainer(store, m32, play, stopPlayback)
+            MorseTrainerKind.TX -> AdvancedTxTrainer(store, corpus, m32, openSettings)
+            MorseTrainerKind.CALLSIGN -> AdvancedCallsignTrainer(store, corpus, m32, { text, repeats -> play(kind, text, repeats) }, stopPlayback, openSettings)
+            MorseTrainerKind.MACHINE -> AdvancedMorseMachineTrainer(store, m32, { text, repeats -> play(kind, text, repeats) }, stopPlayback, openSettings)
         }
     }
 }
@@ -296,7 +301,7 @@ private fun MorseMachineTrainer(settings: MorseTrainerSettings, m32: M32PocketCo
 }
 
 @Composable
-private fun M32Panel(controller: M32PocketController, settings: MorseTrainerSettings, modifier: Modifier) {
+private fun M32Panel(controller: M32PocketController, settings: MorseTrainerSettings, trainer: MorseTrainerKind, modifier: Modifier) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var usbMenuOpen by remember { mutableStateOf(false) }
@@ -352,7 +357,11 @@ private fun M32Panel(controller: M32PocketController, settings: MorseTrainerSett
             Spacer(Modifier.height(8.dp))
             if (controller.state == M32ConnectionState.READY) OutlinedButton(onClick = { scope.launch { controller.disconnect() } },
                 modifier = Modifier.fillMaxWidth()) { Text("Disconnect") }
-            else Button(onClick = { scope.launch { controller.connect(settings.characterWpm) } },
+            else Button(onClick = { scope.launch { controller.connect(when (trainer) {
+                MorseTrainerKind.TX -> settings.characterWpm
+                MorseTrainerKind.CALLSIGN -> settings.callsignCharacterWpm
+                MorseTrainerKind.MACHINE -> settings.machineWpm
+            }) } },
                 enabled = controller.state != M32ConnectionState.CONNECTING, modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = MorseAmber, contentColor = MorseAmberDark)) { Text("Connect & start keyer") }
             HorizontalDivider(Modifier.padding(vertical = 16.dp), color = MorseLine)
