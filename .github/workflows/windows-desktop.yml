@@ -188,7 +188,7 @@ jobs:
           Get-ChildItem artifacts/windows -File | Where-Object Name -Match '^ShackCQ(?:Agent)?-Windows-x64-' |
             Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } |
             Set-Content artifacts/windows/SHA256SUMS.txt
-          if (!(Select-String artifacts/windows/SHA256SUMS.txt -SimpleMatch "ShackCQAgent-Windows-x64-${{ github.sha }}.zip")) {
+          if (!(Select-String -Path artifacts/windows/SHA256SUMS.txt -Pattern "ShackCQAgent-Windows-x64-${{ github.sha }}.zip" -SimpleMatch)) {
             throw 'Standalone Agent checksum is missing'
           }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
