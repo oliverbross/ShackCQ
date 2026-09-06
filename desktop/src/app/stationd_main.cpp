@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+#include "shackcq/desktop/CloudAgentClient.hpp"
 #include "shackcq/desktop/DesktopPanadapter.hpp"
 #include "shackcq/desktop/DesktopPlatform.hpp"
 #include "shackcq/desktop/DesktopRadioController.hpp"
