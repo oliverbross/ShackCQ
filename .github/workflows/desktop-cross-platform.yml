@@ -59,7 +59,7 @@ jobs:
         run: |
           mkdir -p artifacts/macos/ShackCQAgent.app/Contents/MacOS
           cp build/macos/ShackCQAgent artifacts/macos/ShackCQAgent.app/Contents/MacOS/
-          cp desktop/packaging/macos/stationd-Info.plist artifacts/macos/ShackCQAgent.app/Contents/Info.plist
+          cp desktop/packaging/macos/agent-Info.plist artifacts/macos/ShackCQAgent.app/Contents/Info.plist
           macdeployqt artifacts/macos/ShackCQAgent.app
           rm -f artifacts/macos/ShackCQAgent.app/Contents/PlugIns/sqldrivers/libqsqlodbc.dylib \
                 artifacts/macos/ShackCQAgent.app/Contents/PlugIns/sqldrivers/libqsqlpsql.dylib \
