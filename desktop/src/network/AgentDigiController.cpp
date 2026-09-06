@@ -108,7 +108,8 @@ AgentDigiController::~AgentDigiController() {
 bool AgentDigiController::restoreConfiguration(const QVariantMap &section, QString *error) {
   static const QSet<QString> allowed{"schemaVersion","audioProfile","localTxPermitted","hardwareAccepted","acceptedRadioIdentity"};
   for (auto it=section.cbegin(); it!=section.cend(); ++it) if (!allowed.contains(it.key())) {
-    if (error) *error="Digi configuration contains runtime or transmit state"; return false;
+    if (error) *error="Digi configuration contains runtime or transmit state";
+    return false;
   }
   if (section.value("schemaVersion",1).toInt()!=1) { if(error)*error="Unsupported Digi configuration schema"; return false; }
   const QVariantMap profile=section.value("audioProfile").toMap();
