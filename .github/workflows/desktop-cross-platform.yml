@@ -4,7 +4,7 @@ on:
   workflow_call:
   workflow_dispatch:
   push:
-    branches: [feature/windows-desktop-alpha-v1, feature/tci-multirx-waterfall-globe-v1, feature/desktop-flightline-ui-convergence-v1, feature/desktop-ui-ux-deep-convergence-v2, feature/desktop-functional-parity-closure-v1]
+    branches: [feature/windows-desktop-alpha-v1, feature/tci-multirx-waterfall-globe-v1, feature/desktop-flightline-ui-convergence-v1, feature/desktop-ui-ux-deep-convergence-v2, feature/desktop-functional-parity-closure-v1, feature/hamlib-cloud-agent-v1]
     paths:
       - 'desktop/**'
       - 'core/**'
@@ -55,20 +55,20 @@ jobs:
           ditto -c -k --sequesterRsrc artifacts/macos/ShackCQDesktop.app "artifacts/macos/ShackCQ-macOS-arm64-unsigned-v0.1.0-rc.1.zip"
           test "$(stat -f%z artifacts/macos/ShackCQ-macOS-arm64-unsigned-v0.1.0-rc.1.zip)" -le 209715200
           shasum -a 256 "artifacts/macos/ShackCQ-macOS-arm64-unsigned-v0.1.0-rc.1.zip" > artifacts/macos/SHA256SUMS.txt
-      - name: Unsigned standalone stationd packaging proof
+      - name: Unsigned standalone ShackCQ Agent packaging proof
         run: |
-          mkdir -p artifacts/macos/ShackCQStationd.app/Contents/MacOS
-          cp build/macos/shackcq-stationd artifacts/macos/ShackCQStationd.app/Contents/MacOS/
-          cp desktop/packaging/macos/stationd-Info.plist artifacts/macos/ShackCQStationd.app/Contents/Info.plist
-          macdeployqt artifacts/macos/ShackCQStationd.app
-          rm -f artifacts/macos/ShackCQStationd.app/Contents/PlugIns/sqldrivers/libqsqlodbc.dylib \
-                artifacts/macos/ShackCQStationd.app/Contents/PlugIns/sqldrivers/libqsqlpsql.dylib \
-                artifacts/macos/ShackCQStationd.app/Contents/PlugIns/sqldrivers/libqsqlmimer.dylib
-          mkdir -p artifacts/macos/ShackCQStationd.app/Contents/Resources
-          cp COPYING NOTICE artifacts/macos/ShackCQStationd.app/Contents/Resources/
-          ! find artifacts/macos/ShackCQStationd.app -type f | grep -Ei '(private|identity|\.pem$|rigctld)'
-          ditto -c -k --sequesterRsrc artifacts/macos/ShackCQStationd.app "artifacts/macos/ShackCQ-stationd-macOS-arm64-unsigned-${GITHUB_SHA}.zip"
-          shasum -a 256 "artifacts/macos/ShackCQ-stationd-macOS-arm64-unsigned-${GITHUB_SHA}.zip" >> artifacts/macos/SHA256SUMS.txt
+          mkdir -p artifacts/macos/ShackCQAgent.app/Contents/MacOS
+          cp build/macos/ShackCQAgent artifacts/macos/ShackCQAgent.app/Contents/MacOS/
+          cp desktop/packaging/macos/stationd-Info.plist artifacts/macos/ShackCQAgent.app/Contents/Info.plist
+          macdeployqt artifacts/macos/ShackCQAgent.app
+          rm -f artifacts/macos/ShackCQAgent.app/Contents/PlugIns/sqldrivers/libqsqlodbc.dylib \
+                artifacts/macos/ShackCQAgent.app/Contents/PlugIns/sqldrivers/libqsqlpsql.dylib \
+                artifacts/macos/ShackCQAgent.app/Contents/PlugIns/sqldrivers/libqsqlmimer.dylib
+          mkdir -p artifacts/macos/ShackCQAgent.app/Contents/Resources
+          cp COPYING NOTICE artifacts/macos/ShackCQAgent.app/Contents/Resources/
+          ! find artifacts/macos/ShackCQAgent.app -type f | grep -Ei '(private|identity|\.pem$|rigctld)'
+          ditto -c -k --sequesterRsrc artifacts/macos/ShackCQAgent.app "artifacts/macos/ShackCQAgent-macOS-arm64-unsigned-${GITHUB_SHA}.zip"
+          shasum -a 256 "artifacts/macos/ShackCQAgent-macOS-arm64-unsigned-${GITHUB_SHA}.zip" >> artifacts/macos/SHA256SUMS.txt
       - name: Deterministic macOS UI gallery
         env:
           QT_QPA_PLATFORM: offscreen

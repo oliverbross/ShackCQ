@@ -8,6 +8,7 @@ on:
       - integration/android-hardened-windows-alpha-v1
       - feature/windows-desktop-full-parity-v1
       - feature/desktop-functional-parity-closure-v1
+      - feature/hamlib-cloud-agent-v1
       - feature/android-sdroxide-enhancements-v2
       - feature/android-local-sdr-receiver-v3
       - feature/android-sdr-workbench-v4
@@ -51,7 +52,7 @@ jobs:
           arch: linux_gcc_64
           modules: 'qtmultimedia qtserialport qtwebsockets qtlocation qtpositioning'
           cache: true
-      - name: Build full GUI and station daemon
+      - name: Build full GUI and ShackCQ Agent
         run: cmake -S desktop -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=ON && cmake --build build/linux --parallel 2
       - name: Test full Linux desktop offscreen
         env:
@@ -64,8 +65,9 @@ jobs:
           QT_QPA_PLATFORM=offscreen build/linux-install/ShackCQDesktop --ui-stress-report build/linux-ui-stress.json
           cpack --config build/linux/CPackConfig.cmake -B build/packages
           tar -C build/linux-install -czf build/packages/ShackCQ-Linux-x86_64-v0.1.0-rc.1.tar.gz .
-          cp build/linux/shackcq-stationd build/packages/shackcq-stationd
-          tar -C build/packages -czf build/packages/ShackCQ-stationd-Linux-x86_64-v0.1.0-rc.1.tar.gz shackcq-stationd
+          cp build/linux/ShackCQAgent build/packages/ShackCQAgent
+          tar -C build/packages -czf build/packages/ShackCQAgent-Linux-x86_64-v0.1.0-rc.1.tar.gz ShackCQAgent
+          sha256sum build/packages/ShackCQAgent-Linux-x86_64-v0.1.0-rc.1.tar.gz > build/packages/SHA256SUMS.txt
           ! find build/linux-install -type f | grep -Ei '(private|identity|\.pem$|credentials)'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

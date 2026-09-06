@@ -4,7 +4,7 @@ on:
   workflow_call:
   workflow_dispatch:
   push:
-    branches: [feature/windows-desktop-alpha-v1, feature/tci-multirx-waterfall-globe-v1, feature/desktop-flightline-ui-convergence-v1, feature/desktop-ui-ux-deep-convergence-v2, feature/desktop-functional-parity-closure-v1]
+    branches: [feature/windows-desktop-alpha-v1, feature/tci-multirx-waterfall-globe-v1, feature/desktop-flightline-ui-convergence-v1, feature/desktop-ui-ux-deep-convergence-v2, feature/desktop-functional-parity-closure-v1, feature/hamlib-cloud-agent-v1]
     paths:
       - 'desktop/**'
       - 'core/**'
@@ -159,19 +159,19 @@ jobs:
       - name: Package portable ZIP and per-user NSIS installer
         shell: pwsh
         run: desktop/packaging/windows/package.ps1 -BuildDirectory build/windows -OutputDirectory artifacts/windows
-      - name: Package standalone stationd ZIP
+      - name: Package standalone ShackCQ Agent ZIP
         shell: pwsh
         run: |
-          $stage = 'artifacts/windows/stationd-portable'
+          $stage = 'artifacts/windows/agent-portable'
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item build/windows/shackcq-stationd.exe $stage
+          Copy-Item build/windows/ShackCQAgent.exe $stage
           Copy-Item "$env:OPENSSL_ROOT_DIR/bin/libcrypto-3-x64.dll" $stage
           Copy-Item "$env:OPENSSL_ROOT_DIR/bin/libssl-3-x64.dll" $stage
           Copy-Item COPYING "$stage/COPYING.txt"
           Copy-Item NOTICE "$stage/NOTICE.txt"
           windeployqt --release --no-translations --no-system-d3d-compiler --dir $stage "$stage/shackcq-stationd.exe"
-          if (Get-ChildItem $stage -Recurse -File | Where-Object Name -Match '(?i)(private|identity|\.pem$|rigctld)') { throw 'Forbidden stationd package content' }
-          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/windows/ShackCQ-stationd-Windows-x64-${{ github.sha }}.zip" -CompressionLevel Optimal
+          if (Get-ChildItem $stage -Recurse -File | Where-Object Name -Match '(?i)(private|identity|\.pem$|rigctld)') { throw 'Forbidden Agent package content' }
+          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/windows/ShackCQAgent-Windows-x64-${{ github.sha }}.zip" -CompressionLevel Optimal
       - name: Enforce measured size ceilings
         shell: pwsh
         run: |
