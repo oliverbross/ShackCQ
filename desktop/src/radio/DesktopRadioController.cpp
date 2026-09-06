@@ -36,7 +36,7 @@ QString cloudModeFromHamlib(rmode_t value) {
 
 namespace shackcq::desktop {
 namespace {
-constexpr int RadioProfilesSchema = 2;
+constexpr int RadioProfilesSchema = 3;
 
 QVariantMap hamlibSnapshot(const QString &model, quint64 frequency,
                            const QString &mode) {
@@ -314,6 +314,40 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
 #endif
 }
 
+bool DesktopRadioController::saveHamlibProfile(int modelId,
+                                               const QString &route,
+                                               int baudRate,
+                                               bool autoConnect) {
+  const QString cleanRoute = route.trimmed();
+  if (modelId < 1 || cleanRoute.isEmpty() || cleanRoute.size() > 512 ||
+      cleanRoute.contains(QRegularExpression(QStringLiteral("[\\x00-\\x1f]"))) ||
+      (baudRate != 0 && (baudRate < 1200 || baudRate > 921600))) {
+    emit error("Invalid Hamlib model, route, or baud rate");
+    return false;
+  }
+  HamlibModelRegistry models;
+  const bool known = std::any_of(
+      models.allModels().cbegin(), models.allModels().cend(),
+      [modelId](const RadioModel &model) { return model.id == modelId; });
+  if (!known) {
+    emit error("Unknown Hamlib model id");
+    return false;
+  }
+  m_hamlibProfile = {{"modelId", modelId},
+                     {"route", cleanRoute},
+                     {"baudRate", baudRate},
+                     {"autoConnect", autoConnect}};
+  emit preferencesChanged();
+  return true;
+}
+
+void DesktopRadioController::clearHamlibProfile() {
+  if (m_backend == "hamlib")
+    disconnectRadio();
+  m_hamlibProfile.clear();
+  emit preferencesChanged();
+}
+
 bool DesktopRadioController::connectNativeProfile(const QString &profileId,
                                                   const QString &route,
                                                   int baudRate) {
@@ -470,7 +504,11 @@ bool DesktopRadioController::removeTciProfile(const QString &id) {
 }
 
 void DesktopRadioController::startConfiguredAutoConnect() {
-  if (!m_autoConnectProfileId.isEmpty())
+  if (m_hamlibProfile.value("autoConnect", false).toBool()) {
+    connectRadio(m_hamlibProfile.value("modelId").toInt(),
+                 m_hamlibProfile.value("route").toString(),
+                 m_hamlibProfile.value("baudRate").toInt());
+  } else if (!m_autoConnectProfileId.isEmpty())
     connectTciProfile(m_autoConnectProfileId);
 }
 
@@ -504,6 +542,8 @@ void DesktopRadioController::disconnectRadio() {
   m_listeningReceiverId.clear();
   m_transmitReceiverId.clear();
   m_backendCapabilities.clear();
+  m_meters.clear();
+  m_transmitting.reset();
   m_receivers.clear();
   emit snapshotChanged();
 }
@@ -705,6 +745,27 @@ void DesktopRadioController::poll() {
     m_mode = cloudModeFromHamlib(parsed);
     m_filterHz = static_cast<int>(width);
   }
+  m_meters.clear();
+  const QStringList advertisedMeters =
+      m_backendCapabilities.value("meters").toStringList();
+  auto readLevel = [rig, this](setting_t level, const QString &name,
+                               bool floatingPoint) {
+    value_t value{};
+    if (rig_get_level(rig, RIG_VFO_CURR, level, &value) == RIG_OK)
+      m_meters.insert(name, floatingPoint ? QVariant(value.f)
+                                         : QVariant(value.i));
+  };
+  if (advertisedMeters.contains("signal"))
+    readLevel(RIG_LEVEL_STRENGTH, "signal", false);
+  if (advertisedMeters.contains("swr"))
+    readLevel(RIG_LEVEL_SWR, "swr", true);
+  if (advertisedMeters.contains("alc"))
+    readLevel(RIG_LEVEL_ALC, "alc", true);
+  ptt_t ptt = RIG_PTT_OFF;
+  if (rig_get_ptt(rig, RIG_VFO_CURR, &ptt) == RIG_OK)
+    m_transmitting = ptt != RIG_PTT_OFF;
+  else
+    m_transmitting.reset();
   QVariantList rows{hamlibSnapshot(m_model, m_frequencyHz, m_mode)};
   m_receivers.replace(rows, m_activeReceiverId, m_listeningReceiverId,
                       m_transmitReceiverId);
@@ -832,6 +893,7 @@ QVariantMap DesktopRadioController::configuration() const {
   result["activeReceiverId"] = m_activeReceiverId;
   result["listeningReceiverId"] = m_listeningReceiverId;
   result["autoConnectProfileId"] = m_autoConnectProfileId;
+  result["hamlibProfile"] = m_hamlibProfile;
   result["tciProfiles"] = m_tciProfiles;
   result["safeView"] = m_safeView;
   return result;
@@ -871,6 +933,24 @@ bool DesktopRadioController::restoreConfiguration(const QVariantMap &input,
   m_activeReceiverId = section.value("activeReceiverId").toString();
   m_listeningReceiverId = section.value("listeningReceiverId").toString();
   m_safeView = section.value("safeView", m_safeView).toMap();
+  m_hamlibProfile.clear();
+  const QVariantMap hamlibProfile = section.value("hamlibProfile").toMap();
+  if (!hamlibProfile.isEmpty()) {
+    const int modelId = hamlibProfile.value("modelId").toInt();
+    const QString route = hamlibProfile.value("route").toString().trimmed();
+    const int baudRate = hamlibProfile.value("baudRate").toInt();
+    if (modelId < 1 || route.isEmpty() || route.size() > 512 ||
+        route.contains(QRegularExpression(QStringLiteral("[\\x00-\\x1f]"))) ||
+        (baudRate != 0 && (baudRate < 1200 || baudRate > 921600))) {
+      if (error)
+        *error = "Invalid persisted Hamlib profile";
+      return false;
+    }
+    m_hamlibProfile = {{"modelId", modelId},
+                       {"route", route},
+                       {"baudRate", baudRate},
+                       {"autoConnect", hamlibProfile.value("autoConnect", true).toBool()}};
+  }
   m_tciProfiles.clear();
   m_autoConnectProfileId = section.value("autoConnectProfileId").toString();
   for (const QVariant &e : section.value("tciProfiles").toList()) {
@@ -899,7 +979,12 @@ QVariantMap DesktopRadioController::health() const {
           {"pttAvailable", false},
           {"tuneAvailable", false},
           {"capabilities", m_backendCapabilities},
+          {"meters", m_meters},
+          {"transmitting",
+           m_transmitting ? QVariant(*m_transmitting) : QVariant()},
           {"lastSanitizedError", m_lastError},
+          {"hamlibProfileConfigured", !m_hamlibProfile.isEmpty()},
+          {"hamlibProfileModelId", m_hamlibProfile.value("modelId")},
           {"tci", m_tci.diagnostics()}};
 }
 void DesktopRadioController::globalStop() { m_tci.globalStop(); }

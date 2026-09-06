@@ -38,6 +38,34 @@ private slots:
     QCOMPARE(health.value("rotatorMovement").toBool(), false);
   }
 
+  void hamlibProfilePersistsForExplicitSafeAutoconnect() {
+    DesktopRadioController radio;
+    QVERIFY(radio.saveHamlibProfile(1, "/dev/shackcq-dummy", 38400, true));
+    const QVariantMap stored = radio.configuration();
+    QCOMPARE(stored.value("schemaVersion").toInt(), 3);
+    DesktopRadioController restored;
+    QString error;
+    QVERIFY2(restored.restoreConfiguration(stored, &error), qPrintable(error));
+    QCOMPARE(restored.hamlibProfile().value("modelId").toInt(), 1);
+    QCOMPARE(restored.hamlibProfile().value("route").toString(),
+             QString("/dev/shackcq-dummy"));
+    QCOMPARE(restored.hamlibProfile().value("autoConnect").toBool(), true);
+    restored.clearHamlibProfile();
+    QVERIFY(restored.hamlibProfile().isEmpty());
+  }
+
+  void unpairRemovesVaultCredentialAndDisablesClient() {
+    FakeCredentialVault vault;
+    QString error;
+    QVERIFY(vault.write("shackcq-cloud-agent-v1", "fixture", "secret", &error));
+    DesktopRadioController radio;
+    CloudAgentClient client(&vault, &radio);
+    QVERIFY(client.restoreConfiguration({{"enabled", true}}));
+    QVERIFY2(client.unpair(&error), qPrintable(error));
+    QCOMPARE(client.configuration().value("enabled").toBool(), false);
+    QVERIFY(!vault.read("shackcq-cloud-agent-v1").has_value());
+  }
+
   void staleAndProhibitedFramesFailClosed() {
     FakeCredentialVault vault;
     DesktopRadioController radio;

@@ -9,12 +9,14 @@
 #include <QCommandLineParser>
 #include <QCoreApplication>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QTextStream>
 #include <QSysInfo>
 #include <QUrl>
+#include <QSerialPortInfo>
 
 using namespace shackcq::desktop;
 namespace {
@@ -56,11 +58,24 @@ int main(int argc, char **argv) {
   parser.addOption(QCommandLineOption(QStringLiteral("pair-with-shackcq"), "Exchange a one-time ShackCQ Cloud pairing code", "code"));
   parser.addOption(QCommandLineOption(QStringLiteral("cloud-origin"), "ShackCQ Cloud HTTPS origin", "origin", "https://shackcq.com"));
   parser.addOption(QCommandLineOption(QStringLiteral("agent-name"), "Public name for this Agent", "name", QSysInfo::machineHostName()));
+  parser.addOption(QCommandLineOption(QStringLiteral("list-hamlib-models"), "List compiled Hamlib radio models as JSON"));
+  parser.addOption(QCommandLineOption(QStringLiteral("list-serial-ports"), "List local serial routes as JSON"));
+  parser.addOption(QCommandLineOption(QStringLiteral("configure-hamlib"), "Persist a Hamlib model id for safe startup autoconnect", "model-id"));
+  parser.addOption(QCommandLineOption(QStringLiteral("radio-route"), "Explicit local serial/network route used with --configure-hamlib", "route"));
+  parser.addOption(QCommandLineOption(QStringLiteral("radio-baud"), "Serial speed used with --configure-hamlib", "baud", "38400"));
+  parser.addOption(QCommandLineOption(QStringLiteral("no-radio-autoconnect"), "Persist the Hamlib profile without startup autoconnect"));
+  parser.addOption(QCommandLineOption(QStringLiteral("test-radio-connection"), "Open/read the configured receive-only Hamlib profile once, then close"));
+  parser.addOption(QCommandLineOption(QStringLiteral("clear-hamlib-profile"), "Disconnect and remove the persisted Hamlib profile"));
+  parser.addOption(QCommandLineOption(QStringLiteral("unpair-shackcq"), "Remove the cloud Agent credential from the operating-system vault"));
   parser.process(application);
 
   const QJsonObject requestedAdminAction = adminRequest(parser);
   if (!parser.isSet("foreground") && !requestedAdminAction.isEmpty()) return sendAdminRequest(requestedAdminAction);
-  if (!parser.isSet("foreground") && !parser.isSet("pair-with-shackcq")) parser.showHelp(1);
+  const bool setupAction = parser.isSet("pair-with-shackcq") ||
+      parser.isSet("list-hamlib-models") || parser.isSet("list-serial-ports") ||
+      parser.isSet("configure-hamlib") || parser.isSet("clear-hamlib-profile") ||
+      parser.isSet("unpair-shackcq");
+  if (!parser.isSet("foreground") && !setupAction) parser.showHelp(1);
 
   DesktopPaths paths;
   QString error;
@@ -79,6 +94,63 @@ int main(int argc, char **argv) {
   }
   if (!cloudAgent.restoreConfiguration(configuration.section("cloudAgent"), &error)) {
     QTextStream(stderr) << error << '\n'; return 2;
+  }
+  if (parser.isSet("list-hamlib-models")) {
+    HamlibModelRegistry registry;
+    QJsonArray rows;
+    for (const RadioModel &model : registry.allModels())
+      rows.push_back(QJsonObject{{"id", model.id},
+                                 {"manufacturer", model.manufacturer},
+                                 {"model", model.model},
+                                 {"backend", model.backend},
+                                 {"transport", model.transport}});
+    QTextStream(stdout) << QJsonDocument(rows).toJson(QJsonDocument::Indented);
+    return 0;
+  }
+  if (parser.isSet("list-serial-ports")) {
+    QJsonArray rows;
+    for (const QSerialPortInfo &port : QSerialPortInfo::availablePorts())
+      rows.push_back(QJsonObject{{"route", port.portName()},
+                                 {"systemLocation", port.systemLocation()},
+                                 {"description", port.description()}});
+    QTextStream(stdout) << QJsonDocument(rows).toJson(QJsonDocument::Indented);
+    return 0;
+  }
+  if (parser.isSet("configure-hamlib")) {
+    bool modelOk = false, baudOk = false;
+    const int modelId = parser.value("configure-hamlib").toInt(&modelOk);
+    const int baudRate = parser.value("radio-baud").toInt(&baudOk);
+    if (!modelOk || !baudOk ||
+        !radio.saveHamlibProfile(modelId, parser.value("radio-route"), baudRate,
+                                 !parser.isSet("no-radio-autoconnect"))) {
+      QTextStream(stderr) << "Hamlib profile is invalid; use --list-hamlib-models and --list-serial-ports\n";
+      return 8;
+    }
+    if (parser.isSet("test-radio-connection")) {
+      if (!radio.connectRadio(modelId, parser.value("radio-route"), baudRate))
+        return 9;
+      QTextStream(stdout) << QJsonDocument::fromVariant(radio.health()).toJson(QJsonDocument::Indented);
+      radio.disconnectRadio();
+    }
+    configuration.setSection("radioProfiles", radio.configuration());
+    if (!configuration.save(&error)) { QTextStream(stderr) << error << '\n'; return 2; }
+    QTextStream(stdout) << "Hamlib profile saved; receive-only startup autoconnect "
+                        << (parser.isSet("no-radio-autoconnect") ? "disabled\n" : "enabled\n");
+    return 0;
+  }
+  if (parser.isSet("clear-hamlib-profile")) {
+    radio.clearHamlibProfile();
+    configuration.setSection("radioProfiles", radio.configuration());
+    if (!configuration.save(&error)) { QTextStream(stderr) << error << '\n'; return 2; }
+    QTextStream(stdout) << "Hamlib profile removed\n";
+    return 0;
+  }
+  if (parser.isSet("unpair-shackcq")) {
+    if (!cloudAgent.unpair(&error)) { QTextStream(stderr) << error << '\n'; return 7; }
+    configuration.setSection("cloudAgent", cloudAgent.configuration());
+    if (!configuration.save(&error)) { QTextStream(stderr) << error << '\n'; return 2; }
+    QTextStream(stdout) << "ShackCQ Cloud Agent unpaired\n";
+    return 0;
   }
   if (parser.isSet("pair-with-shackcq")) {
     if (!cloudAgent.pair(QUrl(parser.value("cloud-origin")),
@@ -120,6 +192,7 @@ int main(int argc, char **argv) {
   QLocalServer::removeServer(AdminSocket);
   if (!admin.listen(AdminSocket)) { QTextStream(stderr) << admin.errorString() << '\n'; return 4; }
   if (!service.start(&error)) { QTextStream(stderr) << error << '\n'; return 3; }
+  radio.startConfiguredAutoConnect();
   cloudAgent.start();
   QObject::connect(&admin, &QLocalServer::newConnection, &application, [&] {
     while (QLocalSocket *socket = admin.nextPendingConnection()) {
@@ -148,4 +221,3 @@ int main(int argc, char **argv) {
     QTextStream(stdout) << QJsonDocument::fromVariant(service.createPairingOffer()).toJson(QJsonDocument::Indented);
   return application.exec();
 }
-#include "shackcq/desktop/CloudAgentClient.hpp"

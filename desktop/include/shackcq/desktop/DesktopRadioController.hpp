@@ -8,6 +8,7 @@
 #include <QSerialPort>
 #include <QTcpSocket>
 #include <QTimer>
+#include <optional>
 
 namespace shackcq::desktop {
 
@@ -91,13 +92,19 @@ public:
   QString listeningReceiverId() const { return m_listeningReceiverId; }
   QString transmitReceiverId() const { return m_transmitReceiverId; }
   QVariantMap backendCapabilities() const { return m_backendCapabilities; }
+  QVariantMap meters() const { return m_meters; }
+  std::optional<bool> transmitting() const { return m_transmitting; }
   QVariantList tciProfiles() const { return m_tciProfiles; }
+  QVariantMap hamlibProfile() const { return m_hamlibProfile; }
   QVariantMap configuration() const;
   bool restoreConfiguration(const QVariantMap &section,
                             QString *error = nullptr);
   QVariantMap health() const;
 
   Q_INVOKABLE bool connectRadio(int modelId, const QString &port, int baudRate);
+  Q_INVOKABLE bool saveHamlibProfile(int modelId, const QString &route,
+                                     int baudRate, bool autoConnect = true);
+  Q_INVOKABLE void clearHamlibProfile();
   Q_INVOKABLE bool connectNativeProfile(const QString &profileId,
                                         const QString &route, int baudRate);
   Q_INVOKABLE bool connectTciProfile(const QString &profileId);
@@ -157,6 +164,9 @@ private:
   QString m_transmitReceiverId;
   QString m_autoConnectProfileId;
   QVariantMap m_backendCapabilities;
+  QVariantMap m_meters;
+  std::optional<bool> m_transmitting;
+  QVariantMap m_hamlibProfile;
   QVariantMap m_legacyConfiguration;
   QVariantList m_tciProfiles;
   QVariantMap m_safeView{{"spectrumVisible", true},

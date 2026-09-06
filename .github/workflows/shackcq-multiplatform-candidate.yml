@@ -43,7 +43,7 @@ jobs:
       - name: Verify exact checked-out SHA
         run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
       - name: Install Linux desktop and Secret Service dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++ libssl-dev libsecret-1-dev xvfb dpkg-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++ make libssl-dev libsecret-1-dev xvfb dpkg-dev
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: '6.11.2'
@@ -52,8 +52,12 @@ jobs:
           arch: linux_gcc_64
           modules: 'qtmultimedia qtserialport qtwebsockets qtlocation qtpositioning'
           cache: true
+      - name: Verify and build pinned Hamlib
+        run: |
+          python3 scripts/check_hamlib_upstream.py
+          sh scripts/build_hamlib_posix.sh "$RUNNER_TEMP/hamlib" "$GITHUB_WORKSPACE/core/third_party/hamlib" "$RUNNER_TEMP/hamlib-build"
       - name: Build full GUI and ShackCQ Agent
-        run: cmake -S desktop -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=ON && cmake --build build/linux --parallel 2
+        run: cmake -S desktop -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=ON -DSHACKCQ_REQUIRE_HAMLIB=ON -DSHACKCQ_HAMLIB_ROOT="$RUNNER_TEMP/hamlib" && cmake --build build/linux --parallel 2
       - name: Test full Linux desktop offscreen
         env:
           QT_QPA_PLATFORM: offscreen
@@ -65,8 +69,9 @@ jobs:
           QT_QPA_PLATFORM=offscreen build/linux-install/ShackCQDesktop --ui-stress-report build/linux-ui-stress.json
           cpack --config build/linux/CPackConfig.cmake -B build/packages
           tar -C build/linux-install -czf build/packages/ShackCQ-Linux-x86_64-v0.1.0-rc.1.tar.gz .
-          cp build/linux/ShackCQAgent build/packages/ShackCQAgent
-          tar -C build/packages -czf build/packages/ShackCQAgent-Linux-x86_64-v0.1.0-rc.1.tar.gz ShackCQAgent
+          mkdir -p build/packages/agent
+          cp build/linux/ShackCQAgent COPYING NOTICE docs/radio/hamlib/SOURCE_MANIFEST.json build/packages/agent/
+          tar -C build/packages/agent -czf build/packages/ShackCQAgent-Linux-x86_64-v0.1.0-rc.1.tar.gz ShackCQAgent COPYING NOTICE SOURCE_MANIFEST.json
           sha256sum build/packages/ShackCQAgent-Linux-x86_64-v0.1.0-rc.1.tar.gz > build/packages/SHA256SUMS.txt
           ! find build/linux-install -type f | grep -Ei '(private|identity|\.pem$|credentials)'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -85,7 +90,7 @@ jobs:
       - name: Verify native ARM64 runner and exact SHA
         run: test "$(uname -m)" = aarch64 && test "$(git rev-parse HEAD)" = "${{ github.sha }}"
       - name: Install ARM64 dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++ libssl-dev libsecret-1-dev
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++ make libssl-dev libsecret-1-dev
       - id: qt_arm64_primary
         continue-on-error: true
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
@@ -116,16 +121,19 @@ jobs:
           extra: '--base https://mirrors.dotsrc.org/qtproject --timeout 30'
       - name: Build and package stationd natively
         run: |
-          cmake -S desktop -B build/linux-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=OFF -DSHACKCQ_BUILD_NATIVE_DIGI=OFF
-          cmake --build build/linux-arm64 --target shackcq-stationd --parallel 2
+          python3 scripts/check_hamlib_upstream.py
+          sh scripts/build_hamlib_posix.sh "$RUNNER_TEMP/hamlib" "$GITHUB_WORKSPACE/core/third_party/hamlib" "$RUNNER_TEMP/hamlib-build"
+          cmake -S desktop -B build/linux-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=OFF -DSHACKCQ_BUILD_NATIVE_DIGI=OFF -DSHACKCQ_REQUIRE_HAMLIB=ON -DSHACKCQ_HAMLIB_ROOT="$RUNNER_TEMP/hamlib"
+          cmake --build build/linux-arm64 --target ShackCQAgent shackcq-stationd --parallel 2
           mkdir -p build/arm64-package
-          cp build/linux-arm64/shackcq-stationd COPYING NOTICE build/arm64-package/
+          cp build/linux-arm64/ShackCQAgent build/linux-arm64/shackcq-stationd COPYING NOTICE docs/radio/hamlib/SOURCE_MANIFEST.json build/arm64-package/
           ! find build/arm64-package -type f | grep -Ei '(private|identity|\.pem$|credentials)'
-          tar -C build/arm64-package -czf build/ShackCQ-stationd-Linux-arm64-v0.1.0-rc.1.tar.gz shackcq-stationd COPYING NOTICE
+          tar -C build/arm64-package -czf build/ShackCQAgent-Linux-arm64-v0.1.0-rc.1.tar.gz ShackCQAgent shackcq-stationd COPYING NOTICE SOURCE_MANIFEST.json
+          test -s build/ShackCQAgent-Linux-arm64-v0.1.0-rc.1.tar.gz
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ShackCQ-stationd-Linux-arm64-${{ github.sha }}
-          path: build/ShackCQ-stationd-Linux-arm64-v0.1.0-rc.1.tar.gz
+          name: ShackCQAgent-Linux-arm64-${{ github.sha }}
+          path: build/ShackCQAgent-Linux-arm64-v0.1.0-rc.1.tar.gz
           if-no-files-found: error
 
   parity-audits:

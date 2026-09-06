@@ -82,7 +82,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/hamlib
-          key: windows-hamlib-4.7.2-mingw1310-${{ hashFiles('core/third_party/hamlib/SOURCE_MANIFEST.json') }}
+          key: windows-hamlib-4.7.2-mingw1310-${{ hashFiles('docs/radio/hamlib/SOURCE_MANIFEST.json') }}
       - name: Build pinned Hamlib static library and supported backends
         if: steps.hamlib-cache.outputs.cache-hit != 'true'
         shell: msys2 {0}
@@ -110,7 +110,7 @@ jobs:
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/hamlib
-          key: windows-hamlib-4.7.2-mingw1310-${{ hashFiles('core/third_party/hamlib/SOURCE_MANIFEST.json') }}
+          key: windows-hamlib-4.7.2-mingw1310-${{ hashFiles('docs/radio/hamlib/SOURCE_MANIFEST.json') }}
       - name: Configure Release
         shell: pwsh
         run: cmake -S desktop -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=ON -DSHACKCQ_REQUIRE_HAMLIB=ON "-DSHACKCQ_HAMLIB_ROOT=$env:RUNNER_TEMP/hamlib" "-DOPENSSL_ROOT_DIR=$env:OPENSSL_ROOT_DIR"
@@ -185,9 +185,12 @@ jobs:
           $portable = Get-Item artifacts/windows/ShackCQ-Windows-x64-portable-v0.1.0-rc.1.zip -ErrorAction SilentlyContinue
           $installer = Get-Item artifacts/windows/ShackCQ-Windows-x64-setup-v0.1.0-rc.1.exe -ErrorAction SilentlyContinue
           if (!$portable -or !$installer) { throw 'Expected Windows packages were not produced' }
-          Get-ChildItem artifacts/windows -File | Where-Object Name -Match '^ShackCQ-Windows-x64-' |
+          Get-ChildItem artifacts/windows -File | Where-Object Name -Match '^ShackCQ(?:Agent)?-Windows-x64-' |
             Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } |
             Set-Content artifacts/windows/SHA256SUMS.txt
+          if (!(Select-String artifacts/windows/SHA256SUMS.txt -SimpleMatch "ShackCQAgent-Windows-x64-${{ github.sha }}.zip")) {
+            throw 'Standalone Agent checksum is missing'
+          }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ShackCQ-Windows-x64-${{ github.sha }}

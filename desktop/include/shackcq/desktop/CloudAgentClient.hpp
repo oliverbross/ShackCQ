@@ -22,6 +22,7 @@ public:
   QVariantMap configuration() const;
   bool pair(const QUrl &origin, const QString &code, const QString &name,
             QString *error = nullptr);
+  bool unpair(QString *error = nullptr);
   void start();
   void stop();
   QVariantMap health() const;

@@ -31,8 +31,12 @@ jobs:
           cache: true
       - name: Install the native Rust target
         run: rustup target add aarch64-apple-darwin
+      - name: Verify and build pinned Hamlib
+        run: |
+          python3 scripts/check_hamlib_upstream.py
+          sh scripts/build_hamlib_posix.sh "$RUNNER_TEMP/hamlib" "$GITHUB_WORKSPACE/core/third_party/hamlib" "$RUNNER_TEMP/hamlib-build"
       - name: Configure same desktop source
-        run: cmake -S desktop -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=ON
+        run: cmake -S desktop -B build/macos -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=ON -DSHACKCQ_REQUIRE_HAMLIB=ON -DSHACKCQ_HAMLIB_ROOT="$RUNNER_TEMP/hamlib"
       - name: Build and test
         env:
           QT_QPA_PLATFORM: offscreen

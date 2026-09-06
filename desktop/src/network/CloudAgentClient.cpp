@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shackcq/desktop/CloudAgentClient.hpp"
 
+#include <algorithm>
+#include <initializer_list>
+
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QEventLoop>
@@ -10,6 +13,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QRegularExpression>
+#include <QRandomGenerator>
 #include <QSslError>
 #include <QSslConfiguration>
 #include <QSysInfo>
@@ -173,6 +177,19 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
   return true;
 }
 
+bool CloudAgentClient::unpair(QString *error) {
+  stop();
+  if (!m_vault || !m_vault->remove(CredentialAlias, error))
+    return false;
+  m_agentId.clear();
+  m_credential.clear();
+  m_connectUrl = QUrl{};
+  m_enabled = false;
+  setState("Unpaired",
+           "Cloud Agent credential removed from the operating-system vault");
+  return true;
+}
+
 void CloudAgentClient::start() {
   m_stopping = false;
   if (!m_enabled) {
@@ -302,40 +319,81 @@ QJsonObject CloudAgentClient::processControlFrame(const QJsonObject &frame) {
     return result(false, "RADIO_OFFLINE");
   const QString action = frame.value("action").toString();
   const QJsonObject parameters = frame.value("parameters").toObject();
+  const auto exactParameters = [&parameters](std::initializer_list<const char *> names) {
+    if (parameters.size() != static_cast<int>(names.size()))
+      return false;
+    return std::all_of(names.begin(), names.end(), [&parameters](const char *name) {
+      return parameters.contains(QString::fromLatin1(name));
+    });
+  };
   const QStringList advertisedSetters =
       m_radio->backendCapabilities().value("setters").toStringList();
   if (!advertisedSetters.contains(action))
     return result(false, "CAPABILITY_NOT_ADVERTISED");
   bool accepted = false;
   if (action == "radio.set.frequency") {
+    if (!exactParameters({"frequencyHz"}) || !parameters.value("frequencyHz").isDouble())
+      return result(false, "INVALID_PARAMETERS");
     const quint64 value =
         parameters.value("frequencyHz").toVariant().toULongLong();
     accepted = value >= 100'000 && value <= 10'500'000'000ULL &&
                m_radio->requestFrequency(value) &&
                m_radio->frequencyHz() == value;
   } else if (action == "radio.set.mode") {
+    if (!exactParameters({"mode"}) || !parameters.value("mode").isString())
+      return result(false, "INVALID_PARAMETERS");
     const QString value = parameters.value("mode").toString().toUpper();
     accepted = !value.isEmpty() && value.size() <= 12 &&
                m_radio->requestMode(value) &&
                m_radio->mode().compare(value, Qt::CaseInsensitive) == 0;
   } else if (action == "radio.set.filter") {
+    if (!exactParameters({"filterHz"}) || !parameters.value("filterHz").isDouble())
+      return result(false, "INVALID_PARAMETERS");
     const int value = parameters.value("filterHz").toInt();
     accepted = value >= 50 && value <= 20'000 &&
                m_radio->requestFilter(value) &&
                m_radio->filterHz() == value;
   } else if (action == "preset.recall") {
+    if (!exactParameters({"frequencyHz", "mode", "filterHz"}) ||
+        !parameters.value("frequencyHz").isDouble() ||
+        !parameters.value("mode").isString() ||
+        !parameters.value("filterHz").isDouble())
+      return result(false, "INVALID_PARAMETERS");
     const quint64 frequency =
         parameters.value("frequencyHz").toVariant().toULongLong();
     const QString mode = parameters.value("mode").toString().toUpper();
     const int filter = parameters.value("filterHz").toInt();
-    accepted = frequency >= 100'000 && frequency <= 10'500'000'000ULL &&
-               !mode.isEmpty() && mode.size() <= 12 && filter >= 50 &&
-               filter <= 20'000 && m_radio->requestFrequency(frequency) &&
-               m_radio->frequencyHz() == frequency &&
-               m_radio->requestMode(mode) &&
-               m_radio->mode().compare(mode, Qt::CaseInsensitive) == 0 &&
-               m_radio->requestFilter(filter) &&
+    if (frequency < 100'000 || frequency > 10'500'000'000ULL ||
+        mode.isEmpty() || mode.size() > 12 || filter < 50 || filter > 20'000)
+      return result(false, "INVALID_PARAMETERS");
+    const quint64 previousFrequency = m_radio->frequencyHz();
+    const QString previousMode = m_radio->mode();
+    const int previousFilter = m_radio->filterHz();
+    const bool frequencyApplied = m_radio->requestFrequency(frequency) &&
+                                  m_radio->frequencyHz() == frequency;
+    const bool modeApplied = frequencyApplied && m_radio->requestMode(mode) &&
+        m_radio->mode().compare(mode, Qt::CaseInsensitive) == 0;
+    accepted = modeApplied && m_radio->requestFilter(filter) &&
                m_radio->filterHz() == filter;
+    if (!accepted) {
+      // Setter success is not sufficient rollback evidence: a backend may round
+      // or normalise the requested value while still changing the radio. Compare
+      // every fresh readback with the captured tuple and compensate any drift.
+      if (m_radio->mode().compare(previousMode, Qt::CaseInsensitive) != 0 &&
+          !previousMode.isEmpty())
+        (void)m_radio->requestMode(previousMode);
+      if (m_radio->filterHz() != previousFilter && previousFilter > 0)
+        (void)m_radio->requestFilter(previousFilter);
+      if (m_radio->frequencyHz() != previousFrequency && previousFrequency > 0)
+        (void)m_radio->requestFrequency(previousFrequency);
+
+      const bool completeRollback =
+          m_radio->frequencyHz() == previousFrequency &&
+          m_radio->mode().compare(previousMode, Qt::CaseInsensitive) == 0 &&
+          m_radio->filterHz() == previousFilter;
+      return result(false, completeRollback ? "PRESET_RECALL_ROLLED_BACK"
+                                            : "PRESET_RECALL_PARTIAL");
+    }
   } else {
     return result(false, "ACTION_PROHIBITED");
   }
@@ -397,8 +455,11 @@ void CloudAgentClient::sendSnapshot() {
               {"filterHz", m_radio->filterHz() > 0
                                ? QJsonValue(m_radio->filterHz())
                                : QJsonValue::Null},
-              {"meters", QJsonObject{}},
-              {"transmitting", QJsonValue::Null},
+              {"meters", QJsonObject::fromVariantMap(m_radio->meters())},
+              {"transmitting",
+               m_radio->transmitting()
+                   ? QJsonValue(*m_radio->transmitting())
+                   : QJsonValue::Null},
               {"capabilities", capabilityDescriptor()}});
 }
 
@@ -413,7 +474,11 @@ void CloudAgentClient::sendObject(const QJsonObject &object) {
 void CloudAgentClient::scheduleReconnect() {
   if (m_stopping || !m_enabled)
     return;
-  const int delay = qMin(60'000, 1'000 << qMin(m_reconnectAttempt++, 6));
+  const int baseDelay = qMin(60'000, 1'000 << qMin(m_reconnectAttempt++, 6));
+  const int jitter = qMax(1, baseDelay / 5);
+  const int delay = qBound(1'000,
+      baseDelay + QRandomGenerator::global()->bounded(-jitter, jitter + 1),
+      60'000);
   m_reconnect.start(delay);
 }
 
