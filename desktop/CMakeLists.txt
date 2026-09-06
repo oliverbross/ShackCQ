@@ -56,6 +56,7 @@ set(SHACKCQ_DESKTOP_SERVICE_SOURCES
     src/network/WavelogSync.cpp
     src/network/ClusterController.cpp
     src/network/CloudAgentClient.cpp
+    src/network/AgentDigiController.cpp
     src/network/RemoteStationService.cpp
     src/network/RemoteStationClient.cpp
     src/platform/DesktopPlatform.cpp
@@ -117,6 +118,9 @@ if(SHACKCQ_BUILD_NATIVE_DIGI)
         set(SHACKCQ_RUST_LIBRARY "${CMAKE_CURRENT_SOURCE_DIR}/../rust/shackcq-flex/target/${SHACKCQ_RUST_TARGET}/release/libshackcq_flex.a")
     elseif(APPLE)
         set(SHACKCQ_RUST_TARGET x86_64-apple-darwin)
+        set(SHACKCQ_RUST_LIBRARY "${CMAKE_CURRENT_SOURCE_DIR}/../rust/shackcq-flex/target/${SHACKCQ_RUST_TARGET}/release/libshackcq_flex.a")
+    elseif(UNIX AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64|aarch64")
+        set(SHACKCQ_RUST_TARGET aarch64-unknown-linux-gnu)
         set(SHACKCQ_RUST_LIBRARY "${CMAKE_CURRENT_SOURCE_DIR}/../rust/shackcq-flex/target/${SHACKCQ_RUST_TARGET}/release/libshackcq_flex.a")
     else()
         set(SHACKCQ_RUST_TARGET x86_64-unknown-linux-gnu)

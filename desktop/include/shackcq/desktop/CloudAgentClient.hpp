@@ -2,6 +2,7 @@
 
 #include "shackcq/desktop/DesktopPlatform.hpp"
 #include "shackcq/desktop/DesktopRadioController.hpp"
+#include "shackcq/desktop/AgentDigiController.hpp"
 
 #include <QJsonObject>
 #include <QObject>
@@ -16,6 +17,7 @@ class CloudAgentClient final : public QObject {
 public:
   explicit CloudAgentClient(DesktopCredentialVault *vault,
                             DesktopRadioController *radio,
+                            AgentDigiController *digi = nullptr,
                             QObject *parent = nullptr);
   bool restoreConfiguration(const QVariantMap &section,
                             QString *error = nullptr);
@@ -45,6 +47,7 @@ private:
 
   DesktopCredentialVault *m_vault{};
   DesktopRadioController *m_radio{};
+  AgentDigiController *m_digi{};
   QWebSocket m_socket;
   QTimer m_heartbeat;
   QTimer m_reconnect;

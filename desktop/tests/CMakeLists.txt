@@ -34,6 +34,11 @@ target_compile_definitions(cloud_agent_client_tests PRIVATE
 shackcq_target_warnings(cloud_agent_client_tests)
 add_test(NAME cloud_agent_client_tests COMMAND cloud_agent_client_tests)
 
+qt_add_executable(agent_digi_controller_tests unit/agent_digi_controller_tests.cpp)
+target_link_libraries(agent_digi_controller_tests PRIVATE ${SHACKCQ_TEST_LIBS})
+shackcq_target_warnings(agent_digi_controller_tests)
+add_test(NAME agent_digi_controller_tests COMMAND agent_digi_controller_tests)
+
 qt_add_executable(desktop_rf_observation_tests unit/desktop_rf_observation_tests.cpp)
 target_link_libraries(desktop_rf_observation_tests PRIVATE ${SHACKCQ_TEST_LIBS})
 shackcq_target_warnings(desktop_rf_observation_tests)

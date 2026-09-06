@@ -118,16 +118,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "shackcq-flex"
-version = "0.1.0"
-dependencies = [
- "mfsk-core",
- "microfft",
- "socket2",
- "tempo-sstv",
-]
-
-[[package]]
 name = "rustfft"
 version = "6.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -139,6 +129,16 @@ dependencies = [
  "primal-check",
  "strength_reduce",
  "transpose",
+]
+
+[[package]]
+name = "shackcq-flex"
+version = "0.1.0"
+dependencies = [
+ "mfsk-core",
+ "microfft",
+ "socket2",
+ "tempo-sstv",
 ]
 
 [[package]]

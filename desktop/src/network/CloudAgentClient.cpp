@@ -21,7 +21,7 @@
 namespace shackcq::desktop {
 namespace {
 constexpr qsizetype MaxControlBytes = 64 * 1024;
-QJsonObject protocol() { return {{"major", 1}, {"minor", 0}}; }
+QJsonObject protocol() { return {{"major", 1}, {"minor", 1}}; }
 QString compact(const QJsonObject &value) {
   return QString::fromUtf8(QJsonDocument(value).toJson(QJsonDocument::Compact));
 }
@@ -34,8 +34,9 @@ bool boundedId(const QString &value) {
 
 CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
                                    DesktopRadioController *radio,
+                                   AgentDigiController *digi,
                                    QObject *parent)
-    : QObject(parent), m_vault(vault), m_radio(radio) {
+    : QObject(parent), m_vault(vault), m_radio(radio), m_digi(digi) {
   m_heartbeat.setInterval(15'000);
   m_reconnect.setSingleShot(true);
   connect(&m_heartbeat, &QTimer::timeout, this, [this] {
@@ -66,6 +67,10 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
     m_heartbeat.stop();
     m_generation = 0;
     m_announcedDeviceId.clear();
+    if (m_digi) {
+      m_digi->setServerTxPermitted(false);
+      m_digi->stop("cloud transport disconnected");
+    }
     if (!m_stopping) {
       setState("Offline", "Cloud transport disconnected; no commands queued");
       scheduleReconnect();
@@ -82,6 +87,10 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
             }
             sendSnapshot();
           });
+  if (m_digi)
+    connect(m_digi, &AgentDigiController::snapshotChanged, this, [this] {
+      if (m_generation != 0) sendSnapshot();
+    });
 }
 
 bool CloudAgentClient::restoreConfiguration(const QVariantMap &section,
@@ -218,6 +227,10 @@ void CloudAgentClient::stop() {
   m_heartbeat.stop();
   m_reconnect.stop();
   m_generation = 0;
+  if (m_digi) {
+    m_digi->setServerTxPermitted(false);
+    m_digi->stop("cloud Agent stopped");
+  }
   if (m_socket.state() != QAbstractSocket::UnconnectedState)
     m_socket.close(QWebSocketProtocol::CloseCodeNormal, "Agent shutdown");
   setState("Stopped", "No cloud commands accepted");
@@ -276,6 +289,8 @@ void CloudAgentClient::receiveText(const QString &text) {
       frame.value("agentId").toString() == m_agentId &&
       frame.value("protocol").toObject().value("major").toInt() == 1) {
     m_generation = frame.value("generation").toVariant().toULongLong();
+    if (m_digi)
+      m_digi->setServerTxPermitted(frame.value("digiTxEnabled").toBool(false));
     if (m_generation == 0) {
       m_socket.close(QWebSocketProtocol::CloseCodeProtocolError,
                      "invalid generation");
@@ -288,6 +303,11 @@ void CloudAgentClient::receiveText(const QString &text) {
   }
   if (frame.value("type") == "agent.heartbeat.ack")
     return;
+  if (frame.value("type") == "digi.command" && m_digi) {
+    sendObject(m_digi->processCommand(frame, m_agentId, deviceId(), m_generation));
+    sendSnapshot();
+    return;
+  }
   if (frame.value("type") != "radio.command")
     return;
   sendObject(processControlFrame(frame));
@@ -317,6 +337,8 @@ QJsonObject CloudAgentClient::processControlFrame(const QJsonObject &frame) {
   if (m_radio->backend() != "hamlib" ||
       !m_radio->state().startsWith("Connected"))
     return result(false, "RADIO_OFFLINE");
+  if (m_digi && m_digi->radioMutationBlocked())
+    return result(false, "DIGI_BUSY_REQUIRES_DISARM");
   const QString action = frame.value("action").toString();
   const QJsonObject parameters = frame.value("parameters").toObject();
   const auto exactParameters = [&parameters](std::initializer_list<const char *> names) {
@@ -461,11 +483,16 @@ void CloudAgentClient::sendSnapshot() {
                    ? QJsonValue(*m_radio->transmitting())
                    : QJsonValue::Null},
               {"capabilities", capabilityDescriptor()}});
+  if (m_digi)
+    sendObject(m_digi->snapshot(m_agentId, deviceId(), m_generation));
 }
 
 void CloudAgentClient::sendObject(const QJsonObject &object) {
   const QByteArray bytes =
       QJsonDocument(object).toJson(QJsonDocument::Compact);
+  const QString type=object.value("type").toString();
+  if((type=="digi.snapshot"||type=="radio.snapshot")&&m_socket.bytesToWrite()>128*1024)return;
+  if(m_socket.bytesToWrite()>1024*1024){m_socket.close(QWebSocketProtocol::CloseCodePolicyViolated,"outgoing queue limit");return;}
   if (bytes.size() <= MaxControlBytes &&
       m_socket.state() == QAbstractSocket::ConnectedState)
     m_socket.sendTextMessage(QString::fromUtf8(bytes));
@@ -500,7 +527,8 @@ QVariantMap CloudAgentClient::health() const {
           {"ptt", false},
           {"tune", false},
           {"txAudio", false},
-          {"rotatorMovement", false}};
+          {"rotatorMovement", false},
+          {"digi", m_digi ? m_digi->snapshot(m_agentId, deviceId(), m_generation).toVariantMap() : QVariantMap{}}};
 }
 
 } // namespace shackcq::desktop

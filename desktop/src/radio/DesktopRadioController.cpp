@@ -226,6 +226,7 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
   m_backend = "hamlib";
   m_state = "Connected — receive controls only; PTT/TUNE disabled";
   const struct rig_caps *caps = rig->caps;
+  m_digiPttSupported = caps && caps->set_ptt && caps->get_ptt;
   m_model = caps && caps->model_name ? QString::fromUtf8(caps->model_name)
                                     : QString::number(modelId);
   m_manufacturer =
@@ -513,6 +514,7 @@ void DesktopRadioController::startConfiguredAutoConnect() {
 }
 
 void DesktopRadioController::disconnectRadio() {
+  emit aboutToDisconnect();
   m_poll.stop();
   m_tci.disconnectFromServer();
   if (m_nativeSerial.isOpen())
@@ -544,6 +546,7 @@ void DesktopRadioController::disconnectRadio() {
   m_backendCapabilities.clear();
   m_meters.clear();
   m_transmitting.reset();
+  m_digiPttSupported = false;
   m_receivers.clear();
   emit snapshotChanged();
 }
@@ -987,6 +990,42 @@ QVariantMap DesktopRadioController::health() const {
           {"hamlibProfileModelId", m_hamlibProfile.value("modelId")},
           {"tci", m_tci.diagnostics()}};
 }
+bool DesktopRadioController::requestDigiPtt(bool enabled) {
+#ifdef SHACKCQ_HAVE_HAMLIB
+  if (!m_rig || m_backend != "hamlib" || !m_digiPttSupported)
+    return false;
+  auto *rig = static_cast<RIG *>(m_rig);
+  const int code = rig_set_ptt(rig, RIG_VFO_CURR,
+                               enabled ? RIG_PTT_ON : RIG_PTT_OFF);
+  if (code != RIG_OK) {
+    emit error(QString::fromLatin1(rigerror(code)));
+    return false;
+  }
+  ptt_t observed = RIG_PTT_OFF;
+  if (rig_get_ptt(rig, RIG_VFO_CURR, &observed) != RIG_OK)
+    return false;
+  m_transmitting = observed != RIG_PTT_OFF;
+  emit snapshotChanged();
+  return *m_transmitting == enabled;
+#else
+  Q_UNUSED(enabled);
+  return false;
+#endif
+}
+
+std::optional<bool> DesktopRadioController::digiPttReadback() const {
+#ifdef SHACKCQ_HAVE_HAMLIB
+  if (!m_rig || m_backend != "hamlib" || !m_digiPttSupported)
+    return std::nullopt;
+  ptt_t observed = RIG_PTT_OFF;
+  return rig_get_ptt(static_cast<RIG *>(m_rig), RIG_VFO_CURR, &observed) == RIG_OK
+             ? std::optional<bool>(observed != RIG_PTT_OFF)
+             : std::nullopt;
+#else
+  return std::nullopt;
+#endif
+}
+
 void DesktopRadioController::globalStop() { m_tci.globalStop(); }
 void DesktopRadioController::setTciTimeoutsForTest(int a, int b, int c) {
   m_tci.setTimeoutsForTest(a, b, c);

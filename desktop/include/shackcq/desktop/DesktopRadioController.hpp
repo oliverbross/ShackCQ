@@ -121,10 +121,15 @@ public:
   Q_INVOKABLE bool requestMode(const QString &mode);
   Q_INVOKABLE bool requestFilter(int filterHz);
   Q_INVOKABLE void globalStop();
+  // Dedicated local Digi owner only. These are intentionally not Q_INVOKABLE,
+  // not advertised as generic Radio setters, and never available to v1 frames.
+  bool requestDigiPtt(bool enabled);
+  std::optional<bool> digiPttReadback() const;
   void setTciTimeoutsForTest(int connectionMs, int readyMs, int reconnectMs);
   void setHamlibSnapshotForTest(quint64 frequencyHz, const QString &mode);
 
 signals:
+  void aboutToDisconnect();
   void snapshotChanged();
   void preferencesChanged();
   void iqFrame(QString receiverId, quint32 sampleRate, QVector<float> values);
@@ -178,6 +183,7 @@ private:
   int m_hamlibModelId{1};
   QString m_lastError;
   quint64 m_generation{};
+  bool m_digiPttSupported{};
 };
 
 } // namespace shackcq::desktop
