@@ -69,8 +69,8 @@
     },
     {
       "path": "README.android",
-      "bytes": 1167,
-      "sha256": "8d5dc88ad5c88ca4dae2c2d9f8b96a9040bda731d57d09be11baa8819576fc93"
+      "bytes": 1165,
+      "sha256": "d0ee460ebaacd2442e2cac4c43ce80f28e782a958ec0eaa84d54b7d42bd0add1"
     },
     {
       "path": "README.betatester",
@@ -4749,8 +4749,8 @@
     },
     {
       "path": "src/iofunc.c",
-      "bytes": 42958,
-      "sha256": "bf34910d6fe719fccedd8163da0be015ed51d9673ce144d4124f20830c228092"
+      "bytes": 42955,
+      "sha256": "668e0871c74466bdc93010f75beba7debda1ec8e72c4d9544ddc7e7477a34b95"
     },
     {
       "path": "src/iofunc.h",
@@ -4769,8 +4769,8 @@
     },
     {
       "path": "src/microham.c",
-      "bytes": 30460,
-      "sha256": "21323f8f047070d9ac51ad1cf68eac60caa76e4067c7f5a841785fc12d82a786"
+      "bytes": 30459,
+      "sha256": "89aeea3753987b2db9f70795ffabd7e0c8019c3a1b89527ba2ca58f1e1078bf7"
     },
     {
       "path": "src/microham.h",
