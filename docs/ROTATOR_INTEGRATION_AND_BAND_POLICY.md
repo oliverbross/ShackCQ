@@ -1,6 +1,6 @@
 # Rotator integration and band policy
 
-Supported driver families are native GS-232, DCU/ROTOR-EZ, EasyComm and SPID ROT1/ROT2; remote rotctld; and embedded Hamlib rotators. A microHAM ARCO must be configured in one of its published compatibility modes. RigWeave does not claim or guess a proprietary ARCO protocol.
+Supported driver families are native GS-232, DCU/ROTOR-EZ, EasyComm and SPID ROT1/ROT2; remote rotctld; and embedded Hamlib rotators. A microHAM ARCO must be configured in one of its published compatibility modes. ShackCQ does not claim or guess a proprietary ARCO protocol.
 
 Profiles contain a hashed serial identity or explicit opt-in TCP endpoint, protocol, capability evidence/overrides, 0–450 degree capable limits, park position, calibration owner, forbidden sectors and presets. Band assignments may be scoped to a radio profile and select OFF, MANUAL, PROMPT, AUTO_SELECTED_TARGET or SATELLITE_SESSION policy.
 

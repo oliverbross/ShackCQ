@@ -7,20 +7,20 @@ plugins {
 }
 
 val supportedAbis = listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
-val requestedAbi = providers.gradleProperty("rigweaveAbi").orNull?.trim()?.takeIf(String::isNotEmpty)
-val requestedVersionCode = providers.gradleProperty("rigweaveVersionCode").orNull?.toIntOrNull()
-val requestedVersionName = providers.gradleProperty("rigweaveVersionName").orNull?.trim()?.takeIf(String::isNotEmpty)
+val requestedAbi = providers.gradleProperty("shackcqAbi").orNull?.trim()?.takeIf(String::isNotEmpty)
+val requestedVersionCode = providers.gradleProperty("shackcqVersionCode").orNull?.toIntOrNull()
+val requestedVersionName = providers.gradleProperty("shackcqVersionName").orNull?.trim()?.takeIf(String::isNotEmpty)
 require(requestedAbi == null || requestedAbi in supportedAbis) {
-    "rigweaveAbi must be one of ${supportedAbis.joinToString()}"
+    "shackcqAbi must be one of ${supportedAbis.joinToString()}"
 }
 
 android {
-    namespace = "app.rigweave.mobile"
+    namespace = "app.shackcq.mobile"
     compileSdk = 36
     ndkVersion = "28.2.13676358"
 
     defaultConfig {
-        applicationId = "app.rigweave.mobile"
+        applicationId = "app.shackcq.mobile"
         minSdk = 26
         targetSdk = 36
         versionCode = requestedVersionCode ?: 39
@@ -49,7 +49,7 @@ val buildSha = providers.environmentVariable("GITHUB_SHA").orNull?.take(12) ?: r
         commandLine("git", "rev-parse", "--short=12", "HEAD")
     }.standardOutput.asText.get().trim()
 }.getOrDefault("UNKNOWN")
-val buildChannel = providers.environmentVariable("RIGWEAVE_BUILD_CHANNEL").orNull?.trim().orEmpty().ifBlank { "development" }
+val buildChannel = providers.environmentVariable("SHACKCQ_BUILD_CHANNEL").orNull?.trim().orEmpty().ifBlank { "development" }
 
 android.defaultConfig {
     buildConfigField("String", "BUILD_SHA", quoted(buildSha))
@@ -63,7 +63,7 @@ android.defaultConfig {
 val buildRustFlex by tasks.registering(Exec::class) {
     group = "build"
     description = "Build the Nexus-derived Flex core for every Android ABI"
-    workingDir(rootProject.file("../rust/rigweave-flex"))
+    workingDir(rootProject.file("../rust/shackcq-flex"))
     val sdkRoot = providers.environmentVariable("ANDROID_SDK_ROOT").orElse(providers.environmentVariable("ANDROID_HOME")).orNull
     if (sdkRoot != null) environment("ANDROID_NDK_HOME", file("$sdkRoot/ndk/${android.ndkVersion}").absolutePath)
     val targets = requestedAbi?.let(::listOf) ?: supportedAbis

@@ -19,11 +19,11 @@ Existing executable suites retain Digi stop/route/background safety, voice repea
 Host Clang Debug build:
 
 ```text
-RIGWEAVE_ENABLE_ASAN=ON
-RIGWEAVE_ENABLE_UBSAN=ON
-rigweave_core_tests                    PASS
-rigweave_propagation_adapter_tests     PASS
-rigweave_lifecycle_stress_tests        PASS
+SHACKCQ_ENABLE_ASAN=ON
+SHACKCQ_ENABLE_UBSAN=ON
+shackcq_core_tests                    PASS
+shackcq_propagation_adapter_tests     PASS
+shackcq_lifecycle_stress_tests        PASS
 ```
 
 No AddressSanitizer or UndefinedBehaviorSanitizer finding was emitted. ThreadSanitizer was not used: the JNI/Android and vendored dependency toolchains are not one compatible TSan surface, while deterministic owner races and ASan/UBSan are reliable here. The exact sanitizer command is also part of the hosted `rust-native` job.

@@ -2,7 +2,7 @@
 
 ## Frozen inputs
 
-- RigWeave base: `b4f12e17fa87df16d2094b518ae187553e370be5`
+- ShackCQ base: `b4f12e17fa87df16d2094b518ae187553e370be5`
 - MSHV Auto DX Chaser commit: `d960ae22de78940c6be9d95bd4817d233d02ee39`
 - MSHV tree: `52d5b2e4d39a8e174000971ada3ac0c9f0442625`
 - Upstream licence: GPL-3.0; `LICENSE` SHA-256 `ae8271f05a41a70dc47b89c560724128c3e2007f8f7db6e2c21c7f1360fe79fa`
@@ -13,7 +13,7 @@ The upstream audit covered `LICENSE`, `THIRD_PARTY_LICENSES.md`, `README.md`, `C
 `MSHV_2762/src/HvAutoDxer`, all files under `HvAutoDxSettings` and `HvDxccChaser`, and Auto DX
 integration references in `main_ms.*`.
 
-## Existing RigWeave authorities
+## Existing ShackCQ authorities
 
 | Concern | Existing owner at the frozen base | DX Chaser use |
 |---|---|---|
@@ -40,7 +40,7 @@ companion, history and legacy-timing rows remain non-call-eligible.
 
 ## Clean-room decision
 
-The Kotlin/Compose implementation was designed from the authorised behaviour specification and RigWeave types. No MSHV source,
+The Kotlin/Compose implementation was designed from the authorised behaviour specification and ShackCQ types. No MSHV source,
 fixture, Qt architecture, queue/radio code, provider client, DXCC database, Twilio code, or Club Log-derived rarity list was copied
 or adapted. `NOTICE` therefore does not require an attribution change.
 
@@ -50,8 +50,8 @@ or adapted. `NOTICE` therefore does not require an attribution change.
 | search-and-pounce, cooldown, session statistics, engagement lock | Adopted and made operator-started, typed and finite |
 | automatic QSY/non-standard frequency | Replaced with receive-review intent plus mandatory new local decode |
 | ATNO/scarce persistence | Replaced with hard finite caps |
-| spot-source aggregation and reconnect | Rejected; existing RigWeave evidence only |
-| separate DXCC/ADIF/QSO truth | Rejected; existing RigWeave authorities only |
+| spot-source aggregation and reconnect | Rejected; existing ShackCQ evidence only |
+| separate DXCC/ADIF/QSO truth | Rejected; existing ShackCQ authorities only |
 | hard-coded Club Log rarity | Rejected; bounded manual import with provenance digest |
 | direct MSHV queue/AUTO/TX control | Rejected; typed intent boundary only |
 | desktop Qt panel and settings architecture | Rejected; native Compose and package-local inactive settings |

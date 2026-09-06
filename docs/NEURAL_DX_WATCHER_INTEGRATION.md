@@ -4,25 +4,25 @@
 
 ### Empirical-outlook completion
 
-Android now has an independently designed `RigWeave Empirical Outlook v1` in the existing Neural workspace. It receives immutable snapshots from the established cluster/RBN/PSK/WSPR/weather/solar/calendar/Needs/QSO owners, performs no provider fetch, and publishes the single snapshot used by Neural DX, HamClock Home/map, Band Health handoff and Log Intelligence. Schema 4, UTC-matched baseline, 30/60/120-minute outputs, verification/calibration gates and safety limits are specified in `NEURAL_HAMCLOCK_EMPIRICAL_OUTLOOK.md`. No upstream predictor code, model, database, weights or assets were copied; unresolved upstream permission remains recorded.
+Android now has an independently designed `ShackCQ Empirical Outlook v1` in the existing Neural workspace. It receives immutable snapshots from the established cluster/RBN/PSK/WSPR/weather/solar/calendar/Needs/QSO owners, performs no provider fetch, and publishes the single snapshot used by Neural DX, HamClock Home/map, Band Health handoff and Log Intelligence. Schema 4, UTC-matched baseline, 30/60/120-minute outputs, verification/calibration gates and safety limits are specified in `NEURAL_HAMCLOCK_EMPIRICAL_OUTLOOK.md`. No upstream predictor code, model, database, weights or assets were copied; unresolved upstream permission remains recorded.
 
-- RigWeave repository: https://github.com/oliverbross/RigWeave
+- ShackCQ repository: https://github.com/oliverbross/ShackCQ
 - Reviewed remediation base: `39a2926648bdd98ca3d8e1200eff4892dca5eee9`
 - Current-opportunities Android task base: `73b2f5e997d90a634dfa141fd414131599d2bf56`
 - Behavioural reference: https://github.com/F1SMV/Neural-DX-Watcher
 - Approved behavioural baseline: `fe3cba8ed9c0502f5dabdb2f64ebd990de986559` (`version 12.1`). The original remediation brief contained a non-resolving transcription/reference error; no upstream owner confirmation is required merely to identify this corrected pin.
 - Upstream licence status: no `LICENSE`, `LICENCE`, `COPYING`, or `NOTICE` file, SPDX declaration, or licence grant was found in the inspected upstream tree or README. GitHub does not display a detected licence for the repository. Permission is therefore not established.
 - Bundled upstream files or assets: none.
-- This remediation copied no upstream source, comments, text, graphics, or assets. It changes RigWeave's existing native implementation and documentation only.
-- The earlier RigWeave commit history identifies native Neural DX implementation commits, but current source inspection alone cannot prove the provenance of every pre-existing line.
+- This remediation copied no upstream source, comments, text, graphics, or assets. It changes ShackCQ's existing native implementation and documentation only.
+- The earlier ShackCQ commit history identifies native Neural DX implementation commits, but current source inspection alone cannot prove the provenance of every pre-existing line.
 
-> **Release blocker — unresolved upstream provenance and permission.** Do not describe the relationship as licensed parity or distribute material derived from Neural DX Watcher without a compatible licence or permission grant. RigWeave's internal worked-log correctness fix is valid independently of that unresolved release decision.
+> **Release blocker — unresolved upstream provenance and permission.** Do not describe the relationship as licensed parity or distribute material derived from Neural DX Watcher without a compatible licence or permission grant. ShackCQ's internal worked-log correctness fix is valid independently of that unresolved release decision.
 
 ## Integration boundary
 
-RigWeave uses Neural DX Watcher as a behavioural product reference. It does not embed the upstream Python/Flask application, HTML/CSS/JavaScript UI, SQLite files, predictor, resolver, deployment scripts, artwork, or runtime dependencies. RigWeave remains GPL-3.0-only.
+ShackCQ uses Neural DX Watcher as a behavioural product reference. It does not embed the upstream Python/Flask application, HTML/CSS/JavaScript UI, SQLite files, predictor, resolver, deployment scripts, artwork, or runtime dependencies. ShackCQ remains GPL-3.0-only.
 
-| Reference concept | RigWeave implementation |
+| Reference concept | ShackCQ implementation |
 | --- | --- |
 | Cluster spot ingestion and bounded live history | `FeatureController.kt`, `native_bridge.cpp`, `core/src/features.cpp`, `core/portable/src/dx_analysis.cpp` |
 | Entity resolution | `CtyController.kt`, shared `CtyResolver` |
@@ -46,15 +46,15 @@ iOS cannot currently prove or select a Wavelog log authority in `QSOStore`; it l
 
 ## Corrected worked-log defect
 
-Previously `rw_feature_add_worked_qso()` populated `WorkedIndex`, but `DxInsightEngine` ranked spots from a separate worked-country hash list. Android exposed no JNI operation to populate either native ranking authority. A spot already present in `QsoDatabase.spotStatuses()` could therefore receive the 22-point new-entity bonus and `NEW ENTITY IN LOGBOOK`.
+Previously `shackcq_feature_add_worked_qso()` populated `WorkedIndex`, but `DxInsightEngine` ranked spots from a separate worked-country hash list. Android exposed no JNI operation to populate either native ranking authority. A spot already present in `QsoDatabase.spotStatuses()` could therefore receive the 22-point new-entity bonus and `NEW ENTITY IN LOGBOOK`.
 
 The shared calculation now receives a per-spot classifier backed directly by `WorkedIndex`. It maps entity, call, band, mode, band+mode, and recent-dupe state into the opportunity before score and reason are calculated. `NEW ENTITY IN LOGBOOK` is possible only when the index is loaded, complete, and the resolved entity is non-empty and absent.
 
 The reload contract is:
 
-- `rw_feature_begin_worked_sync`: clears the prior index and marks it unloaded while rebuilding;
-- `rw_feature_add_worked_qso`: normalises and records each local or Wavelog row, counting accepted and rejected input;
-- `rw_feature_end_worked_sync`: atomically activates a legitimately empty or populated rebuild.
+- `shackcq_feature_begin_worked_sync`: clears the prior index and marks it unloaded while rebuilding;
+- `shackcq_feature_add_worked_qso`: normalises and records each local or Wavelog row, counting accepted and rejected input;
+- `shackcq_feature_end_worked_sync`: atomically activates a legitimately empty or populated rebuild.
 
 `workedLog.loaded` distinguishes never-loaded/loading from an empty log. `complete` is true only after activation with no rejected or truncated rows. An incomplete index may report positive matches it contains, but absence is never treated as proof of a new entity.
 
@@ -64,13 +64,13 @@ iOS loads the bounded installed `cty.dat` text into its existing shared feature 
 
 ## Intentional differences from the behavioural reference
 
-- RigWeave retains one active cluster connection with configured failover, not simultaneous multi-cluster aggregation.
+- ShackCQ retains one active cluster connection with configured failover, not simultaneous multi-cluster aggregation.
 - Shared native observation ingestion covers `160m`, `80m`, `60m`, `40m`, `30m`, `20m`, `17m`, `15m`, `12m`, `10m`, `6m`, `4m`, `2m`, `70cm`, `23cm`, and `3cm`.
-- Direct CAT tuning from Neural DX remains limited through 6 m. Higher-band spots are visible and analysable but show an observation-only state until RigWeave has an explicit supported radio/transverter path.
+- Direct CAT tuning from Neural DX remains limited through 6 m. Higher-band spots are visible and analysable but show an observation-only state until ShackCQ has an explicit supported radio/transverter path.
 - The full Neural DX workspace remains Android-only. iOS has the smaller native DX surface; desktop has none.
-- RigWeave's opportunity score is a deterministic freshness/watchlist/entity/surge/solar heuristic. It is not the upstream `predictor.py` model, prediction database, verification history, or probability calibration.
-- Android uses the selected RigWeave local or cached Wavelog authority. iOS currently uses only its provable local log authority.
-- RigWeave preserves its existing native UI, local storage, controllers, and separate `neural-dx.sqlite`; it does not run Flask/nginx or an upstream local web API.
+- ShackCQ's opportunity score is a deterministic freshness/watchlist/entity/surge/solar heuristic. It is not the upstream `predictor.py` model, prediction database, verification history, or probability calibration.
+- Android uses the selected ShackCQ local or cached Wavelog authority. iOS currently uses only its provable local log authority.
+- ShackCQ preserves its existing native UI, local storage, controllers, and separate `neural-dx.sqlite`; it does not run Flask/nginx or an upstream local web API.
 
 ## Android current opportunities and historical spot journal
 
@@ -109,7 +109,7 @@ PSK Reporter retains its per-callsign raw cache and recalculates receiver distan
 
 Blitzortung uses the same vocabulary without disk persistence: a connected session is live, retained strikes during disconnect are stale, and disconnect without strikes is unavailable. The controller owns the active socket, closes it before a materially different QTH listener starts, and closes it during idempotent controller shutdown before cancelling jobs and scope. No reconnect loop survives scope cancellation.
 
-This cache/freshness work is Android-only. It adds no dependency or database migration, leaves `neural-dx.sqlite` at schema version 3, does not change `rigweave.sqlite`, scoring, worked-log logic, observation bands, direct-tune safety, endpoints, or iOS/shared-core code, and does not resolve the Neural-DX-Watcher licence/permission release blocker.
+This cache/freshness work is Android-only. It adds no dependency or database migration, leaves `neural-dx.sqlite` at schema version 3, does not change `shackcq.sqlite`, scoring, worked-log logic, observation bands, direct-tune safety, endpoints, or iOS/shared-core code, and does not resolve the Neural-DX-Watcher licence/permission release blocker.
 
 ## Future upstream review procedure
 
@@ -117,7 +117,7 @@ This cache/freshness work is Android-only. It adds no dependency or database mig
 2. Fetch the upstream repository and record the exact commit, tree, licence files, notices, and release/version label.
 3. Review behaviour and documentation as a reference; do not copy source or assets without a compatible licence and the repository's required provenance record.
 4. Compare concepts against the mapping above and update the capability/deviation matrix truthfully.
-5. Keep changes inside existing RigWeave authorities and storage unless a separate task authorises architecture work.
+5. Keep changes inside existing ShackCQ authorities and storage unless a separate task authorises architecture work.
 6. Run focused native, Android, and iOS validation and record source, automated, simulator/device, service, and RF evidence separately.
 
 ## Validation record for this remediation
@@ -158,15 +158,15 @@ Provider freshness/cache closure on base `45eec41bc3e12abeecf87c9c59cde6012743b3
 Validation commands:
 
 ```sh
-cmake -S core -B /tmp/rigweave-neural-dx-core
-cmake --build /tmp/rigweave-neural-dx-core
-ctest --test-dir /tmp/rigweave-neural-dx-core --output-on-failure
+cmake -S core -B /tmp/shackcq-neural-dx-core
+cmake --build /tmp/shackcq-neural-dx-core
+ctest --test-dir /tmp/shackcq-neural-dx-core --output-on-failure
 
 cd android
 ./gradlew :app:testDebugUnitTest
 ./gradlew :app:assembleDebug
 ./gradlew :app:assembleDebugAndroidTest
 
-xcodebuild -project ios/RigWeave.xcodeproj -scheme RigWeave \
+xcodebuild -project ios/ShackCQ.xcodeproj -scheme ShackCQ \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```

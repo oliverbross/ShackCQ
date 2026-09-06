@@ -3,7 +3,7 @@
 ## Frozen inputs and history
 
 The integration branch `integration/keyer-contest-dxchaser-v1` was created in the isolated worktree
-`rigweave-keyer-contest-dxchaser-integration-v1` from exact base
+`shackcq-keyer-contest-dxchaser-integration-v1` from exact base
 `b4f12e17fa87df16d2094b518ae187553e370be5`. Before every merge the corresponding remote tip was
 fetched and rechecked. All three ancestry checks against the base returned exit 0.
 

@@ -1,6 +1,6 @@
 # Android Progress Intelligence
 
-RigWeave's Progress workspace turns the existing local QSO journal and existing live DX/portable snapshots into offline operating guidance. It adds no schema, analytics cache, dependency, telemetry, background alert, or network client.
+ShackCQ's Progress workspace turns the existing local QSO journal and existing live DX/portable snapshots into offline operating guidance. It adds no schema, analytics cache, dependency, telemetry, background alert, or network client.
 
 ## Workspace
 
@@ -39,7 +39,7 @@ The existing QSO journal is the only local authority. A snapshot reads it once, 
 
 ## Official programme references checked
 
-These define the official programmes; RigWeave does not claim their credit:
+These define the official programmes; ShackCQ does not claim their credit:
 
 - [ARRL DXCC rules](https://www.arrl.org/dxcc-rules)
 - [ARRL DXCC award information](https://www.arrl.org/dxcc-award-information)
@@ -48,7 +48,7 @@ These define the official programmes; RigWeave does not claim their credit:
 - [CQ Worked All Zones](https://cq-amateur-radio.com/cq_awards/cq_waz_awards/index_cq_waz_award.html)
 - [POTA awards](https://docs.pota.app/docs/awards.html)
 
-The checked POTA standard unique-park levels begin at 10, 20, 30, 40, 50, and 75, followed by 100 and the published advanced levels. RigWeave shows only the next bounded local milestone and a handoff to POTA for authoritative status.
+The checked POTA standard unique-park levels begin at 10, 20, 30, 40, 50, and 75, followed by 100 and the published advanced levels. ShackCQ shows only the next bounded local milestone and a handoff to POTA for authoritative status.
 
 ## Privacy and safety
 

@@ -4,13 +4,13 @@ Phase 2A remains the POTA source-specific record. The unified Phase 2B workspace
 
 ## Purpose
 
-Portable → POTA Chase is a read-only hunter workspace joining a current activator spot, a useful local worked-state decision, receive-only CAT tuning, and an editable draft in RigWeave's existing logger. Saving continues through the normal local SQLite and optional Wavelog outbox path; hunter credit still comes from activator-submitted POTA logs.
+Portable → POTA Chase is a read-only hunter workspace joining a current activator spot, a useful local worked-state decision, receive-only CAT tuning, and an editable draft in ShackCQ's existing logger. Saving continues through the normal local SQLite and optional Wavelog outbox path; hunter credit still comes from activator-submitted POTA logs.
 
 ## Data and update behaviour
 
 - Live spots: `https://api.pota.app/spot/activator`, fetched on entry and at most every 60 seconds while the workspace is visible and the app is foregrounded.
 - Park catalogue: `https://pota.app/all_parks_ext.csv`, downloaded only on operator request into a staged app-private SQLite database. Headers are matched by name; the active database changes only after row, uniqueness, coordinate, parse-loss, reopen, and sampled-lookup validation.
-- Spot and catalogue requests use bounded timeouts/retries and the `RigWeave/0.1` user agent. Conditional headers are retained when supplied.
+- Spot and catalogue requests use bounded timeouts/retries and the `ShackCQ/0.1` user agent. Conditional headers are retained when supplied.
 - The last normalized spot snapshot remains available after a transient failure as `CACHED`; expired/QRT/invalid rows are never ranked as active. The last valid park database survives every failed or cancelled update.
 - Catalogue metadata records source, bytes, UTC timestamps, `ETag`, `Last-Modified`, row count, source SHA-256, and the last failure. A foreground-day conditional check can flag an update; it does not silently download the catalogue.
 
@@ -24,7 +24,7 @@ Parks supports offline reference/name/location search and distance ordering from
 
 ## Attribution and limits
 
-Park and spot data are provided by Parks on the Air. RigWeave is independent and does not use the POTA logo. Phase 2A does not implement authentication, official-credit claims, self-spotting, activation sessions, POTA log upload, SOTA, WWFF, notifications, panadapter overlays, iPadOS, or transmission.
+Park and spot data are provided by Parks on the Air. ShackCQ is independent and does not use the POTA logo. Phase 2A does not implement authentication, official-credit claims, self-spotting, activation sessions, POTA log upload, SOTA, WWFF, notifications, panadapter overlays, iPadOS, or transmission.
 
 ## Validation
 

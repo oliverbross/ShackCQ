@@ -12,12 +12,12 @@ Fake-response coverage includes success, validated empty, malformed JSON, oversi
 
 | Store | File | Schema | Purpose | Scale fixture |
 |---|---|---:|---|---:|
-| Canonical QSO | `rigweave-desktop.sqlite` | 16 | QSO/projection/sync authority | existing 100k QSO test |
+| Canonical QSO | `shackcq-desktop.sqlite` | 16 | QSO/projection/sync authority | existing 100k QSO test |
 | Neural DX | `neural-dx.sqlite` | 5 | empirical evidence/outlook | 2,880 rows / 180 days |
-| Digi | `rigweave-digi.sqlite` | 2 | decode and TX-draft state | 20,000 rows |
-| Groups.io | `rigweave-groupsio.sqlite` | 2 | offline messages and FTS5 | 30,000 rows |
-| Contest | `rigweave-contest.sqlite` | 2 | staging log/session state | 10,000 rows |
-| DX Chaser | `rigweave-dxchaser.sqlite` | 1 | opportunity/session state | 20,000 rows |
+| Digi | `shackcq-digi.sqlite` | 2 | decode and TX-draft state | 20,000 rows |
+| Groups.io | `shackcq-groupsio.sqlite` | 2 | offline messages and FTS5 | 30,000 rows |
+| Contest | `shackcq-contest.sqlite` | 2 | staging log/session state | 10,000 rows |
+| DX Chaser | `shackcq-dxchaser.sqlite` | 1 | opportunity/session state | 20,000 rows |
 
 Every store enables foreign keys, WAL and a bounded busy timeout. A database whose `user_version` is newer than supported is rejected; it is never downgraded or recreated silently.
 

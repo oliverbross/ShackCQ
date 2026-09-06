@@ -2,7 +2,7 @@
 
 ## Purpose and lifecycle
 
-Portable → **ACTIVATE** is a local-first POTA session manager and fast logger. Setup records editable station/operator identity, one or more own park references, the primary park, location/grid/state, station profile, radio, power, antenna, notes, and UTC start. Starting requires the operator to acknowledge that they and all station equipment are on public property and entirely inside every selected park boundary; RigWeave does not treat GPS or catalogue proximity as legal proof.
+Portable → **ACTIVATE** is a local-first POTA session manager and fast logger. Setup records editable station/operator identity, one or more own park references, the primary park, location/grid/state, station profile, radio, power, antenna, notes, and UTC start. Starting requires the operator to acknowledge that they and all station equipment are on public property and entirely inside every selected park boundary; ShackCQ does not treat GPS or catalogue proximity as legal proof.
 
 One active session is stored in an app-private `AtomicFile` journal after each meaningful change. A recovered process shows an explicit Resume card and starts no CAT, audio, macro, PTT, TUNE, or transmit action. Finish atomically retains a local review before removing the active pointer. Abandon removes only session state; committed QSOs stay in the existing SQLite journal.
 
@@ -19,7 +19,7 @@ myPotaRefs = [all own parks]
 potaRefs = [all other activator parks]
 ```
 
-`myPotaRef` and `potaRef` retain the respective primary references for existing ADIF/Wavelog compatibility. Wavelog therefore receives only the primary own and other park through its current serializer; RigWeave retains every reference locally for correct export and does not duplicate uploads. A POTA Chase row can open an unsaved, editable P2P draft without tuning or transmitting; manual P2P references are also supported.
+`myPotaRef` and `potaRef` retain the respective primary references for existing ADIF/Wavelog compatibility. Wavelog therefore receives only the primary own and other park through its current serializer; ShackCQ retains every reference locally for correct export and does not duplicate uploads. A POTA Chase row can open an unsaved, editable P2P draft without tuning or transmitting; manual P2P references are also supported.
 
 ## Progress, review, and export
 
@@ -36,7 +36,7 @@ Each applicable QSO is emitted in every own-park file with `MY_SIG=POTA` and tha
 
 ## Browser handoffs and offline behaviour
 
-`OPEN POTA SPOTTING` copies a concise operator-editable context summary and opens the normal official POTA site. The review opens the same official site for the operator to choose My Log Uploads. RigWeave does not call a private/write endpoint, authenticate to POTA, post a spot, upload a log, or claim browser submission success.
+`OPEN POTA SPOTTING` copies a concise operator-editable context summary and opens the normal official POTA site. The review opens the same official site for the operator to choose My Log Uploads. ShackCQ does not call a private/write endpoint, authenticate to POTA, post a spot, upload a log, or claim browser submission success.
 
 After the POTA catalogue is downloaded, setup, manual reference entry, session recovery, CAT-optional logging, P2P entry, progress, review, ADIF generation, and later sharing remain local. Live Chase, callbook lookup, and POTA web handoffs degrade independently and do not block logging.
 

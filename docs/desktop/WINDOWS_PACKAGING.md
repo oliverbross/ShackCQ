@@ -4,8 +4,8 @@ The exact-SHA Windows workflow uses Qt 6.11.2 `win64_mingw`, MinGW-w64 13.1, CMa
 
 Artifacts:
 
-- `RigWeave-Windows-x64-portable-v0.1.0-rc.1.zip`
-- `RigWeave-Windows-x64-setup-v0.1.0-rc.1.exe`
+- `ShackCQ-Windows-x64-portable-v0.1.0-rc.1.zip`
+- `ShackCQ-Windows-x64-setup-v0.1.0-rc.1.exe`
 - `artifact-measurements.json` with byte counts and SHA-256 values
 
 The installer runs as the user under LocalAppData, creates a Start Menu entry, has no service or auto-start behavior, and is clearly an unsigned release candidate. Uninstall removes installed application files and shortcuts but does not delete user QSO databases, configuration, cache, logs, exports or support bundles because those are stored through `QStandardPaths` outside the install directory.

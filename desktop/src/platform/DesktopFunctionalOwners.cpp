@@ -1,8 +1,8 @@
-#include "rigweave/desktop/DesktopParityPlatform.hpp"
+#include "shackcq/desktop/DesktopParityPlatform.hpp"
 
-#include "rigweave/satellite.h"
-#ifdef RIGWEAVE_HAVE_NATIVE_DIGI
-#include "rigweave_flex.h"
+#include "shackcq/satellite.h"
+#ifdef SHACKCQ_HAVE_NATIVE_DIGI
+#include "shackcq_flex.h"
 #endif
 
 #include <QDateTime>
@@ -27,7 +27,7 @@
 #include <array>
 #include <cmath>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 
 QVariantMap functionalRow(QString key, QString title, QString subtitle, QString state,
@@ -245,12 +245,12 @@ QVariantMap DesktopParityPlatform::nativeRadioFrame(const QString &profileId,
         return result;
     }
     if (profile == "FLEX") {
-#ifdef RIGWEAVE_HAVE_NATIVE_DIGI
+#ifdef SHACKCQ_HAVE_NATIVE_DIGI
         std::array<char, 256> buffer{};
         int count = -1;
-        if (op == "setfrequency") count = rw_flex_frequency(0, value.toULongLong(), buffer.data(), buffer.size());
-        else if (op == "setmode") count = rw_flex_mode(0, value.toString().toUtf8().constData(), buffer.data(), buffer.size());
-        else if (op == "keepalive") count = rw_flex_keepalive(buffer.data(), buffer.size());
+        if (op == "setfrequency") count = shackcq_flex_frequency(0, value.toULongLong(), buffer.data(), buffer.size());
+        else if (op == "setmode") count = shackcq_flex_mode(0, value.toString().toUtf8().constData(), buffer.data(), buffer.size());
+        else if (op == "keepalive") count = shackcq_flex_keepalive(buffer.data(), buffer.size());
         if (count >= 0) {
             result["frame"] = QByteArray(buffer.data(), count);
             result["state"] = "SAFE_SETTER_PENDING_ACCEPTANCE";
@@ -396,7 +396,7 @@ QVariantList DesktopParityPlatform::decodeDigiSlotForTest(const QString &mode,
                                                           const QVector<float> &samples,
                                                           quint32 sampleRate,
                                                           QString *error) const {
-#ifdef RIGWEAVE_HAVE_NATIVE_DIGI
+#ifdef SHACKCQ_HAVE_NATIVE_DIGI
     const int id = digiModeId(mode);
     if (id < 0 || samples.isEmpty() || sampleRate == 0) {
         if (error) *error = "Invalid native Digi decode request";
@@ -405,27 +405,27 @@ QVariantList DesktopParityPlatform::decodeDigiSlotForTest(const QString &mode,
     QByteArray output(1024 * 1024, '\0');
     int count = -1;
     if (id < 100) {
-        count = rw_digi_decode_slot(id, samples.constData(), size_t(samples.size()), sampleRate,
+        count = shackcq_digi_decode_slot(id, samples.constData(), size_t(samples.size()), sampleRate,
                                     output.data(), size_t(output.size()));
     } else if (id == 102) {
-        count = rw_digi_decode_psk31(samples.constData(), size_t(samples.size()), 1000.0f,
+        count = shackcq_digi_decode_psk31(samples.constData(), size_t(samples.size()), 1000.0f,
                                      output.data(), size_t(output.size()));
     } else {
-        rw_digi_context *context = rw_digi_context_create(sampleRate, 700.0f, false, 2125.0f);
+        shackcq_digi_context *context = shackcq_digi_context_create(sampleRate, 700.0f, false, 2125.0f);
         if (!context) {
             if (error) *error = "Cannot allocate native streaming Digi context";
             return {};
         }
         if (id == 100)
-            count = rw_digi_feed_cw(context, samples.constData(), size_t(samples.size()),
+            count = shackcq_digi_feed_cw(context, samples.constData(), size_t(samples.size()),
                                     output.data(), size_t(output.size()));
         else if (id == 101)
-            count = rw_digi_feed_rtty(context, samples.constData(), size_t(samples.size()),
+            count = shackcq_digi_feed_rtty(context, samples.constData(), size_t(samples.size()),
                                       output.data(), size_t(output.size()));
         else
-            count = rw_digi_feed_sstv(context, samples.constData(), size_t(samples.size()),
+            count = shackcq_digi_feed_sstv(context, samples.constData(), size_t(samples.size()),
                                       output.data(), size_t(output.size()));
-        rw_digi_context_destroy(context);
+        shackcq_digi_context_destroy(context);
     }
     if (count < 0) {
         if (error) *error = "Native Digi engine rejected the slot";
@@ -1016,7 +1016,7 @@ QVariantMap DesktopParityPlatform::predictSatellitePasses(const QString &name,
         longitude < -180 || longitude > 180 || endUtc <= startUtc || endUtc - startUtc > 14LL * 86400) return {};
     QByteArray output(1024 * 1024, '\0');
     const QByteArray encodedName = name.toUtf8(), one = line1.toLatin1(), two = line2.toLatin1();
-    const int count = rw_satellite_passes_json(output.data(), size_t(output.size()), "TLE",
+    const int count = shackcq_satellite_passes_json(output.data(), size_t(output.size()), "TLE",
                                                encodedName.constData(), one.constData(), two.constData(),
                                                startUtc, endUtc, 14LL * 86400, latitude, longitude,
                                                altitudeKm, 0.0, 0.0, 60, 64);
@@ -1435,4 +1435,4 @@ void DesktopParityPlatform::functionalStop() {
     emit operatingContextChanged();
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

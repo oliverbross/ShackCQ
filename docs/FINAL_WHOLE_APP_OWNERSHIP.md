@@ -1,10 +1,10 @@
 # Final whole-application ownership
 
-This record audits production construction in `RigWeaveApp`; tests and documents are not treated as authorities.
+This record audits production construction in `ShackCQApp`; tests and documents are not treated as authorities.
 
 | Concern | Sole production authority / construction | Storage | Safe close or restore |
 |---|---|---|---|
-| QSO body, projection, mutation | `QsoDatabase.shared`, `QsoMutationCoordinator` in `RigWeaveApp` | `qso.sqlite` schema 16, projection contract 5 | monotonic migration; local-first; no destructive fallback |
+| QSO body, projection, mutation | `QsoDatabase.shared`, `QsoMutationCoordinator` in `ShackCQApp` | `qso.sqlite` schema 16, projection contract 5 | monotonic migration; local-first; no destructive fallback |
 | Wavelog binding/outbox/sync | `WavelogController`, `WavelogNativeController` | QSO outbox/binding tables | paused/retryable; credentials excluded from support/config |
 | Groups.io | `GroupsIoController` | separate schema 2 database | closes background work; drafts retained |
 | Neural / empirical outlook | `NeuralDxController` and its one outlook controller | `neural-dx.sqlite` schema 5 | last-good retained; no invented forecast |

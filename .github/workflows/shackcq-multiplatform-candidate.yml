@@ -1,0 +1,237 @@
+name: ShackCQ Multiplatform RC1
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  push:
+    branches:
+      - integration/android-hardened-windows-alpha-v1
+      - feature/windows-desktop-full-parity-v1
+      - feature/desktop-functional-parity-closure-v1
+      - feature/android-sdroxide-enhancements-v2
+      - feature/android-local-sdr-receiver-v3
+      - feature/android-sdr-workbench-v4
+      - feature/android-tci-transmit-control-v5
+      - integration/shackcq-multiplatform-rc1
+      - integration/shackcq-v0.1.0-rc1-final
+      - main
+    tags:
+      - 'v0.1.0-rc.1'
+
+permissions:
+  contents: read
+
+jobs:
+  mobile-core-contracts:
+    uses: ./.github/workflows/shackcq-release-candidate.yml
+    with:
+      allow_descendant_validation: true
+
+  windows-desktop:
+    uses: ./.github/workflows/windows-desktop.yml
+
+  macos-desktop:
+    uses: ./.github/workflows/desktop-cross-platform.yml
+
+  linux-x64-full-gui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: {fetch-depth: 0}
+      - name: Verify exact checked-out SHA
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - name: Install Linux desktop and Secret Service dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++ libssl-dev libsecret-1-dev xvfb dpkg-dev
+      - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.11.2'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: 'qtmultimedia qtserialport qtwebsockets qtlocation qtpositioning'
+          cache: true
+      - name: Build full GUI and station daemon
+        run: cmake -S desktop -B build/linux -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=ON && cmake --build build/linux --parallel 2
+      - name: Test full Linux desktop offscreen
+        env:
+          QT_QPA_PLATFORM: offscreen
+          QTEST_FUNCTION_TIMEOUT: '1900000'
+        run: ctest --test-dir build/linux --output-on-failure
+      - name: Package and clean-install smoke
+        run: |
+          cmake --install build/linux --prefix build/linux-install
+          QT_QPA_PLATFORM=offscreen build/linux-install/ShackCQDesktop --ui-stress-report build/linux-ui-stress.json
+          cpack --config build/linux/CPackConfig.cmake -B build/packages
+          tar -C build/linux-install -czf build/packages/ShackCQ-Linux-x86_64-v0.1.0-rc.1.tar.gz .
+          cp build/linux/shackcq-stationd build/packages/shackcq-stationd
+          tar -C build/packages -czf build/packages/ShackCQ-stationd-Linux-x86_64-v0.1.0-rc.1.tar.gz shackcq-stationd
+          ! find build/linux-install -type f | grep -Ei '(private|identity|\.pem$|credentials)'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ShackCQ-Linux-x86_64-${{ github.sha }}
+          path: |
+            build/packages
+            build/linux-ui-stress.json
+          if-no-files-found: error
+
+  linux-arm64-stationd:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Verify native ARM64 runner and exact SHA
+        run: test "$(uname -m)" = aarch64 && test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - name: Install ARM64 dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++ libssl-dev libsecret-1-dev
+      - id: qt_arm64_primary
+        continue-on-error: true
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.11.2'
+          host: linux_arm64
+          target: desktop
+          arch: linux_gcc_arm64
+          archives: 'icu qtbase qtdeclarative qtsvg'
+          modules: 'qtmultimedia qtserialport qtwebsockets qtlocation qtpositioning'
+          cache: true
+      - name: Preserve a partial ARM64 Qt download before retry
+        if: steps.qt_arm64_primary.outcome == 'failure'
+        run: |
+          if [ -d "$GITHUB_WORKSPACE/../Qt" ]; then
+            mv "$GITHUB_WORKSPACE/../Qt" "$RUNNER_TEMP/qt-arm64-partial"
+          fi
+      - if: steps.qt_arm64_primary.outcome == 'failure'
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.11.2'
+          host: linux_arm64
+          target: desktop
+          arch: linux_gcc_arm64
+          archives: 'icu qtbase qtdeclarative qtsvg'
+          modules: 'qtmultimedia qtserialport qtwebsockets qtlocation qtpositioning'
+          cache: false
+          extra: '--base https://mirrors.dotsrc.org/qtproject --timeout 30'
+      - name: Build and package stationd natively
+        run: |
+          cmake -S desktop -B build/linux-arm64 -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=OFF -DSHACKCQ_BUILD_NATIVE_DIGI=OFF
+          cmake --build build/linux-arm64 --target shackcq-stationd --parallel 2
+          mkdir -p build/arm64-package
+          cp build/linux-arm64/shackcq-stationd COPYING NOTICE build/arm64-package/
+          ! find build/arm64-package -type f | grep -Ei '(private|identity|\.pem$|credentials)'
+          tar -C build/arm64-package -czf build/ShackCQ-stationd-Linux-arm64-v0.1.0-rc.1.tar.gz shackcq-stationd COPYING NOTICE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ShackCQ-stationd-Linux-arm64-${{ github.sha }}
+          path: build/ShackCQ-stationd-Linux-arm64-v0.1.0-rc.1.tar.gz
+          if-no-files-found: error
+
+  parity-audits:
+    runs-on: ubuntu-latest
+    env:
+      SHACKCQ_ALLOW_RC1_DESCENDANT_VALIDATION: "1"
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Verify exact checked-out SHA
+        run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+      - name: Fetch declared lineage refs
+        run: git fetch --no-tags origin '+refs/heads/*:refs/remotes/origin/*'
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Contract, provenance, watcher and privacy gates
+        run: |
+          python3 scripts/check_rc1_convergence.py
+          python3 scripts/check_final_rc1_release.py
+          python3 -m unittest scripts/test_check_final_rc1_release.py
+          python3 scripts/check_hamlib_upstream.py
+          python3 scripts/check_sdroxide_upstream.py
+          python3 scripts/check_local_sdr_receiver_v3.py
+          python3 -m unittest scripts/test_check_local_sdr_receiver_v3.py
+          python3 scripts/check_android_sdr_workbench_v4.py
+          python3 -m unittest scripts/test_check_android_sdr_workbench_v4.py
+          python3 scripts/check_android_tci_transmit_v5.py
+          python3 scripts/test_check_android_tci_transmit_v5.py
+          python3 -m unittest scripts/test_check_openhamclock_upstream.py
+          test -s docs/android/ANDROID_SDROXIDE_OPERATIONAL_V2.md
+          test -s docs/android/SDROXIDE_ANDROID_V2_CROSSWALK.md
+          test -s docs/android/ANDROID_SDROXIDE_V2_LIVE_ACCEPTANCE.md
+          test -s docs/android/ANDROID_LOCAL_SDR_RECEIVER_V3.md
+          test -s docs/android/ANDROID_LOCAL_RECEIVER_ARCHITECTURE.md
+          test -s docs/android/ANDROID_RECEIVE_MODES.md
+          test -s docs/android/ANDROID_FM_TONE_AND_RDS.md
+          test -s docs/android/ANDROID_RECEIVER_RECORDING.md
+          test -s docs/android/ANDROID_LOCAL_SDR_LIVE_ACCEPTANCE.md
+          test -s docs/android/ANDROID_SDR_WORKBENCH_V4.md
+          test -s docs/android/SDROXIDE_ANDROID_FINAL_PARITY_AUDIT_V4.md
+          test -s docs/android/SDROXIDE_ANDROID_FINAL_PARITY_MATRIX_V4.md
+          test -s docs/android/SDROXIDE_ANDROID_V4_PROVENANCE.md
+          test -s docs/android/ANDROID_IQ_RECORD_REPLAY.md
+          test -s docs/android/ANDROID_SIGNAL_MEASUREMENTS.md
+          test -s docs/android/ANDROID_SPECTRUM_SURVEY.md
+          test -s docs/android/ANDROID_SCANNER_INTELLIGENCE_V3.md
+          test -s docs/android/ANDROID_RECEIVER_CALIBRATION.md
+          test -s docs/android/ANDROID_SDR_WORKBENCH_LIVE_ACCEPTANCE.md
+          test -s docs/android/ANDROID_TCI_TRANSMIT_V5.md
+          test -s docs/android/SDROXIDE_TCI_TX_AUDIT_V5.md
+          test -s docs/android/TCI_TX_PROTOCOL_MATRIX_V5.md
+          test -s docs/android/TCI_TX_PROVENANCE_V5.md
+          test -s docs/android/ANDROID_TCI_TX_AUDIO.md
+          test -s docs/android/ANDROID_TCI_TX_INTERLOCKS.md
+          test -s docs/android/ANDROID_TCI_PHYSICAL_ACCEPTANCE.md
+          test -s docs/android/ANDROID_TCI_TX_LIVE_ACCEPTANCE.md
+          test -s NOTICE
+          test -s core/third_party/iturhfprop/SOURCE_MANIFEST.json
+      - name: Repository conflict and credential audit
+        run: |
+          test -z "$(git grep -n -E '^(<<<<<<<|=======|>>>>>>>)' -- ':!core/third_party' ':!.github/workflows' || true)"
+          python3 - <<'PY'
+          import pathlib
+          import re
+          import subprocess
+
+          tracked = subprocess.check_output(
+              ["git", "ls-files", "desktop"], text=True
+          ).splitlines()
+          literal = re.compile(
+              r'''\b(?:password|api[_-]?key|secret)\s*=\s*["'][^"'$<{][^"']{7,}["']''',
+              re.IGNORECASE,
+          )
+          token = re.compile(r'''\b(?:wl2_|Bearer\s+)[A-Za-z0-9_-]{16,}''')
+          findings = []
+          for name in tracked:
+              if name.startswith("desktop/tests/"):
+                  continue
+              text = pathlib.Path(name).read_text(encoding="utf-8", errors="ignore")
+              if literal.search(text) or token.search(text):
+                  findings.append(name)
+          if findings:
+              raise SystemExit("possible literal credential in: " + ", ".join(findings))
+          PY
+      - name: Exact-SHA source, SBOM, manifests and digest ledger
+        run: python3 scripts/prepare_rc1_distribution.py --output build/rc1/distribution --channel RC
+      - name: Upload exact-SHA source distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShackCQ-source-${{ github.sha }}
+          path: build/rc1/distribution
+          if-no-files-found: error
+
+  functional-closure-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Verify exact checked-out SHA and closure matrix
+        run: |
+          test "$(git rev-parse HEAD)" = "${{ github.sha }}"
+          test -s docs/desktop/DESKTOP_FUNCTIONAL_PARITY_MATRIX.md
+          test "$(grep -c '^|' docs/desktop/DESKTOP_FUNCTIONAL_PARITY_MATRIX.md)" -ge 33
+          ! grep -E '\| (FOUNDATION_WIRED|MISSING) \|' docs/desktop/DESKTOP_FUNCTIONAL_PARITY_MATRIX.md
+          ! grep -E '\| (FOUNDATION_WIRED|MISSING) \|' docs/release/RC1_FEATURE_COMPLETION_MATRIX.md docs/release/RC1_PLATFORM_PARITY_MATRIX.md
+      - name: Verify deterministic fake protocol and safety suites are registered
+        run: |
+          grep -q 'groupsClientUsesVaultAliasAndReconcilesFakeService' desktop/tests/unit/desktop_functional_owner_tests.cpp
+          grep -q 'nativeRadioTcpFixtureRequiresReadbackAndRejectsTransmitAuthority' desktop/tests/unit/desktop_platform_safety_tests.cpp
+          grep -q 'nativeRotatorFixturePollsAndEnforcesForbiddenPath' desktop/tests/unit/desktop_platform_safety_tests.cpp
+          grep -q 'desktop_scale_soak_tests' desktop/tests/CMakeLists.txt

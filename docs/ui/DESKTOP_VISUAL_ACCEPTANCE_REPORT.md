@@ -17,7 +17,7 @@
 ## Acceptance criteria
 
 - Every workspace is reachable through the native Navigate menu, shortcuts, and the command palette without a persistent global side rail.
-- macOS has no in-window Windows menu and the app/window identity is “RigWeave”.
+- macOS has no in-window Windows menu and the app/window identity is “ShackCQ”.
 - Windows exposes a native File/Edit/View/Radio/Navigate/Tools/Window/Help menu in window chrome with Alt access.
 - Every command icon resolves from the packaged original SVG family.
 - Written status accompanies colour; focus borders and accessible names remain present.
@@ -28,7 +28,7 @@
 
 - `build/evidence/local-desktop-finish/ui-stress-final.json`
 - `build/evidence/local-desktop-finish/ui-gallery-exact-final/` (five profiles, 39 PNG files each)
-- Computer Use acceptance operated only the isolated `RigWeaveLocalQA` copy with `RIGWEAVE_DESKTOP_DEMO=1` and a private `RIGWEAVE_DEMO_ROOT`.
+- Computer Use acceptance operated only the isolated `ShackCQLocalQA` copy with `SHACKCQ_DESKTOP_DEMO=1` and a private `SHACKCQ_DEMO_ROOT`.
 - The QA sequence used native Navigate → Radio → Home and View → Reset Workspace Layout; it never selected Connect, transmit, keyer, tuning or rotator actions.
 - Saved geometry restoration retains the intended logical-pixel rectangle while the startup canvas is still settling, preventing a transient zero-size clamp from replacing the user layout.
 

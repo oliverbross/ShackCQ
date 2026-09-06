@@ -1,6 +1,6 @@
-#include "rigweave/desktop/DesktopApplication.hpp"
+#include "shackcq/desktop/DesktopApplication.hpp"
 
-#include "rigweave/core.h"
+#include "shackcq/core.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -14,11 +14,11 @@
 #include <algorithm>
 #include <cmath>
 
-#ifndef RIGWEAVE_BUILD_SHA
-#define RIGWEAVE_BUILD_SHA "local-uncommitted-build"
+#ifndef SHACKCQ_BUILD_SHA
+#define SHACKCQ_BUILD_SHA "local-uncommitted-build"
 #endif
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 
 DesktopApplication::DesktopApplication(QObject *parent)
     : QObject(parent), m_rfObservations(this), m_cluster(&m_spots, this),
@@ -47,20 +47,20 @@ DesktopApplication::DesktopApplication(QObject *parent)
 DesktopApplication::~DesktopApplication() { shutdown(); }
 
 bool DesktopApplication::initialize(QString *error) {
-  m_demoMode = qEnvironmentVariableIntValue("RIGWEAVE_DESKTOP_DEMO") == 1;
+  m_demoMode = qEnvironmentVariableIntValue("SHACKCQ_DESKTOP_DEMO") == 1;
   if (m_demoMode) {
-    const QString explicitRoot = qEnvironmentVariable("RIGWEAVE_DEMO_ROOT");
+    const QString explicitRoot = qEnvironmentVariable("SHACKCQ_DEMO_ROOT");
     if (!explicitRoot.isEmpty()) {
       m_paths.setEphemeralRoot(explicitRoot);
     } else {
       m_demoDirectory = std::make_unique<QTemporaryDir>(
-          QDir::tempPath() + "/rigweave-desktop-demo-XXXXXX");
+          QDir::tempPath() + "/shackcq-desktop-demo-XXXXXX");
       if (!m_demoDirectory->isValid()) {
         if (error)
           *error = "Cannot create isolated demo directory";
         return false;
       }
-      if (qEnvironmentVariableIntValue("RIGWEAVE_DEMO_PRESERVE") == 1)
+      if (qEnvironmentVariableIntValue("SHACKCQ_DEMO_PRESERVE") == 1)
         m_demoDirectory->setAutoRemove(false);
       m_paths.setEphemeralRoot(m_demoDirectory->path());
     }
@@ -145,7 +145,7 @@ bool DesktopApplication::initialize(QString *error) {
   });
   m_currentDestination = m_configuration->lastDestination();
   m_database = std::make_unique<QsoDatabase>(
-      m_paths.databases() + "/rigweave-desktop.sqlite", this);
+      m_paths.databases() + "/shackcq-desktop.sqlite", this);
   if (!m_database->open(error))
     return false;
   m_logbook = std::make_unique<QsoTableModel>(m_database.get(), this);
@@ -281,7 +281,7 @@ QVariantList DesktopApplication::commands() const {
   add("file.importConfig", "Import Configuration…", "FILE", "import", {}, "", false, false);
   add("file.exportConfig", "Export Configuration…", "FILE", "export");
   add("file.close", "Close Window", "FILE", "close", shortcut("Meta+W", "Ctrl+W"));
-  add("app.quit", "Quit RigWeave", "FILE", "close", shortcut("Meta+Q", "Ctrl+Q"));
+  add("app.quit", "Quit ShackCQ", "FILE", "close", shortcut("Meta+Q", "Ctrl+Q"));
   add("edit.undo", "Undo", "EDIT", "undo", shortcut("Meta+Z", "Ctrl+Z"));
   add("edit.redo", "Redo", "EDIT", "redo", shortcut("Meta+Shift+Z", "Ctrl+Y"));
   add("edit.cut", "Cut", "EDIT", "cut", shortcut("Meta+X", "Ctrl+X"));
@@ -541,11 +541,11 @@ QVariantMap DesktopApplication::health() const {
                    {"backend", m_notifications.backend()}}}};
 }
 QVariantMap DesktopApplication::buildInformation() const {
-  return {{"buildSha", QString::fromLatin1(RIGWEAVE_BUILD_SHA).isEmpty()
+  return {{"buildSha", QString::fromLatin1(SHACKCQ_BUILD_SHA).isEmpty()
                            ? "local-uncommitted-build"
-                           : QString::fromLatin1(RIGWEAVE_BUILD_SHA)},
+                           : QString::fromLatin1(SHACKCQ_BUILD_SHA)},
           {"qtVersion", QString::fromLatin1(qVersion())},
-          {"coreVersion", QString::fromLatin1(rw_core_version())},
+          {"coreVersion", QString::fromLatin1(shackcq_core_version())},
           {"databaseSchema", QsoDatabase::SchemaVersion},
           {"licence", "GPL-3.0-only"},
           {"hamlib",
@@ -628,4 +628,4 @@ void DesktopApplication::shutdown() {
   BoundedLogger::shutdown();
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

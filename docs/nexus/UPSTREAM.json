@@ -8,7 +8,7 @@
   "license": "GPL-3.0-only",
   "copyingSha256": "b4bbff835ca86b6051284a77138b7b31db215fb3e8aa70221464126cc9ad60fa",
   "noticeSha256": "40d10b6cf7a0bdb9e10ed34f4719539dd433aceb6cf844347f189d1c8b362a88",
-  "originalRigWeaveImportCommit": "6ec4a7925f1550cc364c7fd95967ce38c696ad3f",
+  "originalShackCQImportCommit": "6ec4a7925f1550cc364c7fd95967ce38c696ad3f",
   "originalDigitalParityAuditCommit": "750407eafd60905550e561be2eacec642751fc51",
   "reviewedAt": "2026-08-21",
   "trackedPaths": [
@@ -44,11 +44,11 @@
     "COPYING",
     "NOTICE"
   ],
-  "rigweaveMappings": {
-    "workflow": ["android/app/src/main/java/app/rigweave/mobile/DigiController.kt", "android/app/src/main/java/app/rigweave/mobile/DigiScreen.kt"],
-    "nativeDsp": ["rust/rigweave-flex/src/digi/", "rust/rigweave-flex/src/ffi.rs"],
-    "audioRadio": ["android/app/src/main/java/app/rigweave/mobile/AudioMonitorController.kt", "android/app/src/main/java/app/rigweave/mobile/FlexRadioController.kt"],
-    "logging": ["android/app/src/main/java/app/rigweave/mobile/QsoMutationCoordinator.kt", "android/app/src/main/java/app/rigweave/mobile/QsoDatabase.kt"]
+  "shackcqMappings": {
+    "workflow": ["android/app/src/main/java/app/shackcq/mobile/DigiController.kt", "android/app/src/main/java/app/shackcq/mobile/DigiScreen.kt"],
+    "nativeDsp": ["rust/shackcq-flex/src/digi/", "rust/shackcq-flex/src/ffi.rs"],
+    "audioRadio": ["android/app/src/main/java/app/shackcq/mobile/AudioMonitorController.kt", "android/app/src/main/java/app/shackcq/mobile/FlexRadioController.kt"],
+    "logging": ["android/app/src/main/java/app/shackcq/mobile/QsoMutationCoordinator.kt", "android/app/src/main/java/app/shackcq/mobile/QsoDatabase.kt"]
   },
   "excludedDomains": [
     "Tauri/React desktop shell", "desktop audio backends", "Hamlib/rigctld/OmniRig",

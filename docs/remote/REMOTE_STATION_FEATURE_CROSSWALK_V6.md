@@ -6,7 +6,7 @@
 | Identity, TLS, pairing, roles, revocation | station service + platform vault | `RemoteStationService` | deterministic/local TLS only |
 | Android identity and pinning | Android Keystore + OkHttp | `RemoteIdentity`, fingerprint trust manager | source + JVM compile; live network pending |
 | Session/writer/TX/rotator leases | shared authority | `SessionAuthority` | deterministic tests; physical acceptance pending |
-| Headless service | Qt station owner | `rigweave-stationd` | local process/package gates |
+| Headless service | Qt station owner | `shackcq-stationd` | local process/package gates |
 | Remote Radio backend | Android platform owner | `RemoteStationBackend` | source + JVM tests; live station pending |
 | Spectrum/waterfall | desktop Panadapter projection | derived bounded media channel | not raw I/Q |
 | RX audio | desktop radio audio projection | PCM16 bounded media channel | no acoustic acceptance claim |

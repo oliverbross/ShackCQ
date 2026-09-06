@@ -1,9 +1,9 @@
-# RigWeave Native RGO ONE Radio Core v1
+# ShackCQ Native RGO ONE Radio Core v1
 
 ## Scope
 
 This branch adds an Android-only, integration-ready RGO ONE core under
-`app.rigweave.mobile.radio.rgoone`. It does not connect to the central Radio screen,
+`app.shackcq.mobile.radio.rgoone`. It does not connect to the central Radio screen,
 `UsbRadioTransport`, native core, Digi, Panadapter, QSO storage, audio ownership, or
 configuration recovery. A later semantic adapter owns those connections.
 
@@ -81,7 +81,7 @@ Source/build validation completed on 23 August 2026 from the isolated feature wo
   The repository-wide report retains 177 pre-existing warnings and 37 hints, with no
   finding attributed to the RGO ONE package;
 - `git diff --check` and the ownership/package audits passed: all five production files
-  are inside `app.rigweave.mobile.radio.rgoone`, with no central-radio owner, Android USB,
+  are inside `app.shackcq.mobile.radio.rgoone`, with no central-radio owner, Android USB,
   QSO/provider, Panadapter/Digi, firmware-flash, or `UN` command dependency.
 
 No APK installation, device/emulator execution, USB enumeration, radio connection,

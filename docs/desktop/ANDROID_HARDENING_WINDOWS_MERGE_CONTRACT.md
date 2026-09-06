@@ -16,16 +16,16 @@ Date: 2026-08-25
 Both lines change:
 
 ```text
-android/app/src/main/java/app/rigweave/mobile/AndroidRotatorIntegration.kt
-android/app/src/main/java/app/rigweave/mobile/FeatureController.kt
-android/app/src/main/java/app/rigweave/mobile/MainActivity.kt
-android/app/src/main/java/app/rigweave/mobile/OperationsScreen.kt
-android/app/src/main/java/app/rigweave/mobile/PortableChaseScreen.kt
-android/app/src/main/java/app/rigweave/mobile/ProgressScreen.kt
+android/app/src/main/java/app/shackcq/mobile/AndroidRotatorIntegration.kt
+android/app/src/main/java/app/shackcq/mobile/FeatureController.kt
+android/app/src/main/java/app/shackcq/mobile/MainActivity.kt
+android/app/src/main/java/app/shackcq/mobile/OperationsScreen.kt
+android/app/src/main/java/app/shackcq/mobile/PortableChaseScreen.kt
+android/app/src/main/java/app/shackcq/mobile/ProgressScreen.kt
 core/CMakeLists.txt
 ```
 
-Windows also changes desktop CMake/presets, Qt/QML application code, desktop data/radio/rotator/panadapter services, packaging, desktop workflows and shared documentation. Android hardening changes Android JNI/Kotlin owners, lifecycle tests, sanitizer workflow and lifecycle documentation. The highest-risk semantic conflict is `core/CMakeLists.txt`: retain desktop targets while preserving opt-in ASan/UBSan flags and `rigweave_lifecycle_stress_tests`.
+Windows also changes desktop CMake/presets, Qt/QML application code, desktop data/radio/rotator/panadapter services, packaging, desktop workflows and shared documentation. Android hardening changes Android JNI/Kotlin owners, lifecycle tests, sanitizer workflow and lifecycle documentation. The highest-risk semantic conflict is `core/CMakeLists.txt`: retain desktop targets while preserving opt-in ASan/UBSan flags and `shackcq_lifecycle_stress_tests`.
 
 ## Required later sequence
 

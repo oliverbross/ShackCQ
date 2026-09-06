@@ -1,5 +1,5 @@
-#include "rigweave/desktop/RfMapItem.hpp"
-#include "rigweave/desktop/RfObservationModel.hpp"
+#include "shackcq/desktop/RfMapItem.hpp"
+#include "shackcq/desktop/RfObservationModel.hpp"
 
 #include <QDateTime>
 #include <QLinearGradient>
@@ -9,7 +9,7 @@
 #include <QtMath>
 #include <algorithm>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 const QVector<QVector<QPointF>> Land{
     {{-168, 66},
@@ -310,4 +310,4 @@ void RfMapItem::paint(QPainter *p) {
     p->drawEllipse(station, 5, 5);
   }
 }
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

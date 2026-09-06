@@ -2,7 +2,7 @@
 
 ## Sweep 2 schema and authority amendment
 
-Contest schema 2 now owns temporary `contest_qso_entry` bodies during an event. No staged QSO enters canonical `rigweave.sqlite` until explicit confirmed merge through `QsoMutationCoordinator`; repeated and partial merges retain per-row state for safe retry. N1MM safe additions stage only. SCP is a separate validated app-private read-only assistance cache and never defines callsign validity.
+Contest schema 2 now owns temporary `contest_qso_entry` bodies during an event. No staged QSO enters canonical `shackcq.sqlite` until explicit confirmed merge through `QsoMutationCoordinator`; repeated and partial merges retain per-row state for safe retry. N1MM safe additions stage only. SCP is a separate validated app-private read-only assistance cache and never defines callsign validity.
 
 ## Sweep 1 operator workspace
 
@@ -10,9 +10,9 @@ Setup, Logging, Review and Network are now full tablet workspaces over the exist
 
 ## Ownership and architecture
 
-`rigweave-contest.sqlite` schema 1 owns session lifecycle, operator/radio metadata, serial reservations, QSO ID/revision links, derived score/rate snapshots, rule-pack state, bounded N1MM dedupe/link/claim state and sanitized peer state. It contains no canonical callsign, exchange, comment or QSO body table.
+`shackcq-contest.sqlite` schema 1 owns session lifecycle, operator/radio metadata, serial reservations, QSO ID/revision links, derived score/rate snapshots, rule-pack state, bounded N1MM dedupe/link/claim state and sanitized peer state. It contains no canonical callsign, exchange, comment or QSO body table.
 
-Canonical QSOs remain in schema-13 `rigweave.sqlite`. `ContestQsoMapper` maps standard `CONTEST_ID`, `STX`, `SRX`, `STX_STRING`, `SRX_STRING`, RST, band/mode, zone/state and station fields. `CoordinatorContestQsoMutationPort` invokes `QsoMutationCoordinator`, preserving the existing Wavelog outbox/link/conflict/tombstone path. Wavelog availability never blocks a local save; no contest code makes Wavelog HTTP requests.
+Canonical QSOs remain in schema-13 `shackcq.sqlite`. `ContestQsoMapper` maps standard `CONTEST_ID`, `STX`, `SRX`, `STX_STRING`, `SRX_STRING`, RST, band/mode, zone/state and station fields. `CoordinatorContestQsoMutationPort` invokes `QsoMutationCoordinator`, preserving the existing Wavelog outbox/link/conflict/tombstone path. Wavelog availability never blocks a local save; no contest code makes Wavelog HTTP requests.
 
 `ContestCanonicalQsoReader` pages a maximum 500 contest link IDs ordered by `(linked_at,qso_id)` and resolves only those canonical rows. The index `contest_qso_link_session_idx(session_id,linked_at,qso_id)` is asserted by instrumentation. Score rebuilds sort deterministically by `(createdAt,qsoId)`, retain the last good snapshot while a caller marks recalculation, and never materialize unrelated log rows.
 

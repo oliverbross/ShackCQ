@@ -38,6 +38,6 @@ All XML uses a DTD/entity-disabled parser and a 64 KiB datagram bound.
 | UDP `13064` radio/spectrum/control | `CODEC_ONLY`; no second radio/panadapter owner |
 | UDP `12040` rotor command, UDP `13010` rotor status | `NOT_IMPLEMENTED`; rotator ownership deferred |
 | UDP `13065` SDR server and raw CAT TCP | `BLOCKED_BY_SAFETY`; no second CAT/radio transport |
-| WSJT/JTDX `2237`, `2239`, `2240`, `2241`, `52001`, `52002`, `52004`, `52006`, `61002`, `61004` | `EXISTING_RIGWEAVE_OWNER` — Digi/WSJT interop; no listener here |
+| WSJT/JTDX `2237`, `2239`, `2240`, `2241`, `52001`, `52002`, `52004`, `52006`, `61002`, `61004` | `EXISTING_SHACKCQ_OWNER` — Digi/WSJT interop; no listener here |
 
 Receiver-supported commands with no known current sender path remain truthfully covered only to the level above; no undocumented full-support claim is made.

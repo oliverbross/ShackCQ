@@ -1,5 +1,5 @@
 {
-  "contract": "RIGWEAVE_FINAL_BRANCH_CLASSIFICATION_V1",
+  "contract": "SHACKCQ_FINAL_BRANCH_CLASSIFICATION_V1",
   "starting_secure_remote_v6": "a4c3760622a0d7c8eda34bc039a852ac933542a8",
   "audit_head": "5b6c794e5d0048c67a31560c5c46989da08885c1",
   "refs": [
@@ -109,7 +109,7 @@
       "classification": "ANCESTOR_OF_FINAL"
     },
     {
-      "ref": "feature/rigweave-final-convergence-v1",
+      "ref": "feature/shackcq-final-convergence-v1",
       "sha": "b4f12e17fa87df16d2094b518ae187553e370be5",
       "classification": "ANCESTOR_OF_FINAL"
     },
@@ -199,17 +199,17 @@
       "classification": "ANCESTOR_OF_FINAL"
     },
     {
-      "ref": "integration/rigweave-final-whole-app-v1",
+      "ref": "integration/shackcq-final-whole-app-v1",
       "sha": "00fe01cd56c206543b1afb0fb03dfdb9befb92f7",
       "classification": "ALREADY_PRESENT_EQUIVALENT"
     },
     {
-      "ref": "integration/rigweave-multiplatform-rc1",
+      "ref": "integration/shackcq-multiplatform-rc1",
       "sha": "06f350cdbba1e4de97f6a9f05f213fe3eebc451f",
       "classification": "ANCESTOR_OF_FINAL"
     },
     {
-      "ref": "integration/rigweave-v0.1.0-rc1-final",
+      "ref": "integration/shackcq-v0.1.0-rc1-final",
       "sha": "5b6c794e5d0048c67a31560c5c46989da08885c1",
       "classification": "ANCESTOR_OF_FINAL"
     },
@@ -354,7 +354,7 @@
       "classification": "ANCESTOR_OF_FINAL"
     },
     {
-      "ref": "origin/feature/rigweave-final-convergence-v1",
+      "ref": "origin/feature/shackcq-final-convergence-v1",
       "sha": "b4f12e17fa87df16d2094b518ae187553e370be5",
       "classification": "ANCESTOR_OF_FINAL"
     },
@@ -439,12 +439,12 @@
       "classification": "ANCESTOR_OF_FINAL"
     },
     {
-      "ref": "origin/integration/rigweave-final-whole-app-v1",
+      "ref": "origin/integration/shackcq-final-whole-app-v1",
       "sha": "fb04d52df0c9ccc305125449bb188ef8e3f0185e",
       "classification": "ANCESTOR_OF_FINAL"
     },
     {
-      "ref": "origin/integration/rigweave-multiplatform-rc1",
+      "ref": "origin/integration/shackcq-multiplatform-rc1",
       "sha": "06f350cdbba1e4de97f6a9f05f213fe3eebc451f",
       "classification": "ANCESTOR_OF_FINAL"
     },
@@ -481,232 +481,232 @@
   ],
   "worktrees": [
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile",
       "HEAD": "27c70d0c2ab0ae21ef18d7fd9b39f8878b0940ea",
       "branch": "refs/heads/main"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-android-local-sdr-receiver-v3",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-android-local-sdr-receiver-v3",
       "HEAD": "a0441994104b9b6c908aa0d049521c16afea4b18",
       "branch": "refs/heads/feature/android-local-sdr-receiver-v3"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-android-native-lifecycle-hardening-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-android-native-lifecycle-hardening-v1",
       "HEAD": "aea57b1ea3cf06d78089e37015b283dc7b068ac5",
       "branch": "refs/heads/fix/android-native-lifecycle-hardening-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-android-sdr-workbench-v4",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-android-sdr-workbench-v4",
       "HEAD": "2672dba9086a79ed86594db11a31cb644077fea0",
       "branch": "refs/heads/feature/android-sdr-workbench-v4"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-android-sdroxide-enhancements-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-android-sdroxide-enhancements-v1",
       "HEAD": "bcf860b208cba9a81378a82dad54f8c83adb6b0f",
       "branch": "refs/heads/feature/android-sdroxide-enhancements-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-android-sdroxide-enhancements-v2",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-android-sdroxide-enhancements-v2",
       "HEAD": "398ec9380a1ce72b5b561f51bb33af7effc6ff97",
       "branch": "refs/heads/feature/android-sdroxide-enhancements-v2"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-android-tci-transmit-control-v5",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-android-tci-transmit-control-v5",
       "HEAD": "5c80fa215cc4a998b36f818015747d9af8045f8f",
       "branch": "refs/heads/feature/android-tci-transmit-control-v5"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-android-windows-integration-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-android-windows-integration-v1",
       "HEAD": "d64c9031f75182acf27a10b6d73d73e90e9e9c56",
       "branch": "refs/heads/integration/android-hardened-windows-alpha-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-contest-core-n1mm-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-contest-core-n1mm-v1",
       "HEAD": "d3f2a3b1f182a98d442e97182aa91e5c873f0e67",
       "branch": "refs/heads/feature/contest-core-n1mm-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-desktop-flightline-ui-convergence-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-desktop-flightline-ui-convergence-v1",
       "HEAD": "9c0e3d6f70013e95b39107f782dee0cb4b463e7c",
       "branch": "refs/heads/feature/desktop-flightline-ui-convergence-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-desktop-functional-parity-closure-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-desktop-functional-parity-closure-v1",
       "HEAD": "bf297ae5d13708c16fe3ed621f29b2f649c36110",
       "branch": "refs/heads/feature/desktop-functional-parity-closure-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-desktop-ui-ux-deep-convergence-v2",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-desktop-ui-ux-deep-convergence-v2",
       "HEAD": "de32c8ac908c7979f39bfdfc41ca050378901e75",
       "branch": "refs/heads/feature/desktop-ui-ux-deep-convergence-v2"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-dx-chaser-core-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-dx-chaser-core-v1",
       "HEAD": "b30ee05ad9231627afc9854e7182555ef229f50c",
       "branch": "refs/heads/feature/dx-chaser-core-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-final-whole-app-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-final-whole-app-v1",
       "HEAD": "00fe01cd56c206543b1afb0fb03dfdb9befb92f7",
-      "branch": "refs/heads/integration/rigweave-final-whole-app-v1"
+      "branch": "refs/heads/integration/shackcq-final-whole-app-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-hamlib-radio-platform-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-hamlib-radio-platform-v1",
       "HEAD": "9610a1e1186c16f1400d1d45d6d5f3840a9d09ef",
       "branch": "refs/heads/feature/hamlib-radio-platform-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-intelligent-bandmaps-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-intelligent-bandmaps-v1",
       "HEAD": "38871cec8a08d3ef2711c8db9c3eda4d45996afa",
       "branch": "refs/heads/feature/intelligent-bandmaps-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-keyer-contest-dxchaser-integration-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-keyer-contest-dxchaser-integration-v1",
       "HEAD": "98490b6d5234c3f12cc5d00bbea3163c8273c3dc",
       "branch": "refs/heads/integration/keyer-contest-dxchaser-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-keyer-hotkeys-v2",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-keyer-hotkeys-v2",
       "HEAD": "ecba146f064e57e7ebb8a48d897b9ad4bb4cdf43",
       "branch": "refs/heads/feature/keyer-hotkeys-v2"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-final-convergence-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-final-convergence-v1",
       "HEAD": "b4f12e17fa87df16d2094b518ae187553e370be5",
-      "branch": "refs/heads/feature/rigweave-final-convergence-v1"
+      "branch": "refs/heads/feature/shackcq-final-convergence-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-groupsio-offline-reader",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-groupsio-offline-reader",
       "HEAD": "be30fbf69bc422ae917c083d4507673e4ddf3275",
       "branch": "refs/heads/feature/groupsio-offline-reader"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-groupsio-phase2",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-groupsio-phase2",
       "HEAD": "0ce58488e6afae90c35cda44d87ca362713c46d9",
       "branch": "refs/heads/feature/groupsio-complete-messaging"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-hamclock-finishline-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-hamclock-finishline-v1",
       "HEAD": "3d20627dfc4a4987802e612c3caa4f39f69958e6",
       "branch": "refs/heads/feature/hamclock-finishline-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-integration-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-integration-v1",
       "HEAD": "4a692a1b1d5653b55f21552bcc67a35fdc2b0172",
       "branch": "refs/heads/integration/wavelog-openhamclock-groupsio-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-neural-dx-provider-cache",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-neural-dx-provider-cache",
       "HEAD": "9039fe39d78ac98cbce3da767f65c7cbc41df36b",
       "branch": "refs/heads/fix/neural-dx-provider-freshness-cache"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-neural-hamclock-completion-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-neural-hamclock-completion-v1",
       "HEAD": "ebabe98967bfe24e53e16f33f839d711ec237f03",
       "branch": "refs/heads/feature/neural-hamclock-completion-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-nexus-digi-final",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-nexus-digi-final",
       "HEAD": "bfa8129478d7975523af25b6b44d28a35d348c7e",
       "branch": "refs/heads/fix/nexus-digi-final-production-closure"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-nexus-digi-ft-hardening",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-nexus-digi-ft-hardening",
       "HEAD": "c6571727e6bf1f99049f5bd440162945d778f1b5",
       "branch": "refs/heads/fix/nexus-digi-ft-sequencer-hardening"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-nexus-digi-v2",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-nexus-digi-v2",
       "HEAD": "fa5b009619ba461e6899dd5d5548d9092574ee08",
       "branch": "refs/heads/feature/nexus-digi-integration-v2"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-openhamclock-parity-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-openhamclock-parity-v1",
       "HEAD": "565f727a432e3fd0d11ac8223c790691f05530aa",
       "branch": "refs/heads/feature/openhamclock-parity-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-tablet-hardening",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-tablet-hardening",
       "HEAD": "0261f92a1c7a6d22d6db90a8523433182fac6383",
       "branch": "refs/heads/recovery/tablet-hardening-capture-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-tablet-integration-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-tablet-integration-v1",
       "HEAD": "cd9994bcef97006380dab84de63504cc9ce47a95",
       "branch": "refs/heads/integration/tablet-hardening-final-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-unified-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-unified-v1",
       "HEAD": "909328a1c318db9252c626a6e0fccc73b66e22ab",
       "branch": "refs/heads/integration/unified-neuraldx-hamclock-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-wavelog-native-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-wavelog-native-v1",
       "HEAD": "3ddea26ef401b54d8ab30486698dc81142175044",
       "branch": "refs/heads/feature/wavelog-native-integration-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-multiplatform-rc1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-multiplatform-rc1",
       "HEAD": "06f350cdbba1e4de97f6a9f05f213fe3eebc451f",
-      "branch": "refs/heads/integration/rigweave-multiplatform-rc1"
+      "branch": "refs/heads/integration/shackcq-multiplatform-rc1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-qmxplus-radio-core-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-qmxplus-radio-core-v1",
       "HEAD": "b6b9f34af37727a37273b1129b827810414b927d",
       "branch": "refs/heads/feature/qmxplus-radio-core-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-radio-hamlib-rotator-integration-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-radio-hamlib-rotator-integration-v1",
       "HEAD": "d1e956d2c21eefc905a5ecab086a8f467b7a03c4",
       "branch": "refs/heads/integration/radio-hamlib-rotator-sweep2-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-rgo-one-radio-core-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-rgo-one-radio-core-v1",
       "HEAD": "4b40da56e279b3432cfc4ed91fb20ee17c273efe",
       "branch": "refs/heads/feature/rgo-one-radio-core-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-rotator-platform-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-rotator-platform-v1",
       "HEAD": "6471e85971c088a27ea09bd841d803b90949568e",
       "branch": "refs/heads/feature/rotator-platform-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-secure-remote-station-v6",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-secure-remote-station-v6",
       "HEAD": "a4c3760622a0d7c8eda34bc039a852ac933542a8",
       "branch": "refs/heads/feature/secure-remote-station-v6"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-tablet-acceptance-sweep-1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-tablet-acceptance-sweep-1",
       "HEAD": "4cd3aa3b401a9f7bc9838b94217444d5b4cae3bc",
       "branch": "refs/heads/fix/tablet-acceptance-sweep-1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-tablet-acceptance-sweep-2",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-tablet-acceptance-sweep-2",
       "HEAD": "09412b24159ead7b48d3810cfa86f56176d33776",
       "branch": "refs/heads/fix/tablet-acceptance-sweep-2"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-tablet-acceptance-sweep-3",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-tablet-acceptance-sweep-3",
       "HEAD": "8582c0250188f62d683e10c156e7261a07b3dd6c",
       "branch": "refs/heads/fix/tablet-acceptance-sweep-3"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-tci-multirx-waterfall-globe-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-tci-multirx-waterfall-globe-v1",
       "HEAD": "ce1b99f21161c022fbfc97a78345cbe8a1ae2bd3",
       "branch": "refs/heads/feature/tci-multirx-waterfall-globe-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-v0.1.0-rc1-final",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-v0.1.0-rc1-final",
       "HEAD": "5b6c794e5d0048c67a31560c5c46989da08885c1",
-      "branch": "refs/heads/integration/rigweave-v0.1.0-rc1-final"
+      "branch": "refs/heads/integration/shackcq-v0.1.0-rc1-final"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-windows-desktop-alpha-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-windows-desktop-alpha-v1",
       "HEAD": "f6ce7b3adf1e9582c74d61d6ffd0a16d5db38aa3",
       "branch": "refs/heads/feature/windows-desktop-alpha-v1"
     },
     {
-      "worktree": "/Users/oliver/Documents/Projects/RigWeave/rigweave-windows-desktop-full-parity-v1",
+      "worktree": "/Users/oliver/Documents/Projects/ShackCQ/shackcq-windows-desktop-full-parity-v1",
       "HEAD": "a03e04bb6734b3fbdc1c1ba19bdd6db17eacc947",
       "branch": "refs/heads/feature/windows-desktop-full-parity-v1"
     }

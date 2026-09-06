@@ -10,7 +10,7 @@ This is the production Android receive-I/Q path for Elecraft KX3. It is independ
 selected external USB input
   -> one AudioRecord (UNPROCESSED, stereo PCM16, 96 kHz or explicit 48 kHz fallback)
   -> PanadapterController capture thread
-  -> one dedicated rw_panadapter_context through batched primitive-array JNI
+  -> one dedicated shackcq_panadapter_context through batched primitive-array JNI
   -> streaming complex DSP
   -> three preallocated snapshot buffers
   -> <=30 Hz coalesced Compose state
@@ -25,7 +25,7 @@ The controller owns the `AudioRecord`, native handle, capture/replay threads, ro
 
 ## Route proof and failure behavior
 
-The user selects a concrete external input. The always-visible **48K** and **96K** controls select the requested capture rate. After `AudioRecord.startRecording()`, RigWeave reads the active `AudioRecordingConfiguration` and compares the typed client format, typed device format, selected route and active route. A client-side 96 kHz request is accepted as `TRUE_96K_STEREO` only when the device side is also 96 kHz stereo with matching encoding. A 96-client/48-device path is stopped and may reopen only as a separately proven true 48 kHz path. Mono, conversion, a rejected preferred route, route change, detach, repeated read failure, CAT disconnect, wrong radio model, or transmit state fails closed. Proof is cleared on stop so persistence never restores a stale green state. A physical detach invalidates enabled I/Q, level and measured-flatness profiles before a matching device may recover automatically.
+The user selects a concrete external input. The always-visible **48K** and **96K** controls select the requested capture rate. After `AudioRecord.startRecording()`, ShackCQ reads the active `AudioRecordingConfiguration` and compares the typed client format, typed device format, selected route and active route. A client-side 96 kHz request is accepted as `TRUE_96K_STEREO` only when the device side is also 96 kHz stereo with matching encoding. A 96-client/48-device path is stopped and may reopen only as a separately proven true 48 kHz path. Mono, conversion, a rejected preferred route, route change, detach, repeated read failure, CAT disconnect, wrong radio model, or transmit state fails closed. Proof is cleared on stop so persistence never restores a stale green state. A physical detach invalidates enabled I/Q, level and measured-flatness profiles before a matching device may recover automatically.
 
 ## DSP contract
 

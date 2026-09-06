@@ -38,7 +38,7 @@ class ComparisonError(RuntimeError):
 def request_json(path: str) -> Any:
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "RigWeave-MSHV-Auto-DX-Chaser-audit",
+        "User-Agent": "ShackCQ-MSHV-Auto-DX-Chaser-audit",
         "X-GitHub-Api-Version": "2022-11-28",
     }
     token = os.environ.get("GITHUB_TOKEN")

@@ -11,4 +11,4 @@ Rejected from incorporation:
 - TX paths and automatic reconnect/stream restore;
 - neural audio models and large packaged data.
 
-RigWeave implementations are independent Kotlin/Compose and C++ code under existing GPL-3.0-only project ownership.
+ShackCQ implementations are independent Kotlin/Compose and C++ code under existing GPL-3.0-only project ownership.

@@ -1,8 +1,8 @@
-#include "rigweave/desktop/DesktopApplication.hpp"
-#include "rigweave/desktop/DesktopPlatform.hpp"
-#include "rigweave/desktop/PanadapterSceneItem.hpp"
-#include "rigweave/desktop/RfMapItem.hpp"
-#include "rigweave/tci.hpp"
+#include "shackcq/desktop/DesktopApplication.hpp"
+#include "shackcq/desktop/DesktopPlatform.hpp"
+#include "shackcq/desktop/PanadapterSceneItem.hpp"
+#include "shackcq/desktop/RfMapItem.hpp"
+#include "shackcq/tci.hpp"
 
 #include <QCommandLineOption>
 #include <QCommandLineParser>
@@ -39,7 +39,7 @@
 #include <qt_windows.h>
 #endif
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 
 namespace {
 
@@ -47,7 +47,7 @@ class GalleryTciServer final : public QObject {
 public:
   explicit GalleryTciServer(QObject *parent = nullptr)
       : QObject(parent),
-        m_server(QStringLiteral("RigWeave deterministic gallery TCI"),
+        m_server(QStringLiteral("ShackCQ deterministic gallery TCI"),
                  QWebSocketServer::NonSecureMode, this) {
     m_timer.setInterval(45);
     connect(&m_timer, &QTimer::timeout, this, [this] { sendIq(); });
@@ -97,8 +97,8 @@ private:
         values[2 * sample] = float(std::cos(phase) * .28);
         values[2 * sample + 1] = float(std::sin(phase) * .28);
       }
-      const auto bytes = rigweave::tci::build_binary_for_test(
-          rigweave::tci::DataType::Iq, static_cast<std::uint32_t>(receiver),
+      const auto bytes = shackcq::tci::build_binary_for_test(
+          shackcq::tci::DataType::Iq, static_cast<std::uint32_t>(receiver),
           96'000U, 2U, values);
       const QByteArray frame(reinterpret_cast<const char *>(bytes.data()),
                              static_cast<qsizetype>(bytes.size()));
@@ -195,8 +195,8 @@ std::unique_ptr<QMenuBar> buildNativeMenuBar(DesktopApplication &desktop) {
     return static_cast<QAction *>(nullptr);
   };
 
-  QMenu *appMenu = menuBar->addMenu(QStringLiteral("RigWeave"));
-  command(appMenu, "nav.about", QAction::AboutRole)->setText(QStringLiteral("About RigWeave"));
+  QMenu *appMenu = menuBar->addMenu(QStringLiteral("ShackCQ"));
+  command(appMenu, "nav.about", QAction::AboutRole)->setText(QStringLiteral("About ShackCQ"));
   command(appMenu, "nav.settings", QAction::PreferencesRole)->setText(QStringLiteral("Settings…"));
   appMenu->addSeparator();
   command(appMenu, "app.quit", QAction::QuitRole);
@@ -345,7 +345,7 @@ public:
     addCommand(help, "help.guide");
     addCommand(help, "help.shortcuts");
     addSeparator(help);
-    addCommand(help, "nav.about", "About RigWeave");
+    addCommand(help, "nav.about", "About ShackCQ");
     addCommand(help, "help.licences");
     QObject::connect(&m_desktop, &DesktopApplication::commandStateChanged,
                      &m_desktop, [this] { refreshCommandState(); });
@@ -700,15 +700,15 @@ bool runUiStress(DesktopApplication &desktop, QQuickWindow *window,
 
 int main(int argc, char *argv[]) {
   QApplication app(argc, argv);
-  qmlRegisterType<PanadapterSceneItem>("RigWeave.Controls", 1, 0,
+  qmlRegisterType<PanadapterSceneItem>("ShackCQ.Controls", 1, 0,
                                        "PanadapterScene");
-  qmlRegisterType<RfMapItem>("RigWeave.Controls", 1, 0, "RfMapScene");
+  qmlRegisterType<RfMapItem>("ShackCQ.Controls", 1, 0, "RfMapScene");
   const bool platformFontReady = installPlatformUiFont(app);
-  QCoreApplication::setOrganizationName(QStringLiteral("RigWeave"));
-  QCoreApplication::setOrganizationDomain(QStringLiteral("rigweave.app"));
-  QCoreApplication::setApplicationName(QStringLiteral("RigWeave Desktop"));
+  QCoreApplication::setOrganizationName(QStringLiteral("ShackCQ"));
+  QCoreApplication::setOrganizationDomain(QStringLiteral("shackcq.app"));
+  QCoreApplication::setApplicationName(QStringLiteral("ShackCQ Desktop"));
   QCoreApplication::setApplicationVersion(QStringLiteral("1.0.0-parity.1"));
-  app.setWindowIcon(QIcon(QStringLiteral(":/RigWeave/App/AppIcon.png")));
+  app.setWindowIcon(QIcon(QStringLiteral(":/ShackCQ/App/AppIcon.png")));
 
   QCommandLineParser parser;
   parser.addHelpOption();
@@ -729,12 +729,12 @@ int main(int argc, char *argv[]) {
   if (gallery && !platformFontReady)
     return 4;
   if (gallery || uiStress)
-    qputenv("RIGWEAVE_DESKTOP_DEMO", "1");
-  const bool demo = qEnvironmentVariableIntValue("RIGWEAVE_DESKTOP_DEMO") == 1;
+    qputenv("SHACKCQ_DESKTOP_DEMO", "1");
+  const bool demo = qEnvironmentVariableIntValue("SHACKCQ_DESKTOP_DEMO") == 1;
 
   SingleInstance single(demo
-                            ? QStringLiteral("app.rigweave.desktop.parity.demo")
-                            : QStringLiteral("app.rigweave.desktop"));
+                            ? QStringLiteral("app.shackcq.desktop.parity.demo")
+                            : QStringLiteral("app.shackcq.desktop"));
   if (!single.acquire())
     return 0;
 
@@ -779,7 +779,7 @@ int main(int argc, char *argv[]) {
       });
   QObject::connect(&app, &QCoreApplication::aboutToQuit, &desktop,
                    &DesktopApplication::shutdown);
-  engine.load(QUrl(QStringLiteral("qrc:/RigWeave/App/Main.qml")));
+  engine.load(QUrl(QStringLiteral("qrc:/ShackCQ/App/Main.qml")));
   if (engine.rootObjects().isEmpty())
     return 3;
 #ifdef Q_OS_WIN

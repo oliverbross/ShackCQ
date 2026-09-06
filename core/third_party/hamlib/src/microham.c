@@ -208,7 +208,7 @@ static void close_microham()
 #if defined(__ANDROID__)
 
 /*
- * RigWeave Android integration: direct device discovery is deliberately
+ * ShackCQ Android integration: direct device discovery is deliberately
  * unavailable because the application-owned USB transport is authoritative.
  */
 static void finddevices()

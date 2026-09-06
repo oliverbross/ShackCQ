@@ -14,7 +14,7 @@ Android Digi uses component-audited source from Nexus commit
 
 The complete `tempo-sstv` MIT licence and NOTICE are retained under
 `rust/tempo-sstv`. CW/RTTY provenance is recorded in
-`rust/rigweave-flex/UPSTREAM.md`.
+`rust/shackcq-flex/UPSTREAM.md`.
 
 ## Android operating path
 
@@ -43,7 +43,7 @@ preferences. Arming and selected image pixels deliberately do not persist.
 
 ## Not exposed
 
-Weak-signal modes are exposed on Android through RigWeave's GPL-compatible
+Weak-signal modes are exposed on Android through ShackCQ's GPL-compatible
 `mfsk-core` native bridge. The typed `DigiCapabilities` registry is the
 authority for picker visibility, variants, fixture status, sequencing,
 waterfall tuning, TX duration and ADIF mapping. FT8 and FT4 have the automatic
@@ -52,7 +52,7 @@ manual even when native RX/TX exists; the UI does not imply FT8-style automation
 
 ## Nexus feature audit
 
-RigWeave already has the stronger POTA/WWFF chase, recoverable POTA activation,
+ShackCQ already has the stronger POTA/WWFF chase, recoverable POTA activation,
 offline SOTA catalogue, local journal, and authority-aware QRZ/Club Log/eQSL
 delivery paths. They were not replaced. Nexus LoTW upload shells out to desktop
 TQSL for certificate signing, which is not an Android implementation; only its
@@ -64,7 +64,7 @@ into Digi without its durable QSO/event model and tests.
 
 The cockpit owns one real native 384-bin spectrum, a bounded 90-second
 waterfall, typed USB/Flex health, exact click-to-net tuning, Classic/Roster
-decode views and separate `rigweave-digi.sqlite` storage. FT8/FT4 sequencing
+decode views and separate `shackcq-digi.sqlite` storage. FT8/FT4 sequencing
 is operator-started, locks one base callsign, ignores bystanders and never
 persists arm/PTT/transmitting state. RTTY and BPSK31 remain truthful manual
 workflows; QPSK31 is excluded.

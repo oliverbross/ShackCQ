@@ -9,7 +9,7 @@ power supply, dummy load, test operator, date, and a hash of captured CAT traffi
 - Verify USB enumeration and stable reconnect identity without changing radio settings.
 - Record model and firmware; V6 must return model `006` before V6-only polling begins.
 - Compare VFO A/B, RX/TX VFO, mode, split, fine tune, RIT/XIT, AGC, S-meter, and firmware
-  between radio display and RigWeave.
+  between radio display and ShackCQ.
 - Toggle documented module menus on the radio and verify ATU/NB/AF truth does not infer
   absent hardware from an off value.
 - Disconnect/reconnect repeatedly and confirm stale truth, one close, one poll owner, and
@@ -40,7 +40,7 @@ and a tested immediate RX/stop path.
 - Test memory write only with separate explicit owner authorization and a disposable channel;
   read before, write once, read after, and restore deliberately.
 
-No firmware unlock or firmware flashing is ever part of RigWeave acceptance.
+No firmware unlock or firmware flashing is ever part of ShackCQ acceptance.
 
 ## Evidence separation
 

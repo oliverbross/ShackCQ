@@ -1,4 +1,4 @@
-name: RigWeave Secure Remote Station v6
+name: ShackCQ Secure Remote Station v6
 
 on:
   workflow_dispatch:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   android-ios-core:
-    uses: ./.github/workflows/rigweave-release-candidate.yml
+    uses: ./.github/workflows/shackcq-release-candidate.yml
     with:
       allow_descendant_validation: true
 
@@ -31,7 +31,7 @@ jobs:
       - name: Source, protocol and privacy gate
         run: python3 scripts/check_secure_remote_station_v6.py
       - name: Configure core with ASan and UBSan
-        run: cmake -S core -B build/remote-core -G Ninja -DCMAKE_BUILD_TYPE=Debug -DRIGWEAVE_ENABLE_ASAN=ON -DRIGWEAVE_ENABLE_UBSAN=ON
+        run: cmake -S core -B build/remote-core -G Ninja -DCMAKE_BUILD_TYPE=Debug -DSHACKCQ_ENABLE_ASAN=ON -DSHACKCQ_ENABLE_UBSAN=ON
       - name: Build and test protocol, security, media and scale
         run: cmake --build build/remote-core && ctest --test-dir build/remote-core --output-on-failure
 
@@ -60,14 +60,14 @@ jobs:
       - name: Package Linux x64 stationd without identities
         run: |
           mkdir -p build/package/stationd
-          cp build/linux/rigweave-stationd build/package/stationd/
+          cp build/linux/shackcq-stationd build/package/stationd/
           cp COPYING NOTICE build/package/
-          tar -C build/package -czf build/RigWeave-stationd-linux-x64-${{ github.sha }}.tar.gz stationd COPYING NOTICE
-          ! tar -tzf build/RigWeave-stationd-linux-x64-${{ github.sha }}.tar.gz | grep -Ei '(private|identity|\.pem$|rigctld)'
+          tar -C build/package -czf build/ShackCQ-stationd-linux-x64-${{ github.sha }}.tar.gz stationd COPYING NOTICE
+          ! tar -tzf build/ShackCQ-stationd-linux-x64-${{ github.sha }}.tar.gz | grep -Ei '(private|identity|\.pem$|rigctld)'
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: RigWeave-stationd-linux-x64-${{ github.sha }}
-          path: build/RigWeave-stationd-linux-x64-${{ github.sha }}.tar.gz
+          name: ShackCQ-stationd-linux-x64-${{ github.sha }}
+          path: build/ShackCQ-stationd-linux-x64-${{ github.sha }}.tar.gz
           if-no-files-found: error
 
   source-sbom:
@@ -78,10 +78,10 @@ jobs:
       - name: Verify exact checked-out SHA
         run: test "$(git rev-parse HEAD)" = "${{ github.sha }}"
       - name: Exact-SHA source archive, SBOM, manifests and digest ledger
-        env: {RIGWEAVE_ALLOW_RC1_DESCENDANT_VALIDATION: "1"}
+        env: {SHACKCQ_ALLOW_RC1_DESCENDANT_VALIDATION: "1"}
         run: python3 scripts/prepare_rc1_distribution.py --output build/remote-v6/distribution --channel RC
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: RigWeave-remote-v6-source-sbom-${{ github.sha }}
+          name: ShackCQ-remote-v6-source-sbom-${{ github.sha }}
           path: build/remote-v6/distribution
           if-no-files-found: error

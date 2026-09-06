@@ -2,7 +2,7 @@
 
 ## Scope and evidence boundary
 
-Phase 2 completes RigWeave's member-facing Groups.io workflow: cached reading, local and online search, new topics, replies, local drafts, an explicitly authorised foreground outbox, server-draft reconciliation, incoming and outgoing attachments, complete selected-group mirroring, and manual official archive export. Administration, subscriptions, moderator queues, chat, calendars, wikis, albums, polls, background polling, multiple accounts, desktop UI and AI summarisation remain out of scope.
+Phase 2 completes ShackCQ's member-facing Groups.io workflow: cached reading, local and online search, new topics, replies, local drafts, an explicitly authorised foreground outbox, server-draft reconciliation, incoming and outgoing attachments, complete selected-group mirroring, and manual official archive export. Administration, subscriptions, moderator queues, chat, calendars, wikis, albums, polls, background polling, multiple accounts, desktop UI and AI summarisation remain out of scope.
 
 All automated coverage uses invented fixtures and fake transports. No API key, private group data, real draft, post, attachment or archive was used. Apple/iPad parity is source-only and uncompiled by explicit owner instruction.
 
@@ -10,7 +10,7 @@ All automated coverage uses invented fixtures and fake transports. No API key, p
 
 Reference inspected: <https://groups.io/api>, marked **Revised Jul 31, 2026**, inspected 2026-08-20. Base URL: `https://groups.io/api/v1`.
 
-Every request uses `Authorization: Bearer <API_KEY>`. RigWeave does not call `/login`, use cookies or Basic authentication, place the key in a query parameter, or send `csrf`. GET arguments use the query string. Writes use `application/x-www-form-urlencoded`, except `/uploadattachments`, which is streamed multipart with `draft_id`, `fileupload` and `inline=false`.
+Every request uses `Authorization: Bearer <API_KEY>`. ShackCQ does not call `/login`, use cookies or Basic authentication, place the key in a query parameter, or send `csrf`. GET arguments use the query string. Writes use `application/x-www-form-urlencoded`, except `/uploadattachments`, which is streamed multipart with `draft_id`, `fileupload` and `inline=false`.
 
 Retained reads: `/groups`, `/gettopics`, `/gettopic`, `/getmessages`. Phase 2 adds `/getperms`, `/getsinglefeed`, `/getmessage`, `/searcharchives`, `/getdrafts`, `/getattachments`, and `/downloadarchives`. Writes are `/newdraft`, `/updatedraft`, `/uploadattachments`, `/deleteattachment`, `/deletedraft`, and `/postdraft`.
 
@@ -54,11 +54,11 @@ Downloaded search remains SQLite FTS5 and works offline across cached rows. Grou
 
 Complete Offline Archive is a manual per-group `/getmessages` traversal with pages up to 100. Each page is transactionally upserted with its FTS rows and deduplicated by `(group_id,message_number)`. Progress and opaque cursor state allow pause/resume; cancellation preserves completed pages. Only authoritative `has_more=false` marks completion. An invalid stored cursor restarts safely while preserving/deduplicating existing rows. Normal newest-message sync never implicitly re-walks the archive.
 
-Official ZIP/MBOX export is permission-gated and manual. UI warns that Groups.io permits one request per person/group per 24 hours. `/downloadarchives` streams to a feature-owned temporary file, hashes it, moves it atomically under `GroupsIO/archive-exports/<group>/<timestamp>-archive.zip`, and exposes native share/export. Failure preserves older exports; there is no automatic retry and RigWeave does not parse MBOX.
+Official ZIP/MBOX export is permission-gated and manual. UI warns that Groups.io permits one request per person/group per 24 hours. `/downloadarchives` streams to a feature-owned temporary file, hashes it, moves it atomically under `GroupsIO/archive-exports/<group>/<timestamp>-archive.zip`, and exposes native share/export. Failure preserves older exports; there is no automatic retry and ShackCQ does not parse MBOX.
 
 ## Schema version 2 and isolation
 
-Only `rigweave-groupsio.sqlite` moves from v1 to v2. Android's `SQLiteOpenHelper` performs a transactional `onUpgrade`; Apple reads `PRAGMA user_version`, creates v2 at version 0, transactionally migrates v1, opens v2, rejects newer versions and never downgrades.
+Only `shackcq-groupsio.sqlite` moves from v1 to v2. Android's `SQLiteOpenHelper` performs a transactional `onUpgrade`; Apple reads `PRAGMA user_version`, creates v2 at version 0, transactionally migrates v1, opens v2, rejects newer versions and never downgrades.
 
 The migration preserves groups, topics, messages, FTS and sync state. It adds capability columns to `groups`; reply/quote/attachment-sync columns to `messages`; and `message_attachments`, `local_drafts`, `draft_attachments`, `server_drafts`, and `archive_exports` with query-driven indexes. Credentials and signed URLs never enter SQLite.
 

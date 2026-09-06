@@ -4,9 +4,9 @@ Status: Implemented; physical acceptance pending
 
 ## Context
 
-RigWeave’s Qt desktop already has one `DesktopApplication` composition root, one QML-facing `DesktopRadioController`, one `DesktopPanadapter`, a shared C++17 DSP core, Qt WebSockets, deterministic desktop tests, and cross-platform Qt packaging. TCI must add multi-receiver SDR behavior without adding a second radio authority or breaking Android/Apple callers.
+ShackCQ’s Qt desktop already has one `DesktopApplication` composition root, one QML-facing `DesktopRadioController`, one `DesktopPanadapter`, a shared C++17 DSP core, Qt WebSockets, deterministic desktop tests, and cross-platform Qt packaging. TCI must add multi-receiver SDR behavior without adding a second radio authority or breaking Android/Apple callers.
 
-The pinned SDRoxide reference demonstrates useful TCI protocol and multi-receiver behavior, but importing its Rust/egui/wgpu application graph would duplicate RigWeave authorities and dependencies.
+The pinned SDRoxide reference demonstrates useful TCI protocol and multi-receiver behavior, but importing its Rust/egui/wgpu application graph would duplicate ShackCQ authorities and dependencies.
 
 ## Decision
 
@@ -32,7 +32,7 @@ TCI binary frames use a 64-byte header interpreted as sixteen little-endian 32-b
 
 ## Compatibility
 
-Existing Hamlib single-receiver QML properties remain projections of the active-control receiver. Existing `rw_panadapter_*` ABI remains source-compatible. New portable C++ types are internal until a native client needs them; Android and Apple receive regression builds, not new UI.
+Existing Hamlib single-receiver QML properties remain projections of the active-control receiver. Existing `shackcq_panadapter_*` ABI remains source-compatible. New portable C++ types are internal until a native client needs them; Android and Apple receive regression builds, not new UI.
 
 ## Rejected alternative
 

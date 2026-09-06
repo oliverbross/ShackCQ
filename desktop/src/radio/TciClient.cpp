@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/desktop/TciClient.hpp"
+#include "shackcq/desktop/TciClient.hpp"
 
-#include "rigweave/tci.hpp"
+#include "shackcq/tci.hpp"
 
 #include <QAbstractSocket>
 #include <QDateTime>
@@ -10,7 +10,7 @@
 #include <QStringList>
 #include <QThread>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 
 QStringList arguments(const std::string &value) {
@@ -270,7 +270,7 @@ void TciClient::setState(QString state) {
 
 void TciClient::handleText(const QString &message) {
   m_lastUpdateMs = QDateTime::currentMSecsSinceEpoch();
-  const auto commands = rigweave::tci::parse_status(message.toStdString());
+  const auto commands = shackcq::tci::parse_status(message.toStdString());
   if (commands.empty() && !message.trimmed().isEmpty())
     markMalformed("frame");
   for (const auto &command : commands)
@@ -375,7 +375,7 @@ void TciClient::handleStatus(const std::string &name,
         snapshot["ifOffsetHz"] = offset;
     } else if (command == "modulation") {
       const auto mode =
-          rigweave::tci::canonical_mode(fields.value(1).toStdString());
+          shackcq::tci::canonical_mode(fields.value(1).toStdString());
       ok = mode.has_value();
       if (ok) {
         snapshot["mode"] = QString::fromStdString(*mode).toUpper();
@@ -440,8 +440,8 @@ void TciClient::handleBinary(const QByteArray &message) {
       static_cast<std::uint32_t>(qMax(1, m_receivers.size()));
   m_decodePool.start([this, payload, generation, receiverCount] {
     m_binaryDecodedOffOwnerThread = QThread::currentThread() != thread();
-    rigweave::tci::BinaryError parseError{};
-    const auto frame = rigweave::tci::decode_binary(
+    shackcq::tci::BinaryError parseError{};
+    const auto frame = shackcq::tci::decode_binary(
         reinterpret_cast<const std::uint8_t *>(payload.constData()),
         static_cast<std::size_t>(payload.size()), &parseError, receiverCount);
     int receiver = -1;
@@ -490,9 +490,9 @@ void TciClient::deliverBinary(int receiver, quint32 sampleRate, int dataType,
     }
     return;
   }
-  if (dataType == static_cast<int>(rigweave::tci::DataType::Iq)) {
+  if (dataType == static_cast<int>(shackcq::tci::DataType::Iq)) {
     emit iqFrame(receiver, sampleRate, std::move(values));
-  } else if (dataType == static_cast<int>(rigweave::tci::DataType::RxAudio)) {
+  } else if (dataType == static_cast<int>(shackcq::tci::DataType::RxAudio)) {
     emit rxAudioFrame(receiver, sampleRate, std::move(values));
   }
 }
@@ -503,9 +503,9 @@ bool TciClient::attachReceiver(int receiver) {
     return false;
   m_attachedReceivers.insert(receiver);
   send(QString::fromStdString(
-      *rigweave::tci::build_iq_sample_rate(m_profile.preferredIqSampleRate)));
+      *shackcq::tci::build_iq_sample_rate(m_profile.preferredIqSampleRate)));
   send(QString::fromStdString(
-      *rigweave::tci::build_iq_start(static_cast<std::uint32_t>(receiver))));
+      *shackcq::tci::build_iq_start(static_cast<std::uint32_t>(receiver))));
   return true;
 }
 
@@ -513,13 +513,13 @@ bool TciClient::detachReceiver(int receiver) {
   if (!m_ready || !m_attachedReceivers.remove(receiver))
     return false;
   send(QString::fromStdString(
-      *rigweave::tci::build_iq_stop(static_cast<std::uint32_t>(receiver))));
+      *shackcq::tci::build_iq_stop(static_cast<std::uint32_t>(receiver))));
   return true;
 }
 
 bool TciClient::requestFrequency(int receiver, int channel,
                                  quint64 frequencyHz) {
-  const auto command = rigweave::tci::build_vfo(
+  const auto command = shackcq::tci::build_vfo(
       static_cast<std::uint32_t>(receiver), static_cast<std::uint32_t>(channel),
       frequencyHz);
   if (!m_ready || !validReceiver(receiver) || !command)
@@ -530,7 +530,7 @@ bool TciClient::requestFrequency(int receiver, int channel,
 }
 
 bool TciClient::requestMode(int receiver, const QString &mode) {
-  const auto command = rigweave::tci::build_mode(
+  const auto command = shackcq::tci::build_mode(
       static_cast<std::uint32_t>(receiver), mode.toStdString());
   if (!m_ready || !validReceiver(receiver) || !command)
     return false;
@@ -565,7 +565,7 @@ void TciClient::globalStop() {
   m_pendingMutations.clear();
   if (m_ready && m_stopSentGeneration != m_generation) {
     m_stopSentGeneration = m_generation;
-    send(QString::fromStdString(*rigweave::tci::build_safe_stop(0U)));
+    send(QString::fromStdString(*shackcq::tci::build_safe_stop(0U)));
   }
   const auto attached = m_attachedReceivers;
   for (const int receiver : attached)
@@ -579,4 +579,4 @@ void TciClient::setTimeoutsForTest(int connectionMs, int readyMs,
   m_reconnectTimer.setInterval(qMax(10, reconnectMs));
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

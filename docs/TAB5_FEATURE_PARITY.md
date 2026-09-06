@@ -2,7 +2,7 @@
 
 **Status:** Current implementation comparison, not a universal support claim.
 
-RigWeave carries forward selected owner-authored KX3 remote, logging, DSP, and DX behaviour from the Tab5 project into native Apple and Android clients over a shared C++ core. It does not inject fixture CAT frames, generated spots, fake spectrum, or demonstration QSOs in production paths.
+ShackCQ carries forward selected owner-authored KX3 remote, logging, DSP, and DX behaviour from the Tab5 project into native Apple and Android clients over a shared C++ core. It does not inject fixture CAT frames, generated spots, fake spectrum, or demonstration QSOs in production paths.
 
 | Area | Shared core | Apple | Android | Evidence boundary |
 |---|---|---|---|---|

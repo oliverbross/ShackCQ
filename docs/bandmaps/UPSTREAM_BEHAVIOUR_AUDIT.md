@@ -1,7 +1,7 @@
 # Intelligent Band Maps upstream behaviour audit
 
 This was a clean-room behavioural review. Source copied, translated, adapted or vendored: **NONE**. No upstream source,
-styles, components, assets, data structures or tests were added to RigWeave.
+styles, components, assets, data structures or tests were added to ShackCQ.
 
 | Reference | Immutable pin | Licence observed | Behaviour reviewed |
 |---|---|---|---|
@@ -10,10 +10,10 @@ styles, components, assets, data structures or tests were added to RigWeave.
 | [Not1MM](https://github.com/mbridak/not1mm) | `95b49e30fe7f374057fd708307c02fbdb892a81a` | GPLv3 | zoomable band map, aged and marked spots, worked styling, radio markers, traversal and operator preparation workflow |
 | [Wavelog](https://github.com/wavelog/wavelog) | release commit `af3256140bd05403b7c4a421746c2ea653a4f04f` | MIT | active bands/modes, radio display, worked/confirmed colours, Band Map list behaviour and Contest field preservation |
 
-N1MM behaviour is consumed solely through RigWeave's integrated Contest/N1MM authority at the frozen Task C base. No
+N1MM behaviour is consumed solely through ShackCQ's integrated Contest/N1MM authority at the frozen Task C base. No
 additional N1MM protocol source was reviewed or implemented.
 
-Independent RigWeave decisions include immutable multi-source observations, source-aware tolerances and ageing,
+Independent ShackCQ decisions include immutable multi-source observations, source-aware tolerances and ageing,
 frequency-bucket indexing, three separate evidence channels, bounded projection-backed Needs truth, editable data
 presets, four native Compose layouts, colour plus text/border/icon semantics, and generation-gated receive review.
 

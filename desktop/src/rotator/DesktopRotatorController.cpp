@@ -1,4 +1,4 @@
-#include "rigweave/desktop/DesktopRotatorController.hpp"
+#include "shackcq/desktop/DesktopRotatorController.hpp"
 
 #include <QRegularExpression>
 #include <QSet>
@@ -6,11 +6,11 @@
 #include <algorithm>
 #include <cmath>
 
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
 #include <hamlib/rotator.h>
 #endif
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 
 DesktopRotatorController::DesktopRotatorController(QObject *parent)
     : QObject(parent) {
@@ -27,7 +27,7 @@ DesktopRotatorController::~DesktopRotatorController() { disconnectRotator(); }
 bool DesktopRotatorController::connectRotator(int modelId, const QString &port,
                                               int baudRate) {
   disconnectRotator();
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   if (port.trimmed().isEmpty()) {
     emit error("An explicit rotator route is required");
     return false;
@@ -151,7 +151,7 @@ void DesktopRotatorController::disconnectRotator() {
   if (m_tcp.state() != QAbstractSocket::UnconnectedState)
     m_tcp.abort();
   m_buffer.clear();
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   if (m_rotator) {
     auto *rot = static_cast<ROT *>(m_rotator);
     rot_close(rot);
@@ -257,7 +257,7 @@ bool DesktopRotatorController::confirmMove() {
   emit preparedChanged();
   if (m_protocol != "none" && m_protocol != "HAMLIB")
     return writeFrame(frame("move", m_preparedAzimuth, m_preparedElevation));
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   if (!m_rotator)
     return false;
   const int code =
@@ -281,7 +281,7 @@ void DesktopRotatorController::stop() {
     writeFrame(frame("stop"));
     return;
   }
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   if (m_rotator) {
     const int code = rot_stop(static_cast<ROT *>(m_rotator));
     if (code != RIG_OK)
@@ -293,7 +293,7 @@ void DesktopRotatorController::stop() {
 bool DesktopRotatorController::park() {
   if (m_protocol != "none" && m_protocol != "HAMLIB")
     return false;
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   if (!m_rotator)
     return false;
   const int code = rot_park(static_cast<ROT *>(m_rotator));
@@ -312,7 +312,7 @@ void DesktopRotatorController::poll() {
     writeFrame(frame("query"));
     return;
   }
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   if (!m_rotator)
     return;
   azimuth_t az = 0;
@@ -400,4 +400,4 @@ bool DesktopRotatorController::restoreConfiguration(const QVariantMap &section,
   return true;
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

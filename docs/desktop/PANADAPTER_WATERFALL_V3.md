@@ -2,7 +2,7 @@
 
 ## Signal path
 
-The existing shared rw_panadapter_context remains the DSP authority. Its compatible PCM APIs are preserved and rw_panadapter_push_float_iq adds direct float32 I/Q. Swap/conjugate, correction, clipping, non-finite, duplicate, DC, FFT, averaging, peak-hold/decay, and FIT diagnostics share the same core.
+The existing shared shackcq_panadapter_context remains the DSP authority. Its compatible PCM APIs are preserved and shackcq_panadapter_push_float_iq adds direct float32 I/Q. Swap/conjugate, correction, clipping, non-finite, duplicate, DC, FFT, averaging, peak-hold/decay, and FIT diagnostics share the same core.
 
 Desktop I/Q is routed by stable receiver ID to at most nine contexts: eight TCI receivers plus one exact local stereo route. Each float frame is capped at 2,000,000 values. FFT work executes on one worker thread behind an eight-frame queue; overload increments per-source dropped-frame diagnostics. Shutdown invalidates queued publication, waits for the bounded worker, and cannot publish into a destroyed owner.
 

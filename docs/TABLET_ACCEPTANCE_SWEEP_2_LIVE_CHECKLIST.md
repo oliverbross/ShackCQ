@@ -3,7 +3,7 @@
 ## Protected install gates
 
 - [ ] Record final branch SHA and artifact SHA-256.
-- [ ] Confirm `pm path app.rigweave.mobile`; stop if absent.
+- [ ] Confirm `pm path app.shackcq.mobile`; stop if absent.
 - [ ] Create external hash-recorded protected backup before state-affecting work.
 - [ ] Record UID, package path, QSO/projection counts and protected-data inventory.
 - [ ] Install only with `adb install -r`.

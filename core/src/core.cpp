@@ -1,4 +1,4 @@
-#include "rigweave/core.h"
+#include "shackcq/core.h"
 
 #include <algorithm>
 #include <charconv>
@@ -17,7 +17,7 @@ constexpr size_t kMaxBufferedBytes = 512;
 constexpr size_t kMaxFrameBytes = 128;
 
 struct CoreContext {
-    rw_radio_state state{};
+    shackcq_radio_state state{};
     std::string pending;
 };
 
@@ -233,17 +233,17 @@ std::string adif_field(std::string_view name, std::string_view value) {
 }
 }  // namespace
 
-struct rw_context { CoreContext core; };
+struct shackcq_context { CoreContext core; };
 
-rw_context *rw_context_create(void) {
-    auto *context = new rw_context{};
-    rw_context_reset(context);
+shackcq_context *shackcq_context_create(void) {
+    auto *context = new shackcq_context{};
+    shackcq_context_reset(context);
     return context;
 }
 
-void rw_context_destroy(rw_context *context) { delete context; }
+void shackcq_context_destroy(shackcq_context *context) { delete context; }
 
-void rw_context_reset(rw_context *context) {
+void shackcq_context_reset(shackcq_context *context) {
     if (!context) return;
     context->core = {};
     copy_text(context->core.state.identity, sizeof(context->core.state.identity), "UNAVAILABLE");
@@ -266,7 +266,7 @@ void rw_context_reset(rw_context *context) {
     context->core.state.revision = 0;
 }
 
-int rw_context_feed(rw_context *context, const char *bytes, size_t length) {
+int shackcq_context_feed(shackcq_context *context, const char *bytes, size_t length) {
     if (!context || !bytes || length == 0 || length > kMaxBufferedBytes) return 0;
     if (context->core.pending.size() + length > kMaxBufferedBytes) context->core.pending.clear();
     context->core.pending.append(bytes, length);
@@ -280,28 +280,28 @@ int rw_context_feed(rw_context *context, const char *bytes, size_t length) {
     return applied;
 }
 
-rw_radio_state rw_context_state(const rw_context *context) {
-    return context ? context->core.state : rw_radio_state{};
+shackcq_radio_state shackcq_context_state(const shackcq_context *context) {
+    return context ? context->core.state : shackcq_radio_state{};
 }
 
-rw_command_class rw_classify_command(const char *command) {
-    if (!command) return RW_COMMAND_UNKNOWN;
+shackcq_command_class shackcq_classify_command(const char *command) {
+    if (!command) return SHACKCQ_COMMAND_UNKNOWN;
     const std::string value = upper(command);
     static constexpr std::array<std::string_view, 27> safe{
         "K3;", "OM;", "ID;", "FA;", "FB;", "MD;", "IF;", "TQ;", "SM;", "SW;", "PO;",
         "AG;", "RG;", "BW;", "PC;", "ML;", "MG;", "KS;", "IS;", "PA;", "RA;", "RT;", "XT;", "FR;", "FT;", "DS;", "GT;"
     };
-    if (std::find(safe.begin(), safe.end(), value) != safe.end()) return RW_COMMAND_READ_ONLY;
+    if (std::find(safe.begin(), safe.end(), value) != safe.end()) return SHACKCQ_COMMAND_READ_ONLY;
     if (value.rfind("TX", 0) == 0 || value.rfind("RX", 0) == 0 ||
         value.rfind("SWT", 0) == 0 || value.rfind("SWH", 0) == 0 ||
-        value.rfind("KY", 0) == 0) return RW_COMMAND_TRANSMIT;
-    if (value.size() > 3 && value.back() == ';') return RW_COMMAND_MUTATION;
-    return RW_COMMAND_UNKNOWN;
+        value.rfind("KY", 0) == 0) return SHACKCQ_COMMAND_TRANSMIT;
+    if (value.size() > 3 && value.back() == ';') return SHACKCQ_COMMAND_MUTATION;
+    return SHACKCQ_COMMAND_UNKNOWN;
 }
 
-size_t rw_startup_command_count(void) { return 0; }
+size_t shackcq_startup_command_count(void) { return 0; }
 
-int rw_qso_identity(char *output, size_t output_size, const char *callsign,
+int shackcq_qso_identity(char *output, size_t output_size, const char *callsign,
                     const char *utc_iso8601, uint64_t frequency_hz, const char *mode) {
     if (!output || output_size < 20 || !callsign || !utc_iso8601 || !mode) return 0;
     const std::string key = normalized(callsign) + "|" + utc_iso8601 + "|" +
@@ -311,7 +311,7 @@ int rw_qso_identity(char *output, size_t output_size, const char *callsign,
     return std::snprintf(output, output_size, "%s", stream.str().c_str()) > 0 ? 1 : 0;
 }
 
-int rw_adif_serialize(char *output, size_t output_size, const char *identity,
+int shackcq_adif_serialize(char *output, size_t output_size, const char *identity,
                       const char *callsign, const char *date_yyyymmdd,
                       const char *time_hhmmss, uint64_t frequency_hz,
                       const char *mode, const char *rst_sent, const char *rst_received) {
@@ -329,4 +329,4 @@ int rw_adif_serialize(char *output, size_t output_size, const char *identity,
     return static_cast<int>(record.size());
 }
 
-const char *rw_core_version(void) { return "0.1.0"; }
+const char *shackcq_core_version(void) { return "0.1.0"; }

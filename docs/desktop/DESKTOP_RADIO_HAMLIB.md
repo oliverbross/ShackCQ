@@ -1,6 +1,6 @@
 # Desktop radio and Hamlib
 
-RigWeave uses only the repository-pinned Hamlib 4.7.2 source and verifies its manifest with `scripts/check_hamlib_upstream.py`. The Windows workflow produces one static `libhamlib` with configured supported backends; it does not build or package `rigctl`, `rigctld`, `rotctl`, tests or command-line utilities.
+ShackCQ uses only the repository-pinned Hamlib 4.7.2 source and verifies its manifest with `scripts/check_hamlib_upstream.py`. The Windows workflow produces one static `libhamlib` with configured supported backends; it does not build or package `rigctl`, `rigctld`, `rotctl`, tests or command-line utilities.
 
 `HamlibModelRegistry` enumerates compiled capabilities and exposes manufacturer, model, backend, status and transport for search. `DesktopRadioController` starts disconnected, requires an explicit route and Connect action, polls observable frequency/mode, and accepts bounded receive-review CAT changes. The generic surface must hide unsupported controls.
 

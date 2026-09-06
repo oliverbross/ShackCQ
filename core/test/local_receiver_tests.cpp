@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/local_receiver.hpp"
+#include "shackcq/local_receiver.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -41,32 +41,32 @@ std::vector<float> fm_tone(std::uint32_t rate, float audio_hz, float deviation_h
 }
 
 int main() {
-    rigweave::LocalReceiverDsp receiver;
-    rigweave::LocalReceiverConfig config;
-    config.input_sample_rate = 96000; config.mode = rigweave::LocalReceiverMode::Usb;
+    shackcq::LocalReceiverDsp receiver;
+    shackcq::LocalReceiverConfig config;
+    config.input_sample_rate = 96000; config.mode = shackcq::LocalReceiverMode::Usb;
     assert(receiver.configure(config));
     const auto usb = receiver.process(tone(96000, 1200.0F, 0.2F).data(), 96000U / 5U * 2U);
-    receiver.reset(); config.mode = rigweave::LocalReceiverMode::Lsb; assert(receiver.configure(config));
+    receiver.reset(); config.mode = shackcq::LocalReceiverMode::Lsb; assert(receiver.configure(config));
     const auto rejected = receiver.process(tone(96000, 1200.0F, 0.2F).data(), 96000U / 5U * 2U);
     assert(rms(usb.audio) > rms(rejected.audio) * 3.0F);
 
-    config.mode = rigweave::LocalReceiverMode::Cw; config.filter_low_hz = 500; config.filter_high_hz = 700; config.cw_pitch_hz = 600;
+    config.mode = shackcq::LocalReceiverMode::Cw; config.filter_low_hz = 500; config.filter_high_hz = 700; config.cw_pitch_hz = 600;
     assert(receiver.configure(config));
     assert(!receiver.process(tone(96000, 600.0F, 0.2F).data(), 96000U / 5U * 2U).audio.empty());
 
-    config.mode = rigweave::LocalReceiverMode::Am; config.filter_low_hz = 50; config.filter_high_hz = 6000;
+    config.mode = shackcq::LocalReceiverMode::Am; config.filter_low_hz = 50; config.filter_high_hz = 6000;
     assert(receiver.configure(config));
     auto am = tone(96000, 0.0F, 0.3F, 0.6F);
     for (std::size_t i = 0; i < am.size() / 2U; ++i) { const float envelope = 1.0F + 0.4F * std::sin(2.0F * kPi * 1000.0F * i / 96000.0F); am[i*2U] *= envelope; }
     const auto am_result = receiver.process(am.data(), am.size());
     assert(am_result.metrics.carrier_level > 0.05F && am_result.metrics.modulation_depth > 0.01F);
 
-    config.mode = rigweave::LocalReceiverMode::Sam; assert(receiver.configure(config));
+    config.mode = shackcq::LocalReceiverMode::Sam; assert(receiver.configure(config));
     for (int pass = 0; pass < 6; ++pass) receiver.process(am.data(), am.size());
     const auto sam = receiver.process(am.data(), am.size());
-    assert(sam.metrics.sam_state != rigweave::SamLockState::Fallback);
+    assert(sam.metrics.sam_state != shackcq::SamLockState::Fallback);
 
-    config.mode = rigweave::LocalReceiverMode::Nfm; config.filter_low_hz = 0; config.filter_high_hz = 20000;
+    config.mode = shackcq::LocalReceiverMode::Nfm; config.filter_low_hz = 0; config.filter_high_hz = 20000;
     assert(receiver.configure(config));
     auto fm = tone(96000, 5000.0F, 0.4F);
     const auto nfm = receiver.process(fm.data(), fm.size());
@@ -110,7 +110,7 @@ int main() {
     }
     assert(!receiver.consume_dcs_word(999, false));
 
-    config.input_sample_rate = 192000; config.mode = rigweave::LocalReceiverMode::Wfm; config.filter_high_hz = 95000;
+    config.input_sample_rate = 192000; config.mode = shackcq::LocalReceiverMode::Wfm; config.filter_high_hz = 95000;
     assert(receiver.configure(config));
     const auto wfm_iq = tone(192000, 19000.0F, 0.3F);
     const auto wfm = receiver.process(wfm_iq.data(), wfm_iq.size());
@@ -128,7 +128,7 @@ int main() {
     assert(receiver.consume_rds_group(0x1234, 0x4000, 0xEA60, 0xC780));
     assert(!receiver.process(wfm_iq.data(), wfm_iq.size()).metrics.rds_clock.empty());
 
-    config.input_sample_rate = 96000; config.mode = rigweave::LocalReceiverMode::Spectrum; config.filter_low_hz = 0; config.filter_high_hz = 3000;
+    config.input_sample_rate = 96000; config.mode = shackcq::LocalReceiverMode::Spectrum; config.filter_low_hz = 0; config.filter_high_hz = 3000;
     assert(receiver.configure(config));
     assert(receiver.process(fm.data(), fm.size()).audio.empty());
     config.offset_hz = 50000; assert(!receiver.configure(config));
@@ -136,18 +136,18 @@ int main() {
     // Deterministic churn profiles cover bounded add/remove-equivalent resets, mode and source-rate changes.
     config.offset_hz = 0; config.filter_low_hz = 300; config.filter_high_hz = 2700;
     for (int cycle = 0; cycle < 1000; ++cycle) receiver.reset();
-    const std::array<rigweave::LocalReceiverMode, 10> modes{
-        rigweave::LocalReceiverMode::Usb, rigweave::LocalReceiverMode::Lsb, rigweave::LocalReceiverMode::Cw,
-        rigweave::LocalReceiverMode::Digu, rigweave::LocalReceiverMode::Digl, rigweave::LocalReceiverMode::Dsb,
-        rigweave::LocalReceiverMode::Am, rigweave::LocalReceiverMode::Sam, rigweave::LocalReceiverMode::Nfm,
-        rigweave::LocalReceiverMode::Spectrum,
+    const std::array<shackcq::LocalReceiverMode, 10> modes{
+        shackcq::LocalReceiverMode::Usb, shackcq::LocalReceiverMode::Lsb, shackcq::LocalReceiverMode::Cw,
+        shackcq::LocalReceiverMode::Digu, shackcq::LocalReceiverMode::Digl, shackcq::LocalReceiverMode::Dsb,
+        shackcq::LocalReceiverMode::Am, shackcq::LocalReceiverMode::Sam, shackcq::LocalReceiverMode::Nfm,
+        shackcq::LocalReceiverMode::Spectrum,
     };
     for (int cycle = 0; cycle < 500; ++cycle) {
         config.input_sample_rate = std::array<std::uint32_t, 3>{48000, 96000, 192000}[cycle % 3];
         config.mode = modes[cycle % modes.size()];
-        const auto defaults = config.mode == rigweave::LocalReceiverMode::Nfm ? std::pair<float,float>{0,12500} : std::pair<float,float>{300,2700};
+        const auto defaults = config.mode == shackcq::LocalReceiverMode::Nfm ? std::pair<float,float>{0,12500} : std::pair<float,float>{300,2700};
         config.filter_low_hz = defaults.first; config.filter_high_hz = defaults.second;
         assert(receiver.configure(config));
     }
-    std::cout << "RigWeave local receiver tests passed\n";
+    std::cout << "ShackCQ local receiver tests passed\n";
 }

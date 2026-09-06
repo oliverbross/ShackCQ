@@ -2,7 +2,7 @@
 
 Do not mark an item passed without observing it on the protected tablet or named live service/radio. Stop immediately for unexpected PTT, TUNE or transmit audio.
 
-1. Confirm `app.rigweave.mobile` exists; capture a hash-recorded private recovery backup; install only with `adb install -r` and never clear data.
+1. Confirm `app.shackcq.mobile` exists; capture a hash-recorded private recovery backup; install only with `adb install -r` and never clear data.
 2. Reopen the app and verify QSO, projection, Neural, Digi, Groups.io, Contest and Chaser migrations without destructive fallback.
 3. Check every top-level destination on phone-width, tablet portrait and landscape; confirm DX Chaser is inside Digi and N1MM inside Contest/Health.
 4. Exercise Wavelog authenticated sync, conflicts and deletes; verify one outbox delivery per canonical Contest QSO.

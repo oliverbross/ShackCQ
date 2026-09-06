@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/local_receiver.hpp"
+#include "shackcq/local_receiver.hpp"
 
 #include <algorithm>
 #include <array>
@@ -9,7 +9,7 @@
 #include <iomanip>
 #include <sstream>
 
-namespace rigweave {
+namespace shackcq {
 namespace {
 constexpr float kPi = 3.14159265358979323846F;
 constexpr std::size_t kMaximumInputSamples = 4U * 1024U * 1024U;
@@ -345,4 +345,4 @@ bool LocalReceiverDsp::consume_rds_group(std::uint16_t a, std::uint16_t b, std::
     return true;
 }
 
-} // namespace rigweave
+} // namespace shackcq

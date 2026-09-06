@@ -4,7 +4,7 @@
 
 Wavelog 3.1.0 was reviewed at peeled commit `af3256140bd05403b7c4a421746c2ea653a4f04f` under its MIT licence. The review covered `Sattimers.php`, `Amsatstatus.php`, `Satellite.php`, `Satellite_model.php`, `Hamsat.php`, `Satpredict.php`, satellite/status/timer views and JavaScript, and API v2 `Qso_resource.php`. The native implementation preserves the useful behaviours—passes, flightpath, status matrix, timers, catalogue/transponders, and ADIF fields—without copying Wavelog prediction code or treating community status as transmit authority.
 
-The orbital engine is dnwrnr/sgp4 at exact commit `661e057a5d369d5ee424676cf1d69cbead95ff2c`, vendored unchanged under `core/third_party/sgp4`. Its Apache-2.0 `LICENSE` and `NOTICE` are retained. RigWeave's C++ C-ABI/JNI adapter is outside the vendored tree and supplies local propagation, observer geometry, pass boundaries, ground/sky samples, and Doppler.
+The orbital engine is dnwrnr/sgp4 at exact commit `661e057a5d369d5ee424676cf1d69cbead95ff2c`, vendored unchanged under `core/third_party/sgp4`. Its Apache-2.0 `LICENSE` and `NOTICE` are retained. ShackCQ's C++ C-ABI/JNI adapter is outside the vendored tree and supplies local propagation, observer geometry, pass boundaries, ground/sky samples, and Doppler.
 
 ## Network sources and cache policy
 

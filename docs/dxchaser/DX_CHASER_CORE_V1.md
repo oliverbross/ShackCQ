@@ -1,4 +1,4 @@
-# RigWeave DX Chaser Core v1
+# ShackCQ DX Chaser Core v1
 
 ## Provenance and ownership
 
@@ -8,13 +8,13 @@
   `52d5b2e4d39a8e174000971ada3ac0c9f0442625`, GPL-3.0.
 - Implementation: independent Kotlin/Compose design. No upstream source, fixture, Qt/provider/radio code or Club Log-derived data was
   copied or adapted; `NOTICE` is unchanged.
-- Core ownership remains confined to `android/app/src/main/java/app/rigweave/mobile/dxchaser/`. The semantic integration adds only
+- Core ownership remains confined to `android/app/src/main/java/app/shackcq/mobile/dxchaser/`. The semantic integration adds only
   narrow adapters, production lifecycle/navigation wiring, focused tests and integration documentation outside that package.
 
 ## Product architecture
 
 - `DxChaserModels`: versioned immutable snapshot, candidate, target, action, integration and Band Maps read-only contracts.
-- `DxChaserScorer`: deterministic `RigWeave DX Chaser Score v1` reduction and stable tie-break ordering.
+- `DxChaserScorer`: deterministic `ShackCQ DX Chaser Score v1` reduction and stable tie-break ordering.
 - `DxChaserEngine`: pure event/state reducer for Assist, explicit Chase Session and Dry Run.
 - `DxChaserController`: the single future controller type, single-thread off-main reduction, generation rejection and idempotent close.
 - `DxChaserPorts`: narrow input/output, future Digi/review/QSO adapters and bounded journal contract.
@@ -47,7 +47,7 @@ Defaults are 3 normal, 6 scarce and 10 ATNO attempts; hard maxima are 10, 12 and
 timeouts are 10 minutes, 10 minutes and 2 hours. Recent attempt, completed QSO and cross-band review cooldowns are finite. Active
 session, target, engagement, pending intent, TX enable/arm and sequencer/PTT state are never persisted.
 
-`rigweave-dxchaser.sqlite` schema 1 contains `dxchaser_session`, `dxchaser_attempt`, `dxchaser_cooldown`,
+`shackcq-dxchaser.sqlite` schema 1 contains `dxchaser_session`, `dxchaser_attempt`, `dxchaser_cooldown`,
 `dxchaser_rarity_source`, `dxchaser_rarity_entity` and `dxchaser_meta`. It is not a QSO log. Attempt detail defaults to 30 days,
 session summaries to 180 days, and attempts have a 10,000-row hard cap; active sessions and unexpired cooldowns survive compaction.
 Database work runs behind the Chaser journal port and cannot block normal Digi/logging/radio operation. Reset affects this store only.

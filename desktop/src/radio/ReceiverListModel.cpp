@@ -1,6 +1,6 @@
-#include "rigweave/desktop/ReceiverListModel.hpp"
+#include "shackcq/desktop/ReceiverListModel.hpp"
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 
 ReceiverListModel::ReceiverListModel(QObject *parent)
     : QAbstractListModel(parent) {}
@@ -108,4 +108,4 @@ void ReceiverListModel::replace(QVariantList rows, const QString &activeId,
 
 void ReceiverListModel::clear() { replace({}, {}, {}, {}); }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

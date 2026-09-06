@@ -1,4 +1,4 @@
-#include "rigweave/desktop/DesktopEngagementControllers.hpp"
+#include "shackcq/desktop/DesktopEngagementControllers.hpp"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -7,7 +7,7 @@
 #include <QRegularExpression>
 #include <QSet>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 
 DesktopKeyerController::DesktopKeyerController(QObject *parent)
     : QObject(parent) {
@@ -133,7 +133,7 @@ DesktopNotificationController::DesktopNotificationController(QObject *parent)
   if (qobject_cast<QApplication *>(QCoreApplication::instance())) {
     m_tray = std::make_unique<QSystemTrayIcon>(this);
     m_tray->setIcon(QGuiApplication::windowIcon());
-    m_tray->setToolTip("RigWeave");
+    m_tray->setToolTip("ShackCQ");
     if (QSystemTrayIcon::isSystemTrayAvailable())
       m_tray->show();
   }
@@ -223,4 +223,4 @@ bool DesktopNotificationController::restoreConfiguration(
   return true;
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

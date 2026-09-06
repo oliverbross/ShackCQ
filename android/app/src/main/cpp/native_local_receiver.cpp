@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include <jni.h>
 
-#include "rigweave/local_receiver.hpp"
+#include "shackcq/local_receiver.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -14,30 +14,30 @@ namespace {
 constexpr std::size_t kMaximumJniSamples = 4U * 1024U * 1024U;
 constexpr std::size_t kHeader = 18U;
 
-rigweave::LocalReceiverDsp *receiver(jlong handle) {
-    return reinterpret_cast<rigweave::LocalReceiverDsp *>(static_cast<intptr_t>(handle));
+shackcq::LocalReceiverDsp *receiver(jlong handle) {
+    return reinterpret_cast<shackcq::LocalReceiverDsp *>(static_cast<intptr_t>(handle));
 }
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_rigweave_mobile_NativeLocalReceiver_create(JNIEnv *, jobject) {
-    return static_cast<jlong>(reinterpret_cast<intptr_t>(new rigweave::LocalReceiverDsp()));
+Java_app_shackcq_mobile_NativeLocalReceiver_create(JNIEnv *, jobject) {
+    return static_cast<jlong>(reinterpret_cast<intptr_t>(new shackcq::LocalReceiverDsp()));
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_NativeLocalReceiver_destroy(JNIEnv *, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeLocalReceiver_destroy(JNIEnv *, jobject, jlong handle) {
     if (handle != 0) delete receiver(handle);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_rigweave_mobile_NativeLocalReceiver_configure(JNIEnv *, jobject, jlong handle, jint input_rate,
+Java_app_shackcq_mobile_NativeLocalReceiver_configure(JNIEnv *, jobject, jlong handle, jint input_rate,
         jint mode, jfloat offset_hz, jfloat low_hz, jfloat high_hz, jfloat cw_pitch_hz,
         jfloat squelch_db, jint deemphasis_us) {
-    if (handle == 0 || mode < 0 || mode > static_cast<jint>(rigweave::LocalReceiverMode::Spectrum)) return JNI_FALSE;
-    rigweave::LocalReceiverConfig config;
+    if (handle == 0 || mode < 0 || mode > static_cast<jint>(shackcq::LocalReceiverMode::Spectrum)) return JNI_FALSE;
+    shackcq::LocalReceiverConfig config;
     config.input_sample_rate = static_cast<std::uint32_t>(input_rate);
     config.output_sample_rate = 48000U;
-    config.mode = static_cast<rigweave::LocalReceiverMode>(mode);
+    config.mode = static_cast<shackcq::LocalReceiverMode>(mode);
     config.offset_hz = offset_hz;
     config.filter_low_hz = low_hz;
     config.filter_high_hz = high_hz;
@@ -48,7 +48,7 @@ Java_app_rigweave_mobile_NativeLocalReceiver_configure(JNIEnv *, jobject, jlong 
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_app_rigweave_mobile_NativeLocalReceiver_process(JNIEnv *env, jobject, jlong handle, jfloatArray input) {
+Java_app_shackcq_mobile_NativeLocalReceiver_process(JNIEnv *env, jobject, jlong handle, jfloatArray input) {
     if (handle == 0 || input == nullptr) return env->NewFloatArray(0);
     const jsize count = env->GetArrayLength(input);
     if (count <= 0 || static_cast<std::size_t>(count) > kMaximumJniSamples || count % 2 != 0) return env->NewFloatArray(0);
@@ -86,7 +86,7 @@ Java_app_rigweave_mobile_NativeLocalReceiver_process(JNIEnv *env, jobject, jlong
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_rigweave_mobile_NativeLocalReceiver_debugRdsGroup(JNIEnv *, jobject, jlong handle,
+Java_app_shackcq_mobile_NativeLocalReceiver_debugRdsGroup(JNIEnv *, jobject, jlong handle,
         jint a, jint b, jint c, jint d) {
     if (handle == 0) return JNI_FALSE;
     return receiver(handle)->consume_rds_group(static_cast<std::uint16_t>(a), static_cast<std::uint16_t>(b),
@@ -94,7 +94,7 @@ Java_app_rigweave_mobile_NativeLocalReceiver_debugRdsGroup(JNIEnv *, jobject, jl
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeLocalReceiver_metadata(JNIEnv *env, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeLocalReceiver_metadata(JNIEnv *env, jobject, jlong handle) {
     if (handle == 0) return env->NewStringUTF("{}");
     const auto &value = receiver(handle)->metrics();
     auto clean = [](std::string text) {

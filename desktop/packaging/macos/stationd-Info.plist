@@ -3,9 +3,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleIdentifier</key><string>app.rigweave.stationd</string>
-  <key>CFBundleExecutable</key><string>rigweave-stationd</string>
-  <key>CFBundleName</key><string>RigWeave Station Service</string>
+  <key>CFBundleIdentifier</key><string>app.shackcq.stationd</string>
+  <key>CFBundleExecutable</key><string>shackcq-stationd</string>
+  <key>CFBundleName</key><string>ShackCQ Station Service</string>
   <key>CFBundlePackageType</key><string>APPL</string>
 </dict>
 </plist>

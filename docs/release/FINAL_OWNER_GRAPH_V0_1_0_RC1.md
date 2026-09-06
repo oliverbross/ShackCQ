@@ -1,4 +1,4 @@
-# Final Owner Graph — RigWeave 0.1.0 RC1
+# Final Owner Graph — ShackCQ 0.1.0 RC1
 
 | Domain | Android owner | Apple owner | Desktop/Linux owner |
 |---|---|---|---|

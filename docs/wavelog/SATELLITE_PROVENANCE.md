@@ -15,7 +15,7 @@
 Apache-2.0 is compatible for inclusion in this GPL-3.0-only product when the
 Apache licence, notices, attribution, and modification statements are retained.
 No upstream source has been copied into this branch, so no Apache NOTICE payload
-is currently distributed by RigWeave.
+is currently distributed by ShackCQ.
 
 ## Decision
 

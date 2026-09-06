@@ -3,7 +3,7 @@
 #include <iomanip>
 #include <sstream>
 
-#include "rigweave/propagation/p533.hpp"
+#include "shackcq/propagation/p533.hpp"
 
 namespace {
 std::string json_escape(const std::string& value) {
@@ -18,12 +18,12 @@ std::string json_escape(const std::string& value) {
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_hamclock_finishline_HamClockNativePropagation_nativeEvaluate(
+Java_app_shackcq_mobile_hamclock_finishline_HamClockNativePropagation_nativeEvaluate(
     JNIEnv* env, jobject, jdouble tx_lat, jdouble tx_lon, jdouble rx_lat, jdouble rx_lon,
     jint year, jint month, jint hour, jint ssn, jdouble power, jdouble tx_gain, jdouble rx_gain,
     jdoubleArray frequencies, jint noise, jint reliability, jdouble required_snr,
     jdouble bandwidth, jboolean digital, jboolean long_path) {
-    using namespace rigweave::propagation;
+    using namespace shackcq::propagation;
     P533Input input;
     input.tx_latitude = tx_lat; input.tx_longitude = tx_lon;
     input.rx_latitude = rx_lat; input.rx_longitude = rx_lon;

@@ -8,4 +8,4 @@
 - Licence: GPL-3.0
 - Licence SHA-256: `3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`
 
-The immutable checkout was used only for audit. The production tree contains independent RigWeave implementation code and no vendored SDRoxide files, assets, packages, models, recordings, or fixtures.
+The immutable checkout was used only for audit. The production tree contains independent ShackCQ implementation code and no vendored SDRoxide files, assets, packages, models, recordings, or fixtures.

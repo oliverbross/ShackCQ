@@ -26,7 +26,7 @@ The fix/tablet-acceptance-sweep-1 source closes the 41 owner-observed acceptance
 | APRS, Winlink, WWBOTA, hazards, Meshtastic/MeshCom, extra Digi modes | OPTIONAL | Explicitly outside this release programme |
 | Desktop shells | EXCLUDED | Windows/macOS/Linux shells are not part of this convergence |
 
-Mandatory build, watcher, package, scale, hosted exact-SHA, push and device results are recorded in `RIGWEAVE_FINAL_WHOLE_APP_CONVERGENCE.md`; a source-complete row alone is not release evidence.
+Mandatory build, watcher, package, scale, hosted exact-SHA, push and device results are recorded in `SHACKCQ_FINAL_WHOLE_APP_CONVERGENCE.md`; a source-complete row alone is not release evidence.
 
 ## Sweep 2 radio and rotator integration
 

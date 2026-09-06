@@ -1,4 +1,4 @@
-#include "rigweave/desktop/QsoDatabase.hpp"
+#include "shackcq/desktop/QsoDatabase.hpp"
 
 #include <QDir>
 #include <QCryptographicHash>
@@ -12,7 +12,7 @@
 #include <QTimeZone>
 #include <limits>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 
 QString sqlError(const QSqlQuery &query) {
@@ -45,7 +45,7 @@ QsoRecord fromQuery(const QSqlQuery &q) {
 } // namespace
 
 QsoDatabase::QsoDatabase(QString path, QObject *parent)
-    : QObject(parent), m_path(std::move(path)), m_connectionName(QStringLiteral("rigweave-desktop-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces))) {}
+    : QObject(parent), m_path(std::move(path)), m_connectionName(QStringLiteral("shackcq-desktop-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces))) {}
 
 QsoDatabase::~QsoDatabase() {
     if (m_database.isValid()) m_database.close();
@@ -301,4 +301,4 @@ void QsoTableModel::nextPage(){if(m_rows.isEmpty())return;const auto&last=m_rows
 void QsoTableModel::firstPage(){m_query.cursorCreatedAt=std::numeric_limits<qint64>::max();m_query.cursorId.clear();reload();}
 QVariantMap QsoTableModel::exact(int row)const{return row>=0&&row<m_rows.size()?qsoToVariant(m_rows.at(row)):QVariantMap{};}
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

@@ -8,7 +8,7 @@ on:
     paths:
       - 'desktop/**'
       - 'core/**'
-      - 'cmake/desktop/**'
+      - 'desktop/cmake/**'
       - 'CMakePresets.json'
       - '.github/workflows/windows-desktop.yml'
 
@@ -42,14 +42,14 @@ jobs:
           "$mingwRoot/bin" | Out-File $env:GITHUB_PATH -Append
           "CMAKE_PREFIX_PATH=$qtRoot" | Out-File $env:GITHUB_ENV -Append
           "QT_ROOT_DIR=$qtRoot" | Out-File $env:GITHUB_ENV -Append
-          "RIGWEAVE_MINGW_BIN=$mingwRoot/bin" | Out-File $env:GITHUB_ENV -Append
+          "SHACKCQ_MINGW_BIN=$mingwRoot/bin" | Out-File $env:GITHUB_ENV -Append
           & "$mingwRoot/bin/gcc.exe" --version
       - name: Install pinned open-source build and installer tools
         shell: pwsh
         run: |
           choco install ninja --version 1.13.2 -y --no-progress
           choco install nsis --version 3.11 -y --no-progress
-          & "$env:RIGWEAVE_MINGW_BIN/gcc.exe" --version
+          & "$env:SHACKCQ_MINGW_BIN/gcc.exe" --version
           $nsis = "${env:ProgramFiles(x86)}/NSIS/makensis.exe"
           if (!(Test-Path $nsis)) { throw 'Pinned NSIS executable was not installed' }
           ([IO.Path]::GetDirectoryName($nsis)) | Out-File $env:GITHUB_PATH -Append
@@ -88,7 +88,7 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euo pipefail
-          tool_bin="$(cygpath -u "$RIGWEAVE_MINGW_BIN")"
+          tool_bin="$(cygpath -u "$SHACKCQ_MINGW_BIN")"
           source_root="$(cygpath -u "$GITHUB_WORKSPACE")"
           install_root="$(cygpath -u "$RUNNER_TEMP")/hamlib"
           build_root="$(cygpath -u "$RUNNER_TEMP")/hamlib-build"
@@ -113,7 +113,7 @@ jobs:
           key: windows-hamlib-4.7.2-mingw1310-${{ hashFiles('core/third_party/hamlib/SOURCE_MANIFEST.json') }}
       - name: Configure Release
         shell: pwsh
-        run: cmake -S desktop -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DRIGWEAVE_BUILD_TESTS=ON -DRIGWEAVE_REQUIRE_HAMLIB=ON "-DRIGWEAVE_HAMLIB_ROOT=$env:RUNNER_TEMP/hamlib" "-DOPENSSL_ROOT_DIR=$env:OPENSSL_ROOT_DIR"
+        run: cmake -S desktop -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=ON -DSHACKCQ_REQUIRE_HAMLIB=ON "-DSHACKCQ_HAMLIB_ROOT=$env:RUNNER_TEMP/hamlib" "-DOPENSSL_ROOT_DIR=$env:OPENSSL_ROOT_DIR"
       - name: Build Release
         shell: pwsh
         run: cmake --build build/windows --config Release --parallel 2
@@ -127,7 +127,7 @@ jobs:
         env:
           QT_QPA_PLATFORM: offscreen
         run: |
-          $process = Start-Process -FilePath 'build/windows/RigWeaveDesktop.exe' -ArgumentList @('--smoke-test') -Wait -PassThru
+          $process = Start-Process -FilePath 'build/windows/ShackCQDesktop.exe' -ArgumentList @('--smoke-test') -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "Smoke test exited with code $($process.ExitCode)" }
       - name: Deterministic UI lifecycle stress
         shell: pwsh
@@ -135,7 +135,7 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           New-Item -ItemType Directory -Force -Path artifacts | Out-Null
-          $process = Start-Process -FilePath 'build/windows/RigWeaveDesktop.exe' -ArgumentList @('--ui-stress-report', 'artifacts/ui-stress-windows.json') -Wait -PassThru
+          $process = Start-Process -FilePath 'build/windows/ShackCQDesktop.exe' -ArgumentList @('--ui-stress-report', 'artifacts/ui-stress-windows.json') -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "UI stress exited with code $($process.ExitCode)" }
       - name: Deterministic Windows UI gallery
         shell: pwsh
@@ -145,7 +145,7 @@ jobs:
           function Invoke-Gallery([string]$Directory, [int]$Width, [int]$Height, [string]$Scale) {
             $env:QT_SCALE_FACTOR = $Scale
             $arguments = @('--gallery-dir', $Directory, '--gallery-width', "$Width", '--gallery-height', "$Height")
-            $process = Start-Process -FilePath 'build/windows/RigWeaveDesktop.exe' -ArgumentList $arguments -Wait -PassThru
+            $process = Start-Process -FilePath 'build/windows/ShackCQDesktop.exe' -ArgumentList $arguments -Wait -PassThru
             if ($process.ExitCode -ne 0) { throw "$Directory gallery exited with code $($process.ExitCode)" }
           }
           Invoke-Gallery 'artifacts/ui-gallery/1920x1080' 1920 1080 '1'
@@ -164,14 +164,14 @@ jobs:
         run: |
           $stage = 'artifacts/windows/stationd-portable'
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item build/windows/rigweave-stationd.exe $stage
+          Copy-Item build/windows/shackcq-stationd.exe $stage
           Copy-Item "$env:OPENSSL_ROOT_DIR/bin/libcrypto-3-x64.dll" $stage
           Copy-Item "$env:OPENSSL_ROOT_DIR/bin/libssl-3-x64.dll" $stage
           Copy-Item COPYING "$stage/COPYING.txt"
           Copy-Item NOTICE "$stage/NOTICE.txt"
-          windeployqt --release --no-translations --no-system-d3d-compiler --dir $stage "$stage/rigweave-stationd.exe"
+          windeployqt --release --no-translations --no-system-d3d-compiler --dir $stage "$stage/shackcq-stationd.exe"
           if (Get-ChildItem $stage -Recurse -File | Where-Object Name -Match '(?i)(private|identity|\.pem$|rigctld)') { throw 'Forbidden stationd package content' }
-          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/windows/RigWeave-stationd-Windows-x64-${{ github.sha }}.zip" -CompressionLevel Optimal
+          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/windows/ShackCQ-stationd-Windows-x64-${{ github.sha }}.zip" -CompressionLevel Optimal
       - name: Enforce measured size ceilings
         shell: pwsh
         run: |
@@ -182,15 +182,15 @@ jobs:
       - name: Stage exact-SHA Windows packages
         shell: pwsh
         run: |
-          $portable = Get-Item artifacts/windows/RigWeave-Windows-x64-portable-v0.1.0-rc.1.zip -ErrorAction SilentlyContinue
-          $installer = Get-Item artifacts/windows/RigWeave-Windows-x64-setup-v0.1.0-rc.1.exe -ErrorAction SilentlyContinue
+          $portable = Get-Item artifacts/windows/ShackCQ-Windows-x64-portable-v0.1.0-rc.1.zip -ErrorAction SilentlyContinue
+          $installer = Get-Item artifacts/windows/ShackCQ-Windows-x64-setup-v0.1.0-rc.1.exe -ErrorAction SilentlyContinue
           if (!$portable -or !$installer) { throw 'Expected Windows packages were not produced' }
-          Get-ChildItem artifacts/windows -File | Where-Object Name -Match '^RigWeave-Windows-x64-' |
+          Get-ChildItem artifacts/windows -File | Where-Object Name -Match '^ShackCQ-Windows-x64-' |
             Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } |
             Set-Content artifacts/windows/SHA256SUMS.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: RigWeave-Windows-x64-${{ github.sha }}
+          name: ShackCQ-Windows-x64-${{ github.sha }}
           path: |
             artifacts/windows
             artifacts/ui-gallery

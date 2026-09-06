@@ -1,6 +1,6 @@
-RigWeave
+ShackCQ
 
-RigWeave is licensed under the GNU General Public License version 3 only
+ShackCQ is licensed under the GNU General Public License version 3 only
 (SPDX: GPL-3.0-only). The complete licence is in COPYING.
 
 Individual files and incorporated third-party components retain their own
@@ -40,13 +40,13 @@ affiliation, sponsorship, or trademark licence is implied.
 
 Android POTA Chase consumes the public Parks on the Air activator-spot API and
 worldwide park catalogue from api.pota.app and pota.app. POTA names and park
-data remain attributable to Parks on the Air. RigWeave is an independent
+data remain attributable to Parks on the Air. ShackCQ is an independent
 application and does not imply official hunter credit, affiliation, or
 authoritative park boundaries.
 
 Android POTA Activate uses the downloaded catalogue and official POTA rules to
 prepare local ADIF files. Spotting and log submission are operator-controlled
-browser handoffs to pota.app; RigWeave uses no POTA write API or credentials.
+browser handoffs to pota.app; ShackCQ uses no POTA write API or credentials.
 
 Android Portable Chase consumes the WWFF Spotline public integration spot and
 active-agenda JSON feeds from spots.wwff.co and the official downloadable SOTA
@@ -54,22 +54,22 @@ summit list from sotadata.org.uk. WWFF and SOTA names and data remain
 attributable to their respective programmes. The full WWFF Directory is not
 stored without permission. Authorised receive-only SOTA activity is obtained
 from the GM4LLD SOTA Cluster at cluster.sota.org.uk:7300 using the operator's
-configured DX-cluster login. RigWeave sends only the login and a bounded history
+configured DX-cluster login. ShackCQ sends only the login and a bounded history
 query, exposes no SOTA posting path, and resolves summit details through the
 separately downloaded official summit catalogue. No deprecated private API is used.
 
-The Android Home operating dashboard is a native RigWeave integration inspired
+The Android Home operating dashboard is a native ShackCQ integration inspired
 by OpenHamClock (https://github.com/accius/openhamclock), inspected at immutable
 commit d4a50eaaa61d3432a1de5f80cbe61790739930a5. OpenHamClock is distributed
-under the MIT License, Copyright 2024-2026 OpenHamClock Contributors. RigWeave
+under the MIT License, Copyright 2024-2026 OpenHamClock Contributors. ShackCQ
 does not embed its React/Express application, source files, artwork, server,
 deployment controls, or runtime dependencies. The native Compose implementation
-reuses RigWeave data controllers and design language. See
+reuses ShackCQ data controllers and design language. See
 docs/OPENHAMCLOCK_INTEGRATION.md for the recorded integration boundary.
 
 Wavelog 3.1.0 at peeled commit af3256140bd05403b7c4a421746c2ea653a4f04f
 was reviewed under its MIT licence for logbook, synchronization, operations,
-and satellite behaviour. RigWeave does not copy Wavelog PHP, HTML, or
+and satellite behaviour. ShackCQ does not copy Wavelog PHP, HTML, or
 JavaScript; the native implementations retain their own GPL-3.0-only source.
 
 The native satellite engine incorporates dnwrnr/sgp4 at immutable commit
@@ -85,7 +85,7 @@ names, data, styles, and notices retain their applicable attribution and
 licence terms.
 
 Groups.io names and service interfaces are used only for operator-authorized
-interoperability. RigWeave contains its own native client and local database;
+interoperability. ShackCQ contains its own native client and local database;
 it does not incorporate Groups.io service source, branding assets, or user
 content as a bundled dependency.
 
@@ -110,23 +110,23 @@ ITU-R-HF v14.3 at commit cd172be56dc04b154e5d2fa91cbaa6ecf5284305
 was reviewed for P.533/P.372 interoperability. No ITU source, data, binary, or
 report is incorporated because the reviewed headers contain conflicting use
 and reproduction language and no unambiguous redistribution permission was
-established. RigWeave's adapter boundary is independently written and does not
+established. ShackCQ's adapter boundary is independently written and does not
 claim ITU validation or scientific parity.
 
 Nexus by KD9TAW was reviewed for the Android Digi completion programme at
 commit 57d11fd55f098dc9302b6aafed39e6cd4b6db216 (tree
 ed7ae002f93d996afaf4184cc572138ad1346b17, package 1.7.5). Nexus is
 GPL-3.0-only. No source from that current review was copied. Existing historical
-RigWeave digital-mode provenance remains in rust/rigweave-flex/UPSTREAM.md. The
+ShackCQ digital-mode provenance remains in rust/shackcq-flex/UPSTREAM.md. The
 new cockpit, storage, UDP owner, spectrum bridge and workflow code are
-independently written RigWeave code.
+independently written ShackCQ code.
 
 Hamlib 4.7.2 is incorporated from the official generated release archive at
 peeled commit 40f63488fe0bd751b147f48d62fd217bf53713a0 and tree
 56a42afe2ace9dd1b43729168bb73ca46a812848. Hamlib library and radio backend
 source is generally LGPL-2.1-or-later; original file-level notices,
 COPYING.LIB, COPYING, LICENSE, AUTHORS, and relevant README files are retained
-under core/third_party/hamlib. RigWeave modifies only the Android external-file-
+under core/third_party/hamlib. ShackCQ modifies only the Android external-file-
 descriptor port hook and disables desktop microHam /dev discovery on Android.
 See docs/radio/hamlib/LICENCE_AND_PACKAGING.md and SOURCE_MANIFEST.json.
 
@@ -145,7 +145,7 @@ SDRoxide by dividebysandwich was reviewed at immutable commit
 312b27ec4303d3fe0ef3a70d3aa99ff615e460a4 for TCI, multi-receiver,
 panadapter/waterfall, and RF-map behavior. No SDRoxide source, binary, shader,
 asset, theme, provider, settings, logbook, or runtime dependency is incorporated.
-The selected behavior is independently implemented in RigWeave's existing Qt and
+The selected behavior is independently implemented in ShackCQ's existing Qt and
 C++ architecture; source-level provenance is recorded in
 docs/upstream/SDROXIDE_SELECTIVE_INTEGRATION.md.
 
@@ -156,15 +156,15 @@ The audited source ZIP SHA-256 is
 size is 138,160 bytes. No runtime tile service, commercial key, or map texture is
 packaged.
 
-RigWeave Desktop Flightline icons under desktop/resources/icons are original
-RigWeave project artwork. They do not incorporate a third-party icon library,
+ShackCQ Desktop Flightline icons under desktop/resources/icons are original
+ShackCQ project artwork. They do not incorporate a third-party icon library,
 font, emoji set, or tablet APK asset and add no separate attribution obligation.
 
-Desktop Functional Parity Closure v1 reuses the existing in-tree RigWeave core,
-rigweave-flex, Qt and pinned Hamlib components. It adds no third-party source,
+Desktop Functional Parity Closure v1 reuses the existing in-tree ShackCQ core,
+shackcq-flex, Qt and pinned Hamlib components. It adds no third-party source,
 binary, provider dataset, model, font, icon family or media asset.
 
-RigWeave Multiplatform RC1 adds no new third-party runtime or dataset. Its SPDX
+ShackCQ Multiplatform RC1 adds no new third-party runtime or dataset. Its SPDX
 SBOM and SOURCE_MANIFEST are generated from the exact Git SHA and reference this
 NOTICE. The single Hamlib authority remains pinned at 4.7.2; existing SDRoxide,
 mfsk-core, tempo-sstv, SGP4, ITUHFProp, CTY and band-plan provenance remains
@@ -191,7 +191,7 @@ docs/android/SDROXIDE_ANDROID_V2_PROVENANCE.md.
 The Android Local SDR Receiver v3 review reverified the same immutable SDRoxide
 v1.5.3 commit and tree for receive/demodulation behavior. Its local receiver,
 SSB/CW/AM/SAM/FM, tone, RDS and recording implementation is independently
-written RigWeave GPL-3.0-only code. No SDRoxide source, UI, asset, recording,
+written ShackCQ GPL-3.0-only code. No SDRoxide source, UI, asset, recording,
 test I/Q, model, codec or binary was incorporated. See
 docs/android/SDROXIDE_LOCAL_RECEIVER_PROVENANCE_V3.md.
 
@@ -199,13 +199,13 @@ The Android SDR Operator Workbench v4 review reverified SDRoxide v1.5.3 at
 commit a680935b10f33768a499435e8bd37f779fa640ae and tree
 4697195080495da4a727b14234b85af89c10ecda under GPL-3.0. The capture/replay,
 measurement, survey, scanner, monitor, calibration and TCI-lifecycle code is
-independently written RigWeave GPL-3.0-only code. No SDRoxide source, UI,
+independently written ShackCQ GPL-3.0-only code. No SDRoxide source, UI,
 asset, recording, I/Q fixture, model, dependency or binary is incorporated.
 See docs/android/SDROXIDE_ANDROID_V4_PROVENANCE.md.
 
 The Android TCI Transmit v5 audit reverified the same immutable SDRoxide release
 and audited the official ExpertSDR3 TCI reference at commit
-b081213ff97150fd29f669c633f060f93c81a286. RigWeave TX authority, framing,
+b081213ff97150fd29f669c633f060f93c81a286. ShackCQ TX authority, framing,
 resampling, interlock, UI and fake-lab code is independently written GPL-3.0-only
 code. No upstream source, asset or binary is incorporated. See
 docs/android/TCI_TX_PROVENANCE_V5.md.
@@ -214,11 +214,11 @@ The Secure Remote Station v6 audit reviewed SDRoxide v1.5.3 and the official
 ExpertSDR3 TCI reference for behavior only. No upstream source, UI, asset,
 recording, model, identity, certificate or binary was incorporated. The
 protocol, station service, Android client, TCI/rigctld adapters and test
-fixtures are independently written RigWeave GPL-3.0-only code and use the
+fixtures are independently written ShackCQ GPL-3.0-only code and use the
 project's existing Qt, OpenSSL and OkHttp dependencies. See
 docs/remote/REMOTE_PROVENANCE_V6.md.
 
-RigWeave 0.1.0 RC1 builds the official Xiph.Org libopus v1.5.2 source pinned at
+ShackCQ 0.1.0 RC1 builds the official Xiph.Org libopus v1.5.2 source pinned at
 ddbe48383984d56acd9e1ab6a090c54ca6b735a6 for Remote Station RX audio. Opus is
 used under its BSD-style licence; its source licence and copyright text are
 included in the source/compliance bundle. Linux credential persistence uses the

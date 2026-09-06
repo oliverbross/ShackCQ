@@ -4,11 +4,11 @@ The final read-only review uses `dividebysandwich/sdroxide` stable release `v1.5
 
 The audit covered upstream TCI/session handling, receiver/audio routing, spectrum/waterfall, history, I/Q recording/replay, measurement, tracking, survey, scanner, monitoring, memories, calibration, demodulation, skimmers/digital modes, map/spots, logging, server/browser, MIDI, hardware backends, WSPR/TX, RF Paint and model-assisted features. The final classifications are in `SDROXIDE_ANDROID_FINAL_PARITY_MATRIX_V4.md`.
 
-V4 closes every selected Android operator gap through existing RigWeave owners. Deliberately deferred or excluded product families are not parity defects: they have no approved ownership/safety/protocol proposition in this programme. The final count is:
+V4 closes every selected Android operator gap through existing ShackCQ owners. Deliberately deferred or excluded product families are not parity defects: they have no approved ownership/safety/protocol proposition in this programme. The final count is:
 
 | Classification | Count |
 |---|---:|
-| `RIGWEAVE_STRONGER` | 10 |
+| `SHACKCQ_STRONGER` | 10 |
 | `PARITY` | 12 |
 | `DEFER_PRODUCT_DECISION` | 2 |
 | `EXCLUDED` | 8 |

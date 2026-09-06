@@ -1,4 +1,4 @@
-#include "rigweave/satellite.h"
+#include "shackcq/satellite.h"
 
 #include "CoordGeodetic.h"
 #include "CoordTopocentric.h"
@@ -136,7 +136,7 @@ void append_look(std::ostringstream& out, const Look& value, bool geodetic) {
 }
 }  // namespace
 
-extern "C" int rw_satellite_inspect_json(char *output, size_t output_size,
+extern "C" int shackcq_satellite_inspect_json(char *output, size_t output_size,
     const char *format, const char *name, const char *element_one, const char *element_two) {
     return guarded(output, output_size, [&] {
         const auto tle = parse_elements(format, name, element_one, element_two);
@@ -147,7 +147,7 @@ extern "C" int rw_satellite_inspect_json(char *output, size_t output_size,
     });
 }
 
-extern "C" int rw_satellite_propagate_json(char *output, size_t output_size,
+extern "C" int shackcq_satellite_propagate_json(char *output, size_t output_size,
     const char *format, const char *name, const char *element_one, const char *element_two,
     int64_t epoch_utc, int64_t max_element_age_seconds, double observer_latitude_deg,
     double observer_longitude_deg, double observer_altitude_km) {
@@ -162,7 +162,7 @@ extern "C" int rw_satellite_propagate_json(char *output, size_t output_size,
     });
 }
 
-extern "C" int rw_satellite_passes_json(char *output, size_t output_size,
+extern "C" int shackcq_satellite_passes_json(char *output, size_t output_size,
     const char *format, const char *name, const char *element_one, const char *element_two,
     int64_t start_utc, int64_t end_utc, int64_t max_element_age_seconds,
     double observer_latitude_deg, double observer_longitude_deg, double observer_altitude_km,
@@ -214,7 +214,7 @@ extern "C" int rw_satellite_passes_json(char *output, size_t output_size,
     });
 }
 
-extern "C" int rw_satellite_samples_json(char *output, size_t output_size,
+extern "C" int shackcq_satellite_samples_json(char *output, size_t output_size,
     const char *format, const char *name, const char *element_one, const char *element_two,
     int64_t start_utc, int64_t end_utc, int64_t max_element_age_seconds,
     double observer_latitude_deg, double observer_longitude_deg, double observer_altitude_km,
@@ -238,7 +238,7 @@ extern "C" int rw_satellite_samples_json(char *output, size_t output_size,
     });
 }
 
-extern "C" double rw_satellite_doppler_hz(double nominal_frequency_hz, double range_rate_km_s) {
+extern "C" double shackcq_satellite_doppler_hz(double nominal_frequency_hz, double range_rate_km_s) {
     if (!std::isfinite(nominal_frequency_hz) || nominal_frequency_hz <= 0.0 || !std::isfinite(range_rate_km_s)) return 0.0;
     const double radial_metres_per_second = range_rate_km_s * 1000.0;
     return nominal_frequency_hz * kSpeedOfLightMetresPerSecond / (kSpeedOfLightMetresPerSecond + radial_metres_per_second);

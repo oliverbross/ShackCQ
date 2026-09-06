@@ -1,10 +1,10 @@
-#include "rigweave/desktop/ClusterController.hpp"
+#include "shackcq/desktop/ClusterController.hpp"
 
 #include "kx3/spot.hpp"
 
 #include <QDateTime>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 
 ClusterController::ClusterController(SpotRepository *repository,QObject *parent):QObject(parent),m_repository(repository){
     connect(&m_socket,&QSslSocket::readyRead,this,&ClusterController::consume);
@@ -22,4 +22,4 @@ void ClusterController::requestHistory(){if(m_socket.state()==QAbstractSocket::C
 void ClusterController::consume(){m_buffer+=m_socket.readAll();if(m_buffer.size()>65536){m_buffer.clear();setState("Error","Cluster line buffer exceeded 64 KiB");m_socket.abort();return;}while(true){const qsizetype end=m_buffer.indexOf('\n');if(end<0)break;const QByteArray line=m_buffer.left(end).trimmed();m_buffer.remove(0,end+1);ingestFixtureLine(line,QDateTime::currentSecsSinceEpoch());}}
 void ClusterController::ingestFixtureLine(const QByteArray&line,qint64 receivedAt){const auto parsed=kx3::parse_cluster_spot(std::string_view(line.constData(),static_cast<std::size_t>(line.size())),receivedAt);if(!parsed)return;SpotObservation spot;spot.frequencyHz=parsed->frequency_hz;spot.callsign=QString::fromStdString(parsed->callsign);spot.spotter=QString::fromStdString(parsed->spotter);spot.comment=QString::fromStdString(parsed->comment);spot.band=QString::fromStdString(parsed->band);spot.mode=QString::fromStdString(parsed->mode);spot.source="DX Cluster";spot.receivedAt=parsed->received_epoch;m_repository->ingest(std::move(spot));}
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

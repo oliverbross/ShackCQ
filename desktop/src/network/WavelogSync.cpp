@@ -1,4 +1,4 @@
-#include "rigweave/desktop/WavelogSync.hpp"
+#include "shackcq/desktop/WavelogSync.hpp"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -14,7 +14,7 @@
 #include <QUrlQuery>
 #include <QUuid>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 
 QString safeError(const QSqlQuery &q) { return q.lastError().text().left(500); }
@@ -122,4 +122,4 @@ void WavelogSyncEngine::retryPending(){const auto b=binding();if(!b||!b->canWrit
 
 bool WavelogSyncEngine::resolveConflict(const QString&id,const QString&resolution,const QVariantMap&merged){if(!QStringList{"Keep Local","Keep Remote","Merge"}.contains(resolution))return false;QSqlQuery q(m_database->connection());q.prepare("SELECT qso_id,local_json,remote_json FROM wavelog_conflict WHERE id=? AND state='OPEN'");q.addBindValue(id);if(!q.exec()||!q.next())return false;if(resolution=="Keep Local")enqueue(q.value(0).toString(),"UPDATE");else if(resolution=="Merge"){CanonicalQso c;for(auto it=merged.begin();it!=merged.end();++it)c.fields.insert(it.key().toUpper(),it.value().toString());QSqlQuery o(m_database->connection());o.prepare("UPDATE wavelog_outbox SET canonical_json=?,state='PENDING' WHERE qso_id=?");o.addBindValue(c.encoded());o.addBindValue(q.value(0));o.exec();}QSqlQuery u(m_database->connection());u.prepare("UPDATE wavelog_conflict SET state='RESOLVED',resolution_intent=? WHERE id=?");u.addBindValue(resolution);u.addBindValue(id);const bool ok=u.exec();emit queueChanged();return ok;}
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/desktop/RemoteStationService.hpp"
+#include "shackcq/desktop/RemoteStationService.hpp"
 
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -28,7 +28,7 @@
 #include <cstring>
 #include <memory>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 constexpr int MaxControlBytes = static_cast<int>(remote::MaxControlFrame);
 constexpr int MaxRigLine = 4096;
@@ -56,11 +56,11 @@ void dnsRecord(QByteArray &out, const QString &name, quint16 type,
 }
 bool withinRate(QObject *connection, int maximumPerMinute) {
   const qint64 now = QDateTime::currentMSecsSinceEpoch();
-  qint64 window = connection->property("rigweaveRateWindow").toLongLong();
-  int count = connection->property("rigweaveRateCount").toInt();
+  qint64 window = connection->property("shackcqRateWindow").toLongLong();
+  int count = connection->property("shackcqRateCount").toInt();
   if (window == 0 || now - window >= 60'000) { window = now; count = 0; }
-  connection->setProperty("rigweaveRateWindow", window);
-  connection->setProperty("rigweaveRateCount", ++count);
+  connection->setProperty("shackcqRateWindow", window);
+  connection->setProperty("shackcqRateCount", ++count);
   return count <= maximumPerMinute;
 }
 
@@ -140,10 +140,10 @@ RemoteStationService::RemoteStationService(DesktopCredentialVault *vault,
     DesktopPanadapter *panadapter, QObject *parent)
     : QObject(parent), m_vault(vault), m_radio(radio), m_rotator(rotator),
       m_panadapter(panadapter),
-      m_webSocketServer("RigWeave Remote Protocol v1", QWebSocketServer::SecureMode, this) {
+      m_webSocketServer("ShackCQ Remote Protocol v1", QWebSocketServer::SecureMode, this) {
   m_webSocketServer.setMaxPendingConnections(static_cast<int>(remote::MaxSessions));
   m_webSocketServer.setHandshakeTimeout(5'000);
-  m_webSocketServer.setSupportedSubprotocols({"rigweave.remote.v1"});
+  m_webSocketServer.setSupportedSubprotocols({"shackcq.remote.v1"});
   connect(&m_webSocketServer, &QWebSocketServer::newConnection,
           this, &RemoteStationService::acceptWebSocket);
   connect(&m_rigctldServer, &QTcpServer::newConnection,
@@ -208,7 +208,7 @@ bool RemoteStationService::restoreConfiguration(const QVariantMap &config,
   }
   m_serviceEnabled = config.value("enabled", false).toBool();
   m_stationId = config.value("stationId").toString().left(128);
-  m_stationName = config.value("stationName", "RigWeave Station").toString().trimmed();
+  m_stationName = config.value("stationName", "ShackCQ Station").toString().trimmed();
   m_listenAddress = config.value("listenAddress", "127.0.0.1").toString();
   m_port = static_cast<quint16>(config.value("port", 7443).toUInt());
   m_lanEnabled = config.value("lanEnabled", false).toBool();
@@ -285,9 +285,9 @@ bool RemoteStationService::ensureIdentity(QString *error) {
       !generateP256(QStringLiteral("%1 signing").arg(m_stationName), &signingPrivate,
                     &signingPublic, nullptr, error)) return false;
   QString vaultError;
-  if (!m_vault->write(TlsKeyAlias, "RigWeave Remote Station TLS P-256 key",
+  if (!m_vault->write(TlsKeyAlias, "ShackCQ Remote Station TLS P-256 key",
                       QString::fromLatin1(tlsPrivate.toBase64()), &vaultError) ||
-      !m_vault->write(SigningKeyAlias, "RigWeave Remote Station signing P-256 key",
+      !m_vault->write(SigningKeyAlias, "ShackCQ Remote Station signing P-256 key",
                       QString::fromLatin1(signingPrivate.toBase64()), &vaultError)) {
     if (error) *error = vaultError;
     return false;
@@ -392,16 +392,16 @@ void RemoteStationService::stopDiscovery() {
 }
 
 void RemoteStationService::answerDiscovery() {
-  static const QByteArray serviceWire = dnsName(QStringLiteral("_rigweave._tcp.local"));
+  static const QByteArray serviceWire = dnsName(QStringLiteral("_shackcq._tcp.local"));
   while (m_discoverySocket.hasPendingDatagrams()) {
     QByteArray query; query.resize(static_cast<int>(qMin<qint64>(1500, m_discoverySocket.pendingDatagramSize())));
     QHostAddress sender; quint16 senderPort{};
     const qint64 received = m_discoverySocket.readDatagram(query.data(), query.size(), &sender, &senderPort);
     if (received < 12 || received > 1500 || !query.contains(serviceWire)) continue;
-    const QString service = QStringLiteral("_rigweave._tcp.local");
-    const QString instance = QStringLiteral("%1._rigweave._tcp.local")
+    const QString service = QStringLiteral("_shackcq._tcp.local");
+    const QString instance = QStringLiteral("%1._shackcq._tcp.local")
         .arg(m_stationName.left(48).replace('.', '-'));
-    const QString host = QStringLiteral("rigweave-%1.local").arg(m_stationId.left(12));
+    const QString host = QStringLiteral("shackcq-%1.local").arg(m_stationId.left(12));
     QByteArray response; dns16(response, 0); dns16(response, 0x8400);
     dns16(response, 0); dns16(response, 4); dns16(response, 0); dns16(response, 0);
     dnsRecord(response, service, 12, dnsName(instance));
@@ -844,7 +844,7 @@ void RemoteStationService::consumeRigctld(QTcpSocket *socket) {
 void RemoteStationService::acceptTci() {
   while (QTcpSocket *socket = m_tciServer.nextPendingConnection()) {
     socket->setReadBufferSize(16 * 1024);
-    socket->write("protocol:1.9;device:RigWeave;trx_count:1;channels_count:2;ready;start;");
+    socket->write("protocol:1.9;device:ShackCQ;trx_count:1;channels_count:2;ready;start;");
     connect(socket, &QTcpSocket::readyRead, this, [this, socket] { consumeTci(socket); });
     connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
   }
@@ -941,4 +941,4 @@ QVariantMap RemoteStationService::health() const {
 }
 void RemoteStationService::setState(QString state) { if (m_state == state) return; m_state = std::move(state); emit stateChanged(); }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

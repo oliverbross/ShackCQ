@@ -1,6 +1,6 @@
 # RC1 Configuration Contract
 
-The signed format contract is `RIGWEAVE_CONFIGURATION_BUNDLE`, schema 1, with deterministic canonical JSON. Imports validate signature, schema, limits and section ownership before any mutation. Unknown future sections are retained for explicit review; they are never silently dropped or applied.
+The signed format contract is `SHACKCQ_CONFIGURATION_BUNDLE`, schema 1, with deterministic canonical JSON. Imports validate signature, schema, limits and section ownership before any mutation. Unknown future sections are retained for explicit review; they are never silently dropped or applied.
 
 Safe export/import always excludes or resets:
 

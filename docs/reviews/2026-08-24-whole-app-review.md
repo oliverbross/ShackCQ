@@ -2,14 +2,14 @@
 
 ## Scope and evidence boundary
 
-Three independent whole-source reviews examined the Android, Apple, shared C++, networking, persistence, radio-control, digital-mode, contest, Groups.io, Wavelog, and release-support paths. Findings were merged, checked against the source, and repaired on `integration/rigweave-final-whole-app-v1`.
+Three independent whole-source reviews examined the Android, Apple, shared C++, networking, persistence, radio-control, digital-mode, contest, Groups.io, Wavelog, and release-support paths. Findings were merged, checked against the source, and repaired on `integration/shackcq-final-whole-app-v1`.
 
 This review includes source inspection, native tests, Android production compilation, unit tests and instrumentation-source compilation, an Apple simulator build and golden-corpus test, release-policy checks, provenance tests, and script/data syntax checks. It does not claim physical tablet/iPad visual behavior, radio, audio, authenticated-service, network-peer, or RF evidence. Tablet installation and its separate preservation checks are performed only after the reviewed source is committed and consolidated into `main`.
 
 ## Correctness and safety repairs
 
 - Made C ABI CAT numeric parsing non-throwing for values outside `int` range and added malformed-number regression coverage.
-- Restored the canonical `APP_KX3TOUCH_UUID` ADIF identity while retaining the legacy RigWeave alias on import.
+- Restored the canonical `APP_KX3TOUCH_UUID` ADIF identity while retaining the legacy ShackCQ alias on import.
 - Replaced the Apple ADIF character-index parser with a UTF-8 byte-length parser and retained non-reserved fields.
 - Made Apple Fast Entry import and undo transactional; Wavelog queue changes now happen only after a successful commit.
 - Changed Apple SQLite text binding to `SQLITE_TRANSIENT` so bound text outlives temporary Swift bridges.
@@ -55,7 +55,7 @@ The review intentionally leaves these as explicit follow-ups rather than present
 - CTest: 2/2 passed, including the malformed numeric CAT regression.
 - Android `testDebugUnitTest compileDebugAndroidTestSources lintDebug`: passed (`BUILD SUCCESSFUL`, 40m 19s).
 - Earlier Android production and test-source compilation gate: passed (`BUILD SUCCESSFUL`, 9m 59s).
-- Apple `RigWeave` Debug simulator build with signing disabled: passed.
+- Apple `ShackCQ` Debug simulator build with signing disabled: passed.
 - Apple Fast Entry golden corpus: 3/3 passed.
 - Release-candidate policy audit: passed.
 - OpenHamClock upstream checker tests: 7 passed.

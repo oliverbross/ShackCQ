@@ -33,7 +33,7 @@ kern_return_t IMPL(KXUSBUserClient, Start)
 
     hardwareService = device;
     hardwareService->retain();
-    os_log(OS_LOG_DEFAULT, "RigWeave KXUSB user client opened");
+    os_log(OS_LOG_DEFAULT, "ShackCQ KXUSB user client opened");
     return kIOReturnSuccess;
 }
 

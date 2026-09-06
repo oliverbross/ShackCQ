@@ -1,4 +1,4 @@
-#include "rigweave/core.h"
+#include "shackcq/core.h"
 
 #include "kx3/adif.hpp"
 #include "kx3/cty.hpp"
@@ -77,7 +77,7 @@ const char* confidence_name(kx3::intel::SampleConfidence value) {
 }
 }  // namespace
 
-struct rw_feature_context {
+struct shackcq_feature_context {
     kx3::CtyResolver cty;
     kx3::DxInsightEngine dx;
     kx3::intel::WorkedIndex worked;
@@ -87,7 +87,7 @@ struct rw_feature_context {
     unsigned worked_records{};
     unsigned worked_accepted{};
 
-    rw_feature_context() : worked(kx3::intel::kDefaultWorkedCells) {
+    shackcq_feature_context() : worked(kx3::intel::kDefaultWorkedCells) {
         kx3::PanadapterConfig legacy{};
         legacy.sample_rate = 48000;
         legacy.fft_size = kx3::kPanFftSize;
@@ -95,13 +95,13 @@ struct rw_feature_context {
     }
 };
 
-struct rw_panadapter_context {
+struct shackcq_panadapter_context {
     mutable std::mutex mutex;
     kx3::PanadapterDsp dsp;
 };
 
 namespace {
-kx3::PanadapterConfig native_pan_config(const rw_panadapter_config& value) {
+kx3::PanadapterConfig native_pan_config(const shackcq_panadapter_config& value) {
     kx3::PanadapterConfig config{};
     config.sample_rate = value.sample_rate;
     config.fft_size = value.fft_size;
@@ -128,30 +128,30 @@ kx3::PanadapterConfig native_pan_config(const rw_panadapter_config& value) {
 }
 }
 
-rw_feature_context *rw_feature_context_create(void) {
-    return new rw_feature_context{};
+shackcq_feature_context *shackcq_feature_context_create(void) {
+    return new shackcq_feature_context{};
 }
 
-void rw_feature_context_destroy(rw_feature_context *context) { delete context; }
+void shackcq_feature_context_destroy(shackcq_feature_context *context) { delete context; }
 
-int rw_feature_load_cty_text(rw_feature_context *context, const char *cty_text) {
+int shackcq_feature_load_cty_text(shackcq_feature_context *context, const char *cty_text) {
     return context != nullptr && cty_text != nullptr && context->cty.load_text(cty_text) ? 1 : 0;
 }
 
-int rw_feature_set_watchlist(rw_feature_context *context, const char *watchlist_text) {
+int shackcq_feature_set_watchlist(shackcq_feature_context *context, const char *watchlist_text) {
     if (context == nullptr || watchlist_text == nullptr) return 0;
     context->dx.set_watchlist(kx3::parse_dx_watchlist(watchlist_text));
     return 1;
 }
 
-int rw_feature_set_solar(rw_feature_context *context, float solar_flux, float a_index,
+int shackcq_feature_set_solar(shackcq_feature_context *context, float solar_flux, float a_index,
                          float kp_index, int64_t observed_epoch) {
     if (context == nullptr || observed_epoch <= 0) return 0;
     context->dx.update_solar({solar_flux, a_index, kp_index, observed_epoch, true});
     return 1;
 }
 
-int rw_feature_ingest_cluster_line(rw_feature_context *context, const char *line,
+int shackcq_feature_ingest_cluster_line(shackcq_feature_context *context, const char *line,
                                    int64_t received_epoch) {
     if (context == nullptr || line == nullptr) return 0;
     const auto parsed = kx3::parse_cluster_spot(line, received_epoch);
@@ -174,7 +174,7 @@ int rw_feature_ingest_cluster_line(rw_feature_context *context, const char *line
     return context->dx.ingest(std::move(spot)) ? 1 : 0;
 }
 
-int rw_feature_dx_snapshot_json(const rw_feature_context *context, char *output,
+int shackcq_feature_dx_snapshot_json(const shackcq_feature_context *context, char *output,
                                 size_t output_size, int64_t now_epoch) {
     if (context == nullptr) return 0;
     const bool worked_complete = context->worked_loaded && context->worked.complete() &&
@@ -301,7 +301,7 @@ int rw_feature_dx_snapshot_json(const rw_feature_context *context, char *output,
     return write_output(output, output_size, json.str());
 }
 
-int rw_feature_begin_worked_sync(rw_feature_context *context) {
+int shackcq_feature_begin_worked_sync(shackcq_feature_context *context) {
     if (context == nullptr) return 0;
     context->worked.clear();
     context->worked_loaded = false;
@@ -311,7 +311,7 @@ int rw_feature_begin_worked_sync(rw_feature_context *context) {
     return 1;
 }
 
-int rw_feature_add_worked_qso(rw_feature_context *context, const char *callsign,
+int shackcq_feature_add_worked_qso(shackcq_feature_context *context, const char *callsign,
                               const char *entity, const char *band, const char *mode,
                               const char *submode, int64_t epoch, int from_wavelog) {
     if (context == nullptr || callsign == nullptr) return 0;
@@ -329,14 +329,14 @@ int rw_feature_add_worked_qso(rw_feature_context *context, const char *callsign,
     return 1;
 }
 
-int rw_feature_end_worked_sync(rw_feature_context *context) {
+int shackcq_feature_end_worked_sync(shackcq_feature_context *context) {
     if (context == nullptr || !context->worked_synchronizing) return 0;
     context->worked_synchronizing = false;
     context->worked_loaded = true;
     return 1;
 }
 
-int rw_feature_worked_json(const rw_feature_context *context, char *output,
+int shackcq_feature_worked_json(const shackcq_feature_context *context, char *output,
                            size_t output_size, const char *callsign, const char *entity,
                            const char *band, const char *mode, const char *submode,
                            int64_t now_epoch) {
@@ -364,7 +364,7 @@ int rw_feature_worked_json(const rw_feature_context *context, char *output,
     return write_output(output, output_size, json.str());
 }
 
-int rw_feature_propagation_json(char *output, size_t output_size,
+int shackcq_feature_propagation_json(char *output, size_t output_size,
                                 const char *station_grid, const char *target_grid,
                                 const char *band, int64_t epoch, float solar_flux,
                                 float kp_index, int64_t solar_epoch,
@@ -399,12 +399,12 @@ int rw_feature_propagation_json(char *output, size_t output_size,
     return write_output(output, output_size, json.str());
 }
 
-int rw_panadapter_push_pcm(rw_feature_context *context, const uint8_t *bytes, size_t length,
+int shackcq_panadapter_push_pcm(shackcq_feature_context *context, const uint8_t *bytes, size_t length,
                            unsigned channels, unsigned subframe_bytes, unsigned bits) {
     return context != nullptr && context->panadapter.push_pcm(bytes, length, channels, subframe_bytes, bits) ? 1 : 0;
 }
 
-size_t rw_panadapter_copy_bins(const rw_feature_context *context, uint8_t *output,
+size_t shackcq_panadapter_copy_bins(const shackcq_feature_context *context, uint8_t *output,
                                size_t output_size) {
     if (context == nullptr || output == nullptr) return 0;
     const auto& bins = context->panadapter.bins();
@@ -413,7 +413,7 @@ size_t rw_panadapter_copy_bins(const rw_feature_context *context, uint8_t *outpu
     return count;
 }
 
-size_t rw_panadapter_copy_db_bins(const rw_feature_context *context, float *output,
+size_t shackcq_panadapter_copy_db_bins(const shackcq_feature_context *context, float *output,
                                   size_t output_count) {
     if (context == nullptr || output == nullptr) return 0;
     const auto& bins = context->panadapter.db_bins();
@@ -422,29 +422,29 @@ size_t rw_panadapter_copy_db_bins(const rw_feature_context *context, float *outp
     return count;
 }
 
-float rw_panadapter_peak_db(const rw_feature_context *context) {
+float shackcq_panadapter_peak_db(const shackcq_feature_context *context) {
     return context == nullptr ? -120.0F : context->panadapter.peak_db();
 }
-float rw_panadapter_i_rms_db(const rw_feature_context *context) {
+float shackcq_panadapter_i_rms_db(const shackcq_feature_context *context) {
     return context == nullptr ? -120.0F : context->panadapter.i_rms_db();
 }
-float rw_panadapter_q_rms_db(const rw_feature_context *context) {
+float shackcq_panadapter_q_rms_db(const shackcq_feature_context *context) {
     return context == nullptr ? -120.0F : context->panadapter.q_rms_db();
 }
-float rw_panadapter_iq_correlation(const rw_feature_context *context) {
+float shackcq_panadapter_iq_correlation(const shackcq_feature_context *context) {
     return context == nullptr ? 0.0F : context->panadapter.iq_correlation();
 }
 
-rw_panadapter_context *rw_panadapter_context_create(void) { return new rw_panadapter_context{}; }
-void rw_panadapter_context_destroy(rw_panadapter_context *context) { delete context; }
+shackcq_panadapter_context *shackcq_panadapter_context_create(void) { return new shackcq_panadapter_context{}; }
+void shackcq_panadapter_context_destroy(shackcq_panadapter_context *context) { delete context; }
 
-int rw_panadapter_configure(rw_panadapter_context *context, const rw_panadapter_config *config) {
+int shackcq_panadapter_configure(shackcq_panadapter_context *context, const shackcq_panadapter_config *config) {
     if (context == nullptr || config == nullptr) return 0;
     std::lock_guard<std::mutex> lock(context->mutex);
     return context->dsp.configure(native_pan_config(*config)) ? 1 : 0;
 }
 
-int rw_panadapter_push(rw_panadapter_context *context, const uint8_t *bytes, size_t length,
+int shackcq_panadapter_push(shackcq_panadapter_context *context, const uint8_t *bytes, size_t length,
                        unsigned channels, unsigned subframe_bytes, unsigned bits,
                        int discontinuity) {
     if (context == nullptr) return 0;
@@ -453,7 +453,7 @@ int rw_panadapter_push(rw_panadapter_context *context, const uint8_t *bytes, siz
                                  discontinuity != 0) ? 1 : 0;
 }
 
-int rw_panadapter_push_float_iq(rw_panadapter_context *context, const float *interleaved_iq,
+int shackcq_panadapter_push_float_iq(shackcq_panadapter_context *context, const float *interleaved_iq,
                                 size_t value_count, int discontinuity) {
     if (context == nullptr) return 0;
     std::lock_guard<std::mutex> lock(context->mutex);
@@ -469,27 +469,27 @@ size_t copy_pan_values(const std::vector<float>& values, float *output, size_t o
 }
 }
 
-size_t rw_panadapter_copy_trace(const rw_panadapter_context *context, float *output,
+size_t shackcq_panadapter_copy_trace(const shackcq_panadapter_context *context, float *output,
                                 size_t output_count) {
     if (context == nullptr) return 0;
     std::lock_guard<std::mutex> lock(context->mutex);
     return copy_pan_values(context->dsp.db_bins(), output, output_count);
 }
-size_t rw_panadapter_copy_waterfall(const rw_panadapter_context *context, float *output,
+size_t shackcq_panadapter_copy_waterfall(const shackcq_panadapter_context *context, float *output,
                                     size_t output_count) {
     if (context == nullptr) return 0;
     std::lock_guard<std::mutex> lock(context->mutex);
     return copy_pan_values(context->dsp.waterfall_db(), output, output_count);
 }
-size_t rw_panadapter_copy_peak_hold(const rw_panadapter_context *context, float *output,
+size_t shackcq_panadapter_copy_peak_hold(const shackcq_panadapter_context *context, float *output,
                                     size_t output_count) {
     if (context == nullptr) return 0;
     std::lock_guard<std::mutex> lock(context->mutex);
     return copy_pan_values(context->dsp.peak_hold_db(), output, output_count);
 }
 
-int rw_panadapter_snapshot_copy(const rw_panadapter_context *context,
-                                rw_panadapter_snapshot *output) {
+int shackcq_panadapter_snapshot_copy(const shackcq_panadapter_context *context,
+                                shackcq_panadapter_snapshot *output) {
     if (context == nullptr || output == nullptr) return 0;
     std::lock_guard<std::mutex> lock(context->mutex);
     const auto& source = context->dsp.snapshot();
@@ -511,8 +511,8 @@ int rw_panadapter_snapshot_copy(const rw_panadapter_context *context,
     return 1;
 }
 
-int rw_panadapter_copy_frame(const rw_panadapter_context *context,
-                             rw_panadapter_snapshot *output,
+int shackcq_panadapter_copy_frame(const shackcq_panadapter_context *context,
+                             shackcq_panadapter_snapshot *output,
                              float *trace, float *waterfall, float *peak_hold,
                              size_t output_count) {
     if (context == nullptr || output == nullptr || trace == nullptr ||
@@ -541,7 +541,7 @@ int rw_panadapter_copy_frame(const rw_panadapter_context *context,
     return static_cast<int>(count);
 }
 
-int rw_panadapter_set_iq_correction(rw_panadapter_context *context,
+int shackcq_panadapter_set_iq_correction(shackcq_panadapter_context *context,
                                     float a_real, float a_imag, float b_real, float b_imag,
                                     int enabled) {
     if (context == nullptr) return 0;
@@ -550,34 +550,34 @@ int rw_panadapter_set_iq_correction(rw_panadapter_context *context,
     return 1;
 }
 
-void rw_panadapter_reset_peak_hold(rw_panadapter_context *context) {
+void shackcq_panadapter_reset_peak_hold(shackcq_panadapter_context *context) {
     if (context == nullptr) return;
     std::lock_guard<std::mutex> lock(context->mutex);
     context->dsp.reset_peak_hold();
 }
 
-int rw_sync_action(int status_code, int network_error, int response_ambiguous) {
+int shackcq_sync_action(int status_code, int network_error, int response_ambiguous) {
     return static_cast<int>(kx3::classify_http_result(status_code, network_error != 0,
                                                       response_ambiguous != 0));
 }
 
-uint32_t rw_sync_retry_delay(uint32_t attempt, uint32_t jitter_seed,
+uint32_t shackcq_sync_retry_delay(uint32_t attempt, uint32_t jitter_seed,
                              uint32_t retry_after, int has_retry_after) {
     return kx3::retry_delay_seconds(attempt, jitter_seed,
         has_retry_after ? std::optional<uint32_t>(retry_after) : std::nullopt);
 }
 
-int rw_wavelog_normalize_url(char *output, size_t output_size, const char *url) {
+int shackcq_wavelog_normalize_url(char *output, size_t output_size, const char *url) {
     return url == nullptr ? 0 : write_output(output, output_size, kx3::normalize_wavelog_url(url));
 }
 
-int rw_wavelog_payload(char *output, size_t output_size, const char *api_key,
+int shackcq_wavelog_payload(char *output, size_t output_size, const char *api_key,
                        const char *station_profile_id, const char *adif) {
     if (api_key == nullptr || station_profile_id == nullptr || adif == nullptr) return 0;
     return write_output(output, output_size, kx3::wavelog_payload(api_key, station_profile_id, adif));
 }
 
-int rw_wsjtx_parse_json(char *output, size_t output_size,
+int shackcq_wsjtx_parse_json(char *output, size_t output_size,
                         const uint8_t *datagram, size_t datagram_size) {
     kx3::wsjtx::ParseError error{};
     const auto message = kx3::wsjtx::parse_datagram(datagram, datagram_size, &error);

@@ -16,7 +16,7 @@ PROTECTED_MAIN = "27c70d0c2ab0ae21ef18d7fd9b39f8878b0940ea"
 FROZEN_ORIGIN_MAIN = "fb04d52df0c9ccc305125449bb188ef8e3f0185e"
 REVIEW_TIP = "00fe01cd56c206543b1afb0fb03dfdb9befb92f7"
 SEMANTIC_INTEGRATION = "5ee25b51d979d319bdc2bc9410c5af3599b87887"
-RC_BRANCH = "integration/rigweave-multiplatform-rc1"
+RC_BRANCH = "integration/shackcq-multiplatform-rc1"
 
 
 def git(*args: str, check: bool = True) -> str:
@@ -55,7 +55,7 @@ def resolve_local_only(ref: str, expected: str) -> str:
 def build_proof() -> dict:
     head = resolve("HEAD")
     branch = git("branch", "--show-current") or os.environ.get("GITHUB_REF_NAME", "")
-    allow_descendant_validation = os.environ.get("RIGWEAVE_ALLOW_RC1_DESCENDANT_VALIDATION") == "1"
+    allow_descendant_validation = os.environ.get("SHACKCQ_ALLOW_RC1_DESCENDANT_VALIDATION") == "1"
     required = {
         "canonical_source": SOURCE,
         "accepted_ui": ACCEPTED_UI,
@@ -77,7 +77,7 @@ def build_proof() -> dict:
         "frozen_origin_main": resolve(FROZEN_ORIGIN_MAIN),
         "recovery_ref": resolve("origin/recovery/local-main-27c70d0"),
         "review_tip": resolve_local_only(
-            "integration/rigweave-final-whole-app-v1", REVIEW_TIP
+            "integration/shackcq-final-whole-app-v1", REVIEW_TIP
         ),
         "semantic_integration": resolve(SEMANTIC_INTEGRATION),
     }
@@ -113,7 +113,7 @@ def build_proof() -> dict:
         key = item["classification"]
         counts[key] = counts.get(key, 0) + 1
     return {
-        "contract": "RIGWEAVE_RC1_ANCESTRY_V1",
+        "contract": "SHACKCQ_RC1_ANCESTRY_V1",
         "rc_branch": RC_BRANCH,
         "validation_branch": branch,
         "rc_head": head,

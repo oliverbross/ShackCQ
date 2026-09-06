@@ -1,5 +1,5 @@
 /*
- * RigWeave Hamlib Android bridge
+ * ShackCQ Hamlib Android bridge
  * SPDX-License-Identifier: GPL-3.0-only
  */
 #include <jni.h>
@@ -417,7 +417,7 @@ jbyteArray bytes(JNIEnv *env, const unsigned char *data, int count) {
 }  // namespace
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_libraryInfoNative(JNIEnv *env, jobject) {
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_libraryInfoNative(JNIEnv *env, jobject) {
     std::ostringstream out;
     out << "{\"version\":" << quoted(rig_version()) << ",\"sourceDigest\":\"" << kSourceDigest
         << "\",\"licence\":" << quoted(rig_license()) << ",\"backendCount\":37}";
@@ -425,13 +425,13 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_libraryInfoNative(JNIEnv *env
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_modelsNative(JNIEnv *env, jobject) {
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_modelsNative(JNIEnv *env, jobject) {
     const std::string output = models_json();
     return env->NewStringUTF(output.c_str());
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionCreateNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_sessionCreateNative(
         JNIEnv *, jobject, jint model_id) {
     rig_load_all_backends();
     if (model_id <= 0 || !rig_get_caps(model_id)) return 0;
@@ -445,7 +445,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionCreateNative(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionDestroyNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_sessionDestroyNative(
         JNIEnv *, jobject, jlong handle) {
     Session *value = session(handle);
     if (!value) return;
@@ -462,7 +462,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionDestroyNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionSetReadOnlyNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_sessionSetReadOnlyNative(
         JNIEnv *, jobject, jlong handle, jboolean read_only) {
     Session *value = session(handle);
     if (checked(value) != RIG_OK) return -RIG_EINVAL;
@@ -472,7 +472,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionSetReadOnlyNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionConfigureSerialNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_sessionConfigureSerialNative(
         JNIEnv *, jobject, jlong handle, jint baud, jint data_bits, jint stop_bits,
         jint parity, jint handshake, jint timeout_ms, jint rts, jint dtr) {
     Session *value = session(handle);
@@ -490,7 +490,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionConfigureSerialNative(
     fcntl(value->bridge_application, F_SETFD, FD_CLOEXEC);
     hamlib_port_t *port = HAMLIB_RIGPORT(value->rig);
     port->type.rig = RIG_PORT_SERIAL;
-    std::snprintf(port->pathname, sizeof(port->pathname), "rigweave-fd:%d", value->bridge_hamlib);
+    std::snprintf(port->pathname, sizeof(port->pathname), "shackcq-fd:%d", value->bridge_hamlib);
     port->parm.serial.rate = baud;
     port->parm.serial.data_bits = data_bits;
     port->parm.serial.stop_bits = stop_bits;
@@ -504,7 +504,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionConfigureSerialNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionConfigureNetworkNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_sessionConfigureNetworkNative(
         JNIEnv *env, jobject, jlong handle, jstring host_value, jint port_value, jint timeout_ms) {
     Session *value = session(handle);
     const std::string host = text(env, host_value);
@@ -525,7 +525,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionConfigureNetworkNative
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionOpenNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_sessionOpenNative(
         JNIEnv *, jobject, jlong handle) {
     Session *value = session(handle);
     if (checked(value) != RIG_OK) return -RIG_EINVAL;
@@ -537,7 +537,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionOpenNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionCloseNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_sessionCloseNative(
         JNIEnv *, jobject, jlong handle) {
     Session *value = session(handle);
     if (checked(value) != RIG_OK) return -RIG_EINVAL;
@@ -551,7 +551,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionCloseNative(
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_bridgeReadNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_bridgeReadNative(
         JNIEnv *env, jobject, jlong handle, jint maximum, jint timeout_ms) {
     Session *value = session(handle);
     if (!value || maximum < 1 || maximum > kMaximumBridgeTransfer ||
@@ -571,7 +571,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_bridgeReadNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_bridgeWriteNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_bridgeWriteNative(
         JNIEnv *env, jobject, jlong handle, jbyteArray data) {
     Session *value = session(handle);
     if (!value || !data) return -RIG_EINVAL;
@@ -590,7 +590,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_bridgeWriteNative(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionSnapshotNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_sessionSnapshotNative(
         JNIEnv *env, jobject, jlong handle) {
     Session *value = session(handle);
     const std::string output = value ? snapshot_json(value)
@@ -599,7 +599,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_sessionSnapshotNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setFrequencyNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_setFrequencyNative(
         JNIEnv *env, jobject, jlong handle, jstring vfo_value, jlong frequency) {
     Session *value = session(handle);
     if (writable(value) != RIG_OK || frequency <= 0 || frequency > INT64_C(10000000000000))
@@ -612,7 +612,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setFrequencyNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setVfoNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_setVfoNative(
         JNIEnv *env, jobject, jlong handle, jstring vfo_value) {
     Session *value = session(handle);
     if (writable(value) != RIG_OK) return -RIG_EINVAL;
@@ -624,7 +624,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setVfoNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setModeNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_setModeNative(
         JNIEnv *env, jobject, jlong handle, jstring vfo_value, jstring mode_value,
         jint passband_hz) {
     Session *value = session(handle);
@@ -640,7 +640,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setModeNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setSplitNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_setSplitNative(
         JNIEnv *env, jobject, jlong handle, jboolean enabled, jstring tx_vfo_value) {
     Session *value = session(handle);
     if (writable(value) != RIG_OK) return -RIG_EINVAL;
@@ -653,7 +653,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setSplitNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setRitNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_setRitNative(
         JNIEnv *, jobject, jlong handle, jint offset_hz) {
     Session *value = session(handle);
     if (writable(value) != RIG_OK) return -RIG_EINVAL;
@@ -662,7 +662,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setRitNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setXitNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_setXitNative(
         JNIEnv *, jobject, jlong handle, jint offset_hz) {
     Session *value = session(handle);
     if (writable(value) != RIG_OK) return -RIG_EINVAL;
@@ -671,7 +671,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setXitNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setLevelNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_setLevelNative(
         JNIEnv *env, jobject, jlong handle, jstring level_value, jdouble numeric_value) {
     Session *value = session(handle);
     if (writable(value) != RIG_OK || !std::isfinite(numeric_value) ||
@@ -687,7 +687,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setLevelNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setFunctionNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_setFunctionNative(
         JNIEnv *env, jobject, jlong handle, jstring function_value, jboolean enabled) {
     Session *value = session(handle);
     if (writable(value) != RIG_OK) return -RIG_EINVAL;
@@ -700,7 +700,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setFunctionNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setParameterNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_setParameterNative(
         JNIEnv *env, jobject, jlong handle, jstring parameter_value, jdouble numeric_value) {
     Session *value = session(handle);
     if (writable(value) != RIG_OK || !std::isfinite(numeric_value) ||
@@ -716,7 +716,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setParameterNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setPttNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_setPttNative(
         JNIEnv *, jobject, jlong handle, jboolean enabled) {
     Session *value = session(handle);
     if (writable(value) != RIG_OK) return -RIG_EINVAL;
@@ -726,7 +726,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_setPttNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_tuneNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_tuneNative(
         JNIEnv *, jobject, jlong handle) {
     Session *value = session(handle);
     if (writable(value) != RIG_OK) return -RIG_EINVAL;
@@ -736,13 +736,13 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_tuneNative(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorModelsNative(JNIEnv *env, jobject) {
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorModelsNative(JNIEnv *env, jobject) {
     const std::string output = rotator_models_json();
     return env->NewStringUTF(output.c_str());
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionCreateNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorSessionCreateNative(
         JNIEnv *, jobject, jint model_id) {
     rot_load_all_backends();
     if (model_id <= 0 || !rot_get_caps(model_id)) return 0;
@@ -756,7 +756,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionCreateNative(
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionDestroyNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorSessionDestroyNative(
         JNIEnv *, jobject, jlong handle) {
     RotatorSession *value = rotator_session(handle);
     if (!value) return;
@@ -773,7 +773,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionDestroyNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionSetReadOnlyNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorSessionSetReadOnlyNative(
         JNIEnv *, jobject, jlong handle, jboolean read_only) {
     RotatorSession *value = rotator_session(handle);
     if (!value || !value->rotator) return -RIG_EINVAL;
@@ -783,7 +783,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionSetReadOnlyNati
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionConfigureSerialNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorSessionConfigureSerialNative(
         JNIEnv *, jobject, jlong handle, jint baud, jint data_bits, jint stop_bits,
         jint parity, jint handshake, jint timeout_ms, jint rts, jint dtr) {
     RotatorSession *value = rotator_session(handle);
@@ -800,7 +800,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionConfigureSerial
     fcntl(value->bridge_application, F_SETFD, FD_CLOEXEC);
     hamlib_port_t *port = HAMLIB_ROTPORT(value->rotator);
     port->type.rig = RIG_PORT_SERIAL;
-    std::snprintf(port->pathname, sizeof(port->pathname), "rigweave-rot-fd:%d", value->bridge_hamlib);
+    std::snprintf(port->pathname, sizeof(port->pathname), "shackcq-rot-fd:%d", value->bridge_hamlib);
     port->parm.serial.rate = baud;
     port->parm.serial.data_bits = data_bits;
     port->parm.serial.stop_bits = stop_bits;
@@ -814,7 +814,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionConfigureSerial
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionConfigureNetworkNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorSessionConfigureNetworkNative(
         JNIEnv *env, jobject, jlong handle, jstring host_value, jint port_value, jint timeout_ms) {
     RotatorSession *value = rotator_session(handle);
     const std::string host = text(env, host_value);
@@ -834,7 +834,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionConfigureNetwor
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionOpenNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorSessionOpenNative(
         JNIEnv *, jobject, jlong handle) {
     RotatorSession *value = rotator_session(handle);
     if (!value || !value->rotator) return -RIG_EINVAL;
@@ -846,7 +846,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionOpenNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionCloseNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorSessionCloseNative(
         JNIEnv *, jobject, jlong handle) {
     RotatorSession *value = rotator_session(handle);
     if (!value || !value->rotator) return -RIG_EINVAL;
@@ -859,7 +859,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSessionCloseNative(
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorBridgeReadNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorBridgeReadNative(
         JNIEnv *env, jobject, jlong handle, jint maximum, jint timeout_ms) {
     RotatorSession *value = rotator_session(handle);
     if (!value || maximum < 1 || maximum > kMaximumBridgeTransfer || timeout_ms < 0 || timeout_ms > 60000)
@@ -878,7 +878,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorBridgeReadNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorBridgeWriteNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorBridgeWriteNative(
         JNIEnv *env, jobject, jlong handle, jbyteArray data) {
     RotatorSession *value = rotator_session(handle);
     if (!value || !data) return -RIG_EINVAL;
@@ -897,7 +897,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorBridgeWriteNative(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorPollNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorPollNative(
         JNIEnv *env, jobject, jlong handle) {
     RotatorSession *value = rotator_session(handle);
     if (!value || !value->rotator) return env->NewStringUTF("{\"ok\":false,\"code\":-1}");
@@ -912,7 +912,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorPollNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSetPositionNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorSetPositionNative(
         JNIEnv *, jobject, jlong handle, jdouble azimuth, jdouble elevation) {
     RotatorSession *value = rotator_session(handle);
     if (!value || !value->rotator || value->read_only || !std::isfinite(azimuth) || !std::isfinite(elevation)) return -RIG_EINVAL;
@@ -921,7 +921,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorSetPositionNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorStopNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorStopNative(
         JNIEnv *, jobject, jlong handle) {
     RotatorSession *value = rotator_session(handle);
     if (!value || !value->rotator) return -RIG_EINVAL;
@@ -930,7 +930,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorStopNative(
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorParkNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_rotatorParkNative(
         JNIEnv *, jobject, jlong handle) {
     RotatorSession *value = rotator_session(handle);
     if (!value || !value->rotator || value->read_only) return -RIG_EINVAL;
@@ -939,7 +939,7 @@ Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_rotatorParkNative(
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_radio_hamlib_NativeHamlib_errorNative(
+Java_app_shackcq_mobile_radio_hamlib_NativeHamlib_errorNative(
         JNIEnv *env, jobject, jint status) {
     const std::string output = error_json(status);
     return env->NewStringUTF(output.c_str());

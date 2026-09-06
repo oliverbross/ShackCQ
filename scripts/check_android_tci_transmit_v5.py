@@ -16,8 +16,8 @@ REQUIRED = [
     "docs/android/ANDROID_TCI_TX_INTERLOCKS.md",
     "docs/android/ANDROID_TCI_PHYSICAL_ACCEPTANCE.md",
     "docs/android/ANDROID_TCI_TX_LIVE_ACCEPTANCE.md",
-    "android/app/src/main/java/app/rigweave/mobile/TciTransmitControl.kt",
-    "android/app/src/main/java/app/rigweave/mobile/DebugTciTransmitter.kt",
+    "android/app/src/main/java/app/shackcq/mobile/TciTransmitControl.kt",
+    "android/app/src/main/java/app/shackcq/mobile/DebugTciTransmitter.kt",
 ]
 
 

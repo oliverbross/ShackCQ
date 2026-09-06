@@ -1,6 +1,6 @@
 # Contest cockpit and session log v2
 
-`rigweave-contest.sqlite` schema 2 adds `contest_qso_entry`. Each row stores the event-time draft, exchange JSON, station/worked context, network origin/revision, dupe override and merge state. This is temporary Contest data, not the canonical log.
+`shackcq-contest.sqlite` schema 2 adds `contest_qso_entry`. Each row stores the event-time draft, exchange JSON, station/worked context, network origin/revision, dupe override and merge state. This is temporary Contest data, not the canonical log.
 
 Logging, editing, deletion, score and export operate on staged rows. `Merge to Logbook` requires confirmation, maps each unmerged row through the existing canonical mutation coordinator, records the canonical ID/revision only after success, and leaves failures retryable. Repeating merge skips completed rows. Existing canonical Contest QSOs remain immutable from the temporary review surface.
 

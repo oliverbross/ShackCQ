@@ -15,7 +15,7 @@ not carry an unambiguous redistribution grant. No prediction is fabricated.
 - Start SHA: `4a692a1b1d5653b55f21552bcc67a35fdc2b0172`
 - Validated implementation SHA: `71e865e29ba70d5a195a22dea33b85c73c63d194`
 - Final SHA: the completion-record commit containing this file, resolved and reported at handoff
-- Worktree: `/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-hamclock-finishline-v1`
+- Worktree: `/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-hamclock-finishline-v1`
 
 Commits before this completion record:
 

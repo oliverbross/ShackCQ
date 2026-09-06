@@ -52,7 +52,7 @@ No whole-file ours/theirs resolution was used.
 | App/controller lifecycle | one graph in `MainActivity`; `OperationsController` owns and closes satellites; Neural close is idempotent |
 | QSO writes | canonical `qso` plus `QsoMutationCoordinator`, projection v2, one Wavelog outbox |
 | Neural observations | separate `neural-dx.sqlite`, schema 3, no worked/QSL authority |
-| Groups.io | separate `rigweave-groupsio.sqlite`; no QSO tables |
+| Groups.io | separate `shackcq-groupsio.sqlite`; no QSO tables |
 | Provider caches | focused `NeuralProviderCache`, HamClock last-good support, satellite provider cache, Groups.io database/cache |
 
 ## P.533 and package boundary

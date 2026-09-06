@@ -1,11 +1,11 @@
-#include "rigweave/desktop/ClusterController.hpp"
-#include "rigweave/desktop/DesktopPlatform.hpp"
-#include "rigweave/desktop/WavelogSync.hpp"
+#include "shackcq/desktop/ClusterController.hpp"
+#include "shackcq/desktop/DesktopPlatform.hpp"
+#include "shackcq/desktop/WavelogSync.hpp"
 
 #include <QTemporaryDir>
 #include <QtTest>
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 
 class FakeWavelogEndpoint final : public WavelogEndpoint {
 public:

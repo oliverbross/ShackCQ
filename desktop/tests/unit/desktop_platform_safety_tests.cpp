@@ -1,8 +1,8 @@
-#include "rigweave/desktop/DesktopPanadapter.hpp"
-#include "rigweave/desktop/DesktopEngagementControllers.hpp"
-#include "rigweave/desktop/DesktopPlatform.hpp"
-#include "rigweave/desktop/DesktopRadioController.hpp"
-#include "rigweave/desktop/DesktopRotatorController.hpp"
+#include "shackcq/desktop/DesktopPanadapter.hpp"
+#include "shackcq/desktop/DesktopEngagementControllers.hpp"
+#include "shackcq/desktop/DesktopPlatform.hpp"
+#include "shackcq/desktop/DesktopRadioController.hpp"
+#include "shackcq/desktop/DesktopRotatorController.hpp"
 
 #include <QJsonDocument>
 #include <QTcpServer>
@@ -11,7 +11,7 @@
 #include <QtTest>
 #include <cmath>
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 
 class DesktopPlatformSafetyTests final : public QObject {
   Q_OBJECT
@@ -88,7 +88,7 @@ private slots:
                       {"endpoint", "ws://user:pass@192.168.1.22:40001"},
                       {"deviceIdentity", "safe-device"},
                       {"callsign", "OM0SECRET"},
-                      {"configPath", "/Users/private/RigWeave/config.json"}}},
+                      {"configPath", "/Users/private/ShackCQ/config.json"}}},
          {"stationLatitude", 48.1234},
          {"stationLongitude", 17.1234},
          {"rawIqSamples", "RAW-IQ-MARKER"},

@@ -1,6 +1,6 @@
-#include "rigweave/desktop/PanadapterSceneItem.hpp"
+#include "shackcq/desktop/PanadapterSceneItem.hpp"
 
-#include "rigweave/desktop/DesktopPanadapter.hpp"
+#include "shackcq/desktop/DesktopPanadapter.hpp"
 
 #include <QQuickWindow>
 #include <QSGFlatColorMaterial>
@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <utility>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 
 class PanadapterNode final : public QSGNode {
@@ -223,4 +223,4 @@ void PanadapterSceneItem::releaseResources() {
   queueRendererHealth(QStringLiteral("Released cleanly"));
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

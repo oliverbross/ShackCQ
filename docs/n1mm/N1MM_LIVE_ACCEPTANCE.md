@@ -4,7 +4,7 @@ Not performed in this branch. Automated loopback proves codecs, discovery/TCP fr
 
 Use a disposable N1MM+ test database and isolated trusted LAN:
 
-1. Confirm the exact N1MM+ version and matching contest/rule identity; leave RigWeave non-master and monitor-only.
+1. Confirm the exact N1MM+ version and matching contest/rule identity; leave ShackCQ non-master and monitor-only.
 2. Verify trailing-percent discovery, paired TCP links, hello/status, ECHO liveness, disconnect and reconnect without opening non-selected interfaces or VPN broadcast.
 3. Compare every command/43-field contact/XML fixture against observed traffic without enabling radio/TX/control actions.
 4. In monitor mode, prove add/edit/delete/checksum traffic cannot mutate the canonical log.

@@ -12,6 +12,6 @@ android/app/build/
 *.xcuserstate
 xcuserdata/
 flex-developer.properties
-rust/rigweave-flex/target/
+rust/shackcq-flex/target/
 rust/tempo-sstv/target/
 third_party/*/target/

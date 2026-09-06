@@ -54,11 +54,11 @@ IMPL(CP210xDriver, Start)
 	if (ret == kIOReturnSuccess) ret = usbInterface->CopyPipe(kBulkOutEndpoint, &bulkOut);
 	if (ret == kIOReturnSuccess) ret = configurePL2303();
 	if (ret == kIOReturnSuccess) {
-		(void)SetName("RigWeavePL2303");
+		(void)SetName("ShackCQPL2303");
 		ret = RegisterService();
 	}
 	if (ret != kIOReturnSuccess) {
-		os_log(OS_LOG_DEFAULT, "RigWeave PL2303GC start failed: 0x%08x", ret);
+		os_log(OS_LOG_DEFAULT, "ShackCQ PL2303GC start failed: 0x%08x", ret);
 		if (interfaceOpen) (void)usbInterface->Close(this, 0);
 		interfaceOpen = false;
 		OSSafeReleaseNULL(bulkIn);
@@ -67,7 +67,7 @@ IMPL(CP210xDriver, Start)
 		(void)Stop(provider, SUPERDISPATCH);
 		return ret;
 	}
-	os_log(OS_LOG_DEFAULT, "RigWeave PL2303GC/KXUSB ready VID 0x067B PID 0x23A3 endpoints 83/02");
+	os_log(OS_LOG_DEFAULT, "ShackCQ PL2303GC/KXUSB ready VID 0x067B PID 0x23A3 endpoints 83/02");
 	return kIOReturnSuccess;
 }
 
@@ -79,7 +79,7 @@ IMPL(CP210xDriver, Stop)
 	OSSafeReleaseNULL(bulkIn);
 	OSSafeReleaseNULL(bulkOut);
 	usbInterface = nullptr;
-	os_log(OS_LOG_DEFAULT, "RigWeave PL2303 service stopped");
+	os_log(OS_LOG_DEFAULT, "ShackCQ PL2303 service stopped");
 	return Stop(provider, SUPERDISPATCH);
 }
 

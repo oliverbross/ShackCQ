@@ -1,6 +1,6 @@
 # Nexus Digi v2 decisions
 
-- The existing RigWeave mode inventory is frozen; missing Nexus modes are excluded rather than imitated.
+- The existing ShackCQ mode inventory is frozen; missing Nexus modes are excluded rather than imitated.
 - FT8 and FT4 alone receive an automatic exchange sequencer. Other slotted modes remain explicit one-shot/manual workflows.
 - `DigiController` remains the single Digi owner and delegates only to the existing audio, radio, QSO, Wavelog, Needs, portable, and satellite authorities.
 - Waterfall taps change decoder audio offset, never radio dial frequency or PTT.

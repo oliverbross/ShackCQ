@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/desktop/DesktopRadioController.hpp"
-#include "rigweave/desktop/TciClient.hpp"
+#include "shackcq/desktop/DesktopRadioController.hpp"
+#include "shackcq/desktop/TciClient.hpp"
 
-#include "rigweave/tci.hpp"
+#include "shackcq/tci.hpp"
 
 #include <QCryptographicHash>
 #include <QTcpServer>
@@ -10,7 +10,7 @@
 #include <QtEndian>
 #include <QtTest>
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 
 class FakeTciServer final : public QObject {
 public:
@@ -264,8 +264,8 @@ private slots:
              QString("2"));
     QCOMPARE(client.diagnostics().value("unknownCommands").toULongLong(), 1ULL);
 
-    const auto binary = rigweave::tci::build_binary_for_test(
-        rigweave::tci::DataType::Iq, 0U, 96'000U, 2U,
+    const auto binary = shackcq::tci::build_binary_for_test(
+        shackcq::tci::DataType::Iq, 0U, 96'000U, 2U,
         {0.25F, -0.5F, 0.75F, -1.0F});
     server.sendBinary(QByteArray(reinterpret_cast<const char *>(binary.data()),
                                  static_cast<qsizetype>(binary.size())));
@@ -274,15 +274,15 @@ private slots:
     QCOMPARE(iqSpy.at(0).at(1).toUInt(), 96'000U);
     QVERIFY(client.diagnostics().value("binaryDecodedOffOwnerThread").toBool());
 
-    const auto audio = rigweave::tci::build_binary_for_test(
-        rigweave::tci::DataType::RxAudio, 0U, 48'000U, 2U,
+    const auto audio = shackcq::tci::build_binary_for_test(
+        shackcq::tci::DataType::RxAudio, 0U, 48'000U, 2U,
         {0.1F, 0.1F, -0.1F, -0.1F});
     server.sendBinary(QByteArray(reinterpret_cast<const char *>(audio.data()),
                                  static_cast<qsizetype>(audio.size())));
     QTRY_COMPARE_WITH_TIMEOUT(audioSpy.size(), 1, 1'000);
 
-    const auto unattached = rigweave::tci::build_binary_for_test(
-        rigweave::tci::DataType::Iq, 1U, 96'000U, 2U, {0.2F, -0.2F});
+    const auto unattached = shackcq::tci::build_binary_for_test(
+        shackcq::tci::DataType::Iq, 1U, 96'000U, 2U, {0.2F, -0.2F});
     server.sendBinary(
         QByteArray(reinterpret_cast<const char *>(unattached.data()),
                    static_cast<qsizetype>(unattached.size())));

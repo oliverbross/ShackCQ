@@ -101,17 +101,17 @@ void spectral_reduce(RxDsp &state, jfloat *values, jsize count, float amount) {
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_rigweave_mobile_NativeRxDsp_create(JNIEnv *, jobject) {
+Java_app_shackcq_mobile_NativeRxDsp_create(JNIEnv *, jobject) {
     return static_cast<jlong>(reinterpret_cast<intptr_t>(new RxDsp()));
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_NativeRxDsp_destroy(JNIEnv *, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeRxDsp_destroy(JNIEnv *, jobject, jlong handle) {
     if (handle) delete dsp(handle);
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_app_rigweave_mobile_NativeRxDsp_process(
+Java_app_shackcq_mobile_NativeRxDsp_process(
     JNIEnv *env, jobject, jlong handle, jfloatArray data, jint sample_rate,
     jboolean blanker, jboolean notch, jfloat reduction, jboolean agc, jint hang_ms,
     jfloat squelch_db, jfloat output_gain) {

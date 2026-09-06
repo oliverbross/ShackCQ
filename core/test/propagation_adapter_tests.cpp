@@ -1,9 +1,9 @@
-#include "rigweave/propagation/p533.hpp"
+#include "shackcq/propagation/p533.hpp"
 
 #include <cstdlib>
 #include <iostream>
 
-using rigweave::propagation::P533Input;
+using shackcq::propagation::P533Input;
 
 namespace {
 void require(bool value, const char* message) {
@@ -30,18 +30,18 @@ P533Input valid_input() {
 
 int main() {
     auto input = valid_input();
-    require(rigweave::propagation::validate_p533_input(input).empty(), "valid input rejected");
-    const auto unavailable = rigweave::propagation::evaluate_p533(input);
+    require(shackcq::propagation::validate_p533_input(input).empty(), "valid input rejected");
+    const auto unavailable = shackcq::propagation::evaluate_p533(input);
     require(!unavailable.available, "blocked engine reported availability");
     require(unavailable.status == "LICENSE_BLOCKED", "blocked status was not explicit");
 
     input.tx_latitude = 91.0;
-    require(!rigweave::propagation::validate_p533_input(input).empty(), "invalid latitude accepted");
-    require(rigweave::propagation::evaluate_p533(input).status == "INVALID_INPUT", "invalid input status missing");
+    require(!shackcq::propagation::validate_p533_input(input).empty(), "invalid latitude accepted");
+    require(shackcq::propagation::evaluate_p533(input).status == "INVALID_INPUT", "invalid input status missing");
 
     input = valid_input();
     input.frequencies_mhz.assign(65, 14.1);
-    require(!rigweave::propagation::validate_p533_input(input).empty(), "unbounded frequency batch accepted");
+    require(!shackcq::propagation::validate_p533_input(input).empty(), "unbounded frequency batch accepted");
     return 0;
 }
 

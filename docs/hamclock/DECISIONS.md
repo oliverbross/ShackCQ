@@ -1,26 +1,26 @@
 # OpenHamClock integration decisions
 
-These decisions apply to the RigWeave OpenHamClock completion programme unless a later owner-approved decision supersedes them.
+These decisions apply to the ShackCQ OpenHamClock completion programme unless a later owner-approved decision supersedes them.
 
 ## Native clients, no embedded React
 
-Android uses Jetpack Compose and iOS/iPadOS uses SwiftUI. RigWeave will not embed the upstream React application in a WebView, ship its Express server, or download/execute its JavaScript at runtime.
+Android uses Jetpack Compose and iOS/iPadOS uses SwiftUI. ShackCQ will not embed the upstream React application in a WebView, ship its Express server, or download/execute its JavaScript at runtime.
 
 ## Behaviour parity, not pixel cloning
 
 Parity is judged by truthful operator outcomes. OpenHamClock layout density and information hierarchy may inform the native design, but upstream pixels, logos, artwork, trade dress and React components are not cloned.
 
-## RigWeave workspaces remain authoritative
+## ShackCQ workspaces remain authoritative
 
 Radio, Digi, DX, Portable, Operations, Satellite, Logbook, Wavelog and Log Intelligence retain ownership of their established outcomes. Home summarizes or delegates to them rather than creating weaker duplicate implementations.
 
 ## No shared OpenHamClock DXSpider proxy
 
-RigWeave keeps its user-configured DX-cluster connection and does not adopt the upstream shared DXSpider proxy. Existing session identity, persistence and operator configuration remain authoritative.
+ShackCQ keeps its user-configured DX-cluster connection and does not adopt the upstream shared DXSpider proxy. Existing session identity, persistence and operator configuration remain authoritative.
 
 ## No runtime source-code updating
 
-Installed clients and workflows never download and execute upstream source. The watcher reads GitHub metadata/content only and never changes RigWeave source or pins automatically.
+Installed clients and workflows never download and execute upstream source. The watcher reads GitHub metadata/content only and never changes ShackCQ source or pins automatically.
 
 ## Stable updates require review
 
@@ -92,4 +92,4 @@ The audited upstream is `accius/openhamclock` at immutable stable commit `d4a50e
 - Shack display is a full-window Compose dialog with a persistent exit, lifecycle-restored system bars, optional keep-screen-on, reduced motion, and touch-paused rotation. It reuses Home state and providers.
 ## Empirical outlook
 
-The future-window feature is named `RigWeave Empirical Outlook v1`, not AI probability, VOACAP or P.533. One application-scoped controller receives existing owner snapshots; it cannot fetch, tune, transmit, spot or log. Current Band Health and future outlook remain separate scores. QSO history and calendar/watchlist/Needs are context/value ranking only. Percentages remain hidden until the 40-family/15-bin calibration gate passes. Local P.533 remains `LICENSE_BLOCKED`.
+The future-window feature is named `ShackCQ Empirical Outlook v1`, not AI probability, VOACAP or P.533. One application-scoped controller receives existing owner snapshots; it cannot fetch, tune, transmit, spot or log. Current Band Health and future outlook remain separate scores. QSO history and calendar/watchlist/Needs are context/value ranking only. Percentages remain hidden until the 40-family/15-bin calibration gate passes. Local P.533 remains `LICENSE_BLOCKED`.

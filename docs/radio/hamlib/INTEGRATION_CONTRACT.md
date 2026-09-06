@@ -1,6 +1,6 @@
 # Integration contract
 
-This task exports an isolated Hamlib platform under `app.rigweave.mobile.radio.hamlib`. It does not integrate it into `MainActivity`, `AppController`, `RadioBackend`, `NativeCore`, `RadioState`, the central Radio screen, Panadapter, Digi, Configuration Recovery, Health, or Apple code.
+This task exports an isolated Hamlib platform under `app.shackcq.mobile.radio.hamlib`. It does not integrate it into `MainActivity`, `AppController`, `RadioBackend`, `NativeCore`, `RadioState`, the central Radio screen, Panadapter, Digi, Configuration Recovery, Health, or Apple code.
 
 An adopting task must:
 

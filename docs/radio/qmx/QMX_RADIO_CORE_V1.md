@@ -1,4 +1,4 @@
-# RigWeave native QMX/QMX+ radio core v1
+# ShackCQ native QMX/QMX+ radio core v1
 
 This branch provides the isolated Android QMX/QMX+ profile core. It is intentionally not wired into the central application in this branch.
 

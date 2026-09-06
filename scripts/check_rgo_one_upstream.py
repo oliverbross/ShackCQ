@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PIN = ROOT / "docs/radio/rgoone/UPSTREAM.json"
 MAXIMUM_BYTES = 8 * 1024 * 1024
 ALLOWED_HOSTS = {"lz2jr.com", "www.lz2jr.com"}
-USER_AGENT = "RigWeave-RGO-One-Official-Watch/1"
+USER_AGENT = "ShackCQ-RGO-One-Official-Watch/1"
 
 
 def validate_url(url: str) -> None:

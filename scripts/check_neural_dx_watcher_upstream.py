@@ -20,7 +20,7 @@ def main() -> int:
     args = parser.parse_args()
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "RigWeave-upstream-watch",
+        "User-Agent": "ShackCQ-upstream-watch",
         "X-GitHub-Api-Version": "2022-11-28",
     }
     token = os.environ.get("GITHUB_TOKEN", "").strip()

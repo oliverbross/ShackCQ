@@ -1,6 +1,6 @@
-# RigWeave Remote Protocol v1
+# ShackCQ Remote Protocol v1
 
-Control transport is WSS with subprotocol `rigweave.remote.v1`. Each JSON request carries `version`, `type`, `requestId`, and—after authentication—`stationId`, `sessionId`, `generation`, `timestampMs`, and a bounded `payload` object.
+Control transport is WSS with subprotocol `shackcq.remote.v1`. Each JSON request carries `version`, `type`, `requestId`, and—after authentication—`stationId`, `sessionId`, `generation`, `timestampMs`, and a bounded `payload` object.
 
 Lifecycle: server `HELLO`; client signed `AUTH`; server `ACK/AUTHENTICATED`; periodic `HEARTBEAT`; optional `LEASE`; typed `MUTATE`; projected `STATE`; binary media. Pairing uses `PAIR_REQUEST` and always requires local approval. Unknown versions/messages, oversized input, invalid signatures, stale generations, missing sessions, and denied leases fail closed.
 

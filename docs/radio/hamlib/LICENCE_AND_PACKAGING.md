@@ -2,7 +2,7 @@
 
 ## Immutable source
 
-RigWeave vendors the official generated Hamlib 4.7.2 release archive under
+ShackCQ vendors the official generated Hamlib 4.7.2 release archive under
 `core/third_party/hamlib`. The release archive SHA-256 is
 `ae1fcf2dbc80ea0786ea8f047b09399c3f7737d1930442f61a031708ed33e88f`.
 The signed tag peels to commit `40f63488fe0bd751b147f48d62fd217bf53713a0`
@@ -26,7 +26,7 @@ LGPL-2.1-or-later. `COPYING.LIB`, file-level copyright notices, `AUTHORS`,
 `README`, and relevant backend notices are preserved. Some utilities and test
 sources carry GPL-2.0-or-later or other compatible notices; they remain in the
 corresponding-source bundle but are not linked into the application library.
-RigWeave is GPL-3.0-only, so the linked LGPL-2.1-or-later library and backend
+ShackCQ is GPL-3.0-only, so the linked LGPL-2.1-or-later library and backend
 code is distribution-compatible while retaining the upstream LGPL terms.
 
 The audit does not replace upstream file-level notices. Files without an SPDX
@@ -34,11 +34,11 @@ line retain their original copyright/licence prologue and are covered by the
 top-level licence notices. The watcher treats changes to any licence digest or
 source header distribution as `LICENCE` review work.
 
-## RigWeave modifications
+## ShackCQ modifications
 
 Two narrow Android integration changes are maintained in the vendored tree:
 
-- `src/iofunc.c`: accepts a private `rigweave-fd:<n>` descriptor reference,
+- `src/iofunc.c`: accepts a private `shackcq-fd:<n>` descriptor reference,
   duplicates it, and closes only the duplicate. This connects Hamlib to an
   application-owned socket pair without opening Android USB or a PTY.
 - `src/microham.c`: disables POSIX `/dev` glob discovery on Android. Direct

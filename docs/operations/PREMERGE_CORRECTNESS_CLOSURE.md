@@ -7,6 +7,6 @@
 - Provider contract result: a live CelesTrak OMM CSV row with an offset-less fractional UTC epoch was retained and accepted by native SGP4, including a six-digit NORAD path. The reviewed DF2ET timer URL returned human-facing `text/html` with no stable JSON/fetch/XHR contract, so Timers are unavailable and no HTML scraping or network adapter remains.
 - Focused validation: native CMake/CTest `1/1` passed; deterministic temporary SQLite profile passed all 12 sorts in both directions with distinct adjacent pages and exact Previous; focused satellite Fast Entry regression passed; `compileDebugKotlin` passed.
 - Full JVM result: `235` tests passed, `0` failed, `0` errors, `0` skipped.
-- APK: `/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-wavelog-native-v1/android/app/build/outputs/apk/debug/app-debug.apk`; `124154591` bytes; SHA-256 `fa2f5fbafdd489dd9ae9de1ab51003668992c0f11ff7c3e7b9ad6a7804cd40ff`.
+- APK: `/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-wavelog-native-v1/android/app/build/outputs/apk/debug/app-debug.apk`; `124154591` bytes; SHA-256 `fa2f5fbafdd489dd9ae9de1ab51003668992c0f11ff7c3e7b9ad6a7804cd40ff`.
 - Remaining external evidence only: physical Android-tablet migration/rebuild progress, GPS/share-target behaviour, live Wavelog mutation/round-trip, and radio/RF interaction were not run. No Apple build was run.
 - `docs/wavelog/Archive.zip`: untouched, unopened, uninspected, untracked and uncommitted.

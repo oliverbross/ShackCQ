@@ -1,8 +1,8 @@
-# RigWeave Empirical Outlook v1
+# ShackCQ Empirical Outlook v1
 
 ## Product truth
 
-This is an empirical RF outlook built from RigWeave-owned observations. It is not P.533, VOACAP, a neural network, an ionosonde, an exact future callsign prediction, or transmit authority. Output uses `INSUFFICIENT_EVIDENCE`, `QUIET`, `BUILDING`, `FAVOURABLE`, `STRONG`, and `DEGRADED`, plus `LOW`, `MEDIUM`, or `HIGH` confidence. A percentage is withheld until calibration gates pass.
+This is an empirical RF outlook built from ShackCQ-owned observations. It is not P.533, VOACAP, a neural network, an ionosonde, an exact future callsign prediction, or transmit authority. Output uses `INSUFFICIENT_EVIDENCE`, `QUIET`, `BUILDING`, `FAVOURABLE`, `STRONG`, and `DEGRADED`, plus `LOW`, `MEDIUM`, or `HIGH` confidence. A percentage is withheld until calibration gates pass.
 
 Current callsigns remain current observations. Future candidates are separately attributed as `CURRENTLY OBSERVED`, `SCHEDULED`, `WATCHLIST`, `NEEDED`, or `RECENT PATTERN`; a scheduled candidate is not a predicted transmission.
 
@@ -16,7 +16,7 @@ Evidence and pending predictions retain at most 180 days. Verified outcomes reta
 
 The baseline uses the target UTC quarter-hour with ±30-minute tolerance over a bounded 56-day history. It requires at least eight matched buckets and remains station-, band- and region-scoped. Evidence retains major mode-family keys; the global operator outlook deliberately aggregates those families where a mode-specific sample would be too sparse. Current World anomalies and future windows query `evidence_bucket`; neither repeatedly scans raw spot rows nor compares a target time with an all-day mean.
 
-The versioned score is bounded 0–100. Coefficients live in `RigWeaveEmpiricalOutlookV1`: baseline propensity 20, current/matched-baseline support 25, trend 15, source/call/receiver diversity 20, distance/path diversity 10, environmental context −10…+10, and explicit freshness/degradation penalties. QSO aggregates are personal context only and never contribute live support. Calendar, watchlist and Needs rank value only after the RF outlook.
+The versioned score is bounded 0–100. Coefficients live in `ShackCQEmpiricalOutlookV1`: baseline propensity 20, current/matched-baseline support 25, trend 15, source/call/receiver diversity 20, distance/path diversity 10, environmental context −10…+10, and explicit freshness/degradation penalties. QSO aggregates are personal context only and never contribute live support. Calendar, watchlist and Needs rank value only after the RF outlook.
 
 All 16 canonical bands are retained. 4 m/2 m/70 cm require current and historical terrestrial evidence; 23 cm/3 cm require stronger multi-source local support and cannot be inferred from solar context alone. Output windows are 30, 60 and 120 minutes. World/map output is capped at 72 cells.
 

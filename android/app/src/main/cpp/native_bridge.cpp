@@ -7,20 +7,20 @@
 #include <sstream>
 #include <string>
 #include <vector>
-#include "rigweave/core.h"
-#include "rigweave/satellite.h"
-#include "rigweave/tci.hpp"
-#include "rigweave_flex.h"
+#include "shackcq/core.h"
+#include "shackcq/satellite.h"
+#include "shackcq/tci.hpp"
+#include "shackcq_flex.h"
 
 namespace {
 constexpr jsize kMaximumJniInput = 4 * 1024 * 1024;
 constexpr int kMaximumEncodedSamples = 16 * 1024 * 1024;
 
-rw_context *context(jlong handle) { return reinterpret_cast<rw_context *>(static_cast<intptr_t>(handle)); }
-rw_feature_context *features(jlong handle) { return reinterpret_cast<rw_feature_context *>(static_cast<intptr_t>(handle)); }
-rw_panadapter_context *panadapter(jlong handle) { return reinterpret_cast<rw_panadapter_context *>(static_cast<intptr_t>(handle)); }
-rw_flex_context *flex(jlong handle) { return reinterpret_cast<rw_flex_context *>(static_cast<intptr_t>(handle)); }
-rw_digi_context *digi(jlong handle) { return reinterpret_cast<rw_digi_context *>(static_cast<intptr_t>(handle)); }
+shackcq_context *context(jlong handle) { return reinterpret_cast<shackcq_context *>(static_cast<intptr_t>(handle)); }
+shackcq_feature_context *features(jlong handle) { return reinterpret_cast<shackcq_feature_context *>(static_cast<intptr_t>(handle)); }
+shackcq_panadapter_context *panadapter(jlong handle) { return reinterpret_cast<shackcq_panadapter_context *>(static_cast<intptr_t>(handle)); }
+shackcq_flex_context *flex(jlong handle) { return reinterpret_cast<shackcq_flex_context *>(static_cast<intptr_t>(handle)); }
+shackcq_digi_context *digi(jlong handle) { return reinterpret_cast<shackcq_digi_context *>(static_cast<intptr_t>(handle)); }
 std::string utf(JNIEnv *env, jstring value) {
     if (!value) return {};
     const char *chars = env->GetStringUTFChars(value, nullptr);
@@ -30,33 +30,33 @@ std::string utf(JNIEnv *env, jstring value) {
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_rigweave_mobile_NativeCore_flexCreate(JNIEnv *, jobject) {
-    return static_cast<jlong>(reinterpret_cast<intptr_t>(rw_flex_context_create()));
+Java_app_shackcq_mobile_NativeCore_flexCreate(JNIEnv *, jobject) {
+    return static_cast<jlong>(reinterpret_cast<intptr_t>(shackcq_flex_context_create()));
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_NativeCore_flexDestroy(JNIEnv *, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeCore_flexDestroy(JNIEnv *, jobject, jlong handle) {
     if (!handle) return;
-    rw_flex_context_destroy(flex(handle));
+    shackcq_flex_context_destroy(flex(handle));
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_NativeCore_flexFeed(JNIEnv *env, jobject, jlong handle, jbyteArray data) {
+Java_app_shackcq_mobile_NativeCore_flexFeed(JNIEnv *env, jobject, jlong handle, jbyteArray data) {
     if (!handle || !data) return -1;
     const jsize length = env->GetArrayLength(data);
     if (length <= 0 || length > kMaximumJniInput) return -1;
     jbyte *bytes = env->GetByteArrayElements(data, nullptr);
     if (!bytes) return -1;
-    const int applied = rw_flex_context_feed(flex(handle), reinterpret_cast<const uint8_t *>(bytes), static_cast<size_t>(length));
+    const int applied = shackcq_flex_context_feed(flex(handle), reinterpret_cast<const uint8_t *>(bytes), static_cast<size_t>(length));
     env->ReleaseByteArrayElements(data, bytes, JNI_ABORT);
     return applied;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_flexState(JNIEnv *env, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeCore_flexState(JNIEnv *env, jobject, jlong handle) {
     if (!handle) return env->NewStringUTF("{}");
     std::string output(65536, '\0');
-    const int size = rw_flex_state_json(flex(handle), output.data(), output.size());
+    const int size = shackcq_flex_state_json(flex(handle), output.data(), output.size());
     return env->NewStringUTF(size >= 0 ? output.c_str() : "{}");
 }
 
@@ -75,95 +75,95 @@ jstring satellite_text(JNIEnv *env, Work work) {
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeSatellite_inspectNative(JNIEnv *env, jobject, jstring format, jstring name,
+Java_app_shackcq_mobile_NativeSatellite_inspectNative(JNIEnv *env, jobject, jstring format, jstring name,
     jstring elementOne, jstring elementTwo) {
     const std::string f = utf(env, format), n = utf(env, name), one = utf(env, elementOne), two = utf(env, elementTwo);
     return satellite_text(env, [&](char *out, size_t size) {
-        return rw_satellite_inspect_json(out, size, f.c_str(), n.c_str(), one.c_str(), two.c_str());
+        return shackcq_satellite_inspect_json(out, size, f.c_str(), n.c_str(), one.c_str(), two.c_str());
     });
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeSatellite_propagateNative(JNIEnv *env, jobject, jstring format, jstring name,
+Java_app_shackcq_mobile_NativeSatellite_propagateNative(JNIEnv *env, jobject, jstring format, jstring name,
     jstring elementOne, jstring elementTwo, jlong epoch, jlong maxAge, jdouble latitude, jdouble longitude, jdouble altitude) {
     const std::string f = utf(env, format), n = utf(env, name), one = utf(env, elementOne), two = utf(env, elementTwo);
-    return satellite_text(env, [&](char *out, size_t size) { return rw_satellite_propagate_json(out, size, f.c_str(), n.c_str(), one.c_str(), two.c_str(),
+    return satellite_text(env, [&](char *out, size_t size) { return shackcq_satellite_propagate_json(out, size, f.c_str(), n.c_str(), one.c_str(), two.c_str(),
         static_cast<int64_t>(epoch), static_cast<int64_t>(maxAge), latitude, longitude, altitude); });
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeSatellite_passesNative(JNIEnv *env, jobject, jstring format, jstring name,
+Java_app_shackcq_mobile_NativeSatellite_passesNative(JNIEnv *env, jobject, jstring format, jstring name,
     jstring elementOne, jstring elementTwo, jlong start, jlong end, jlong maxAge, jdouble latitude, jdouble longitude,
     jdouble altitude, jdouble horizon, jdouble minimumPeak, jint step, jint maximumPasses) {
     const std::string f = utf(env, format), n = utf(env, name), one = utf(env, elementOne), two = utf(env, elementTwo);
-    return satellite_text(env, [&](char *out, size_t size) { return rw_satellite_passes_json(out, size, f.c_str(), n.c_str(), one.c_str(), two.c_str(),
+    return satellite_text(env, [&](char *out, size_t size) { return shackcq_satellite_passes_json(out, size, f.c_str(), n.c_str(), one.c_str(), two.c_str(),
         static_cast<int64_t>(start), static_cast<int64_t>(end), static_cast<int64_t>(maxAge), latitude, longitude, altitude,
         horizon, minimumPeak, step, maximumPasses); });
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeSatellite_samplesNative(JNIEnv *env, jobject, jstring format, jstring name,
+Java_app_shackcq_mobile_NativeSatellite_samplesNative(JNIEnv *env, jobject, jstring format, jstring name,
     jstring elementOne, jstring elementTwo, jlong start, jlong end, jlong maxAge, jdouble latitude, jdouble longitude,
     jdouble altitude, jint step, jint maximumSamples, jint kind) {
     const std::string f = utf(env, format), n = utf(env, name), one = utf(env, elementOne), two = utf(env, elementTwo);
-    return satellite_text(env, [&](char *out, size_t size) { return rw_satellite_samples_json(out, size, f.c_str(), n.c_str(), one.c_str(), two.c_str(),
+    return satellite_text(env, [&](char *out, size_t size) { return shackcq_satellite_samples_json(out, size, f.c_str(), n.c_str(), one.c_str(), two.c_str(),
         static_cast<int64_t>(start), static_cast<int64_t>(end), static_cast<int64_t>(maxAge), latitude, longitude, altitude,
         step, maximumSamples, kind); });
 }
 
 extern "C" JNIEXPORT jdouble JNICALL
-Java_app_rigweave_mobile_NativeSatellite_dopplerNative(JNIEnv *, jobject, jdouble frequency, jdouble rangeRate) {
-    return rw_satellite_doppler_hz(frequency, rangeRate);
+Java_app_shackcq_mobile_NativeSatellite_dopplerNative(JNIEnv *, jobject, jdouble frequency, jdouble rangeRate) {
+    return shackcq_satellite_doppler_hz(frequency, rangeRate);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_flexIdentity(JNIEnv *env, jobject, jstring program) {
-    const auto value = utf(env, program); return flex_text(env, [&](char *out, size_t size) { return rw_flex_client_identity(value.c_str(), out, size); });
+Java_app_shackcq_mobile_NativeCore_flexIdentity(JNIEnv *env, jobject, jstring program) {
+    const auto value = utf(env, program); return flex_text(env, [&](char *out, size_t size) { return shackcq_flex_client_identity(value.c_str(), out, size); });
 }
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_flexSubscriptions(JNIEnv *env, jobject) { return flex_text(env, rw_flex_subscriptions); }
+Java_app_shackcq_mobile_NativeCore_flexSubscriptions(JNIEnv *env, jobject) { return flex_text(env, shackcq_flex_subscriptions); }
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_flexKeepalive(JNIEnv *env, jobject) { return flex_text(env, rw_flex_keepalive); }
+Java_app_shackcq_mobile_NativeCore_flexKeepalive(JNIEnv *env, jobject) { return flex_text(env, shackcq_flex_keepalive); }
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_flexFrequency(JNIEnv *env, jobject, jint slice, jlong hz) {
-    return flex_text(env, [&](char *out, size_t size) { return rw_flex_frequency(static_cast<uint32_t>(slice), static_cast<uint64_t>(hz), out, size); });
+Java_app_shackcq_mobile_NativeCore_flexFrequency(JNIEnv *env, jobject, jint slice, jlong hz) {
+    return flex_text(env, [&](char *out, size_t size) { return shackcq_flex_frequency(static_cast<uint32_t>(slice), static_cast<uint64_t>(hz), out, size); });
 }
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_flexMode(JNIEnv *env, jobject, jint slice, jstring mode) {
-    const auto value = utf(env, mode); return flex_text(env, [&](char *out, size_t size) { return rw_flex_mode(static_cast<uint32_t>(slice), value.c_str(), out, size); });
+Java_app_shackcq_mobile_NativeCore_flexMode(JNIEnv *env, jobject, jint slice, jstring mode) {
+    const auto value = utf(env, mode); return flex_text(env, [&](char *out, size_t size) { return shackcq_flex_mode(static_cast<uint32_t>(slice), value.c_str(), out, size); });
 }
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_flexFilter(JNIEnv *env, jobject, jstring letter, jint low, jint high) {
-    const auto value = utf(env, letter); return flex_text(env, [&](char *out, size_t size) { return rw_flex_filter(value.c_str(), low, high, out, size); });
+Java_app_shackcq_mobile_NativeCore_flexFilter(JNIEnv *env, jobject, jstring letter, jint low, jint high) {
+    const auto value = utf(env, letter); return flex_text(env, [&](char *out, size_t size) { return shackcq_flex_filter(value.c_str(), low, high, out, size); });
 }
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_flexParseDiscovery(JNIEnv *env, jobject, jbyteArray data) {
+Java_app_shackcq_mobile_NativeCore_flexParseDiscovery(JNIEnv *env, jobject, jbyteArray data) {
     if (!data) return env->NewStringUTF("");
     const jsize length = env->GetArrayLength(data);
     if (length <= 0 || length > 65'536) return env->NewStringUTF("");
     jbyte *bytes = env->GetByteArrayElements(data, nullptr);
     if (!bytes) return env->NewStringUTF("");
     char output[4096]{};
-    const int size = rw_flex_parse_discovery(reinterpret_cast<const uint8_t *>(bytes), static_cast<size_t>(length), output, sizeof(output));
+    const int size = shackcq_flex_parse_discovery(reinterpret_cast<const uint8_t *>(bytes), static_cast<size_t>(length), output, sizeof(output));
     env->ReleaseByteArrayElements(data, bytes, JNI_ABORT);
     return env->NewStringUTF(size >= 0 ? output : "");
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_rigweave_mobile_NativeCore_digiCreate(JNIEnv *, jobject, jint sampleRate, jfloat pitch, jboolean reverse, jfloat rttyCentre) {
+Java_app_shackcq_mobile_NativeCore_digiCreate(JNIEnv *, jobject, jint sampleRate, jfloat pitch, jboolean reverse, jfloat rttyCentre) {
     if (sampleRate < 8'000 || sampleRate > 384'000 || !std::isfinite(pitch) || !std::isfinite(rttyCentre)) return 0;
     return static_cast<jlong>(reinterpret_cast<intptr_t>(
-        rw_digi_context_create(static_cast<uint32_t>(sampleRate), pitch, reverse == JNI_TRUE, rttyCentre)));
+        shackcq_digi_context_create(static_cast<uint32_t>(sampleRate), pitch, reverse == JNI_TRUE, rttyCentre)));
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_NativeCore_digiDestroy(JNIEnv *, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeCore_digiDestroy(JNIEnv *, jobject, jlong handle) {
     if (!handle) return;
-    rw_digi_context_destroy(digi(handle));
+    shackcq_digi_context_destroy(digi(handle));
 }
 
 jstring digi_feed(JNIEnv *env, jlong handle, jfloatArray data,
-                  const std::function<int(rw_digi_context *, const float *, size_t, char *, size_t)> &feed) {
+                  const std::function<int(shackcq_digi_context *, const float *, size_t, char *, size_t)> &feed) {
     if (!data || !handle) return env->NewStringUTF("{}");
     const jsize length = env->GetArrayLength(data);
     if (length <= 0 || length > kMaximumJniInput) return env->NewStringUTF("{}");
@@ -176,22 +176,22 @@ jstring digi_feed(JNIEnv *env, jlong handle, jfloatArray data,
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_digiFeedCw(JNIEnv *env, jobject, jlong handle, jfloatArray data) {
-    return digi_feed(env, handle, data, rw_digi_feed_cw);
+Java_app_shackcq_mobile_NativeCore_digiFeedCw(JNIEnv *env, jobject, jlong handle, jfloatArray data) {
+    return digi_feed(env, handle, data, shackcq_digi_feed_cw);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_digiFeedRtty(JNIEnv *env, jobject, jlong handle, jfloatArray data) {
-    return digi_feed(env, handle, data, rw_digi_feed_rtty);
+Java_app_shackcq_mobile_NativeCore_digiFeedRtty(JNIEnv *env, jobject, jlong handle, jfloatArray data) {
+    return digi_feed(env, handle, data, shackcq_digi_feed_rtty);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_digiFeedSstv(JNIEnv *env, jobject, jlong handle, jfloatArray data) {
-    return digi_feed(env, handle, data, rw_digi_feed_sstv);
+Java_app_shackcq_mobile_NativeCore_digiFeedSstv(JNIEnv *env, jobject, jlong handle, jfloatArray data) {
+    return digi_feed(env, handle, data, shackcq_digi_feed_sstv);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_digiDecodeSlot(JNIEnv *env, jobject, jint mode, jfloatArray data, jint sampleRate) {
+Java_app_shackcq_mobile_NativeCore_digiDecodeSlot(JNIEnv *env, jobject, jint mode, jfloatArray data, jint sampleRate) {
     if (!data || sampleRate < 8'000 || sampleRate > 384'000)
         return env->NewStringUTF("{\"error\":\"No audio\",\"decodes\":[]}");
     const jsize length = env->GetArrayLength(data);
@@ -200,14 +200,14 @@ Java_app_rigweave_mobile_NativeCore_digiDecodeSlot(JNIEnv *env, jobject, jint mo
     jfloat *samples = env->GetFloatArrayElements(data, nullptr);
     if (!samples) return env->NewStringUTF("{\"error\":\"No audio\",\"decodes\":[]}");
     std::string output(262144, '\0');
-    const int size = rw_digi_decode_slot(mode, samples, static_cast<size_t>(length),
+    const int size = shackcq_digi_decode_slot(mode, samples, static_cast<size_t>(length),
                                          static_cast<uint32_t>(sampleRate), output.data(), output.size());
     env->ReleaseFloatArrayElements(data, samples, JNI_ABORT);
     return env->NewStringUTF(size >= 0 ? output.c_str() : "{\"error\":\"Decode failed\",\"decodes\":[]}");
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_app_rigweave_mobile_NativeCore_digiSpectrum(JNIEnv *env, jobject, jfloatArray data, jint sampleRate,
+Java_app_shackcq_mobile_NativeCore_digiSpectrum(JNIEnv *env, jobject, jfloatArray data, jint sampleRate,
                                                   jfloat lowHz, jfloat highHz, jint bins, jint window) {
     if (!data || sampleRate < 8'000 || sampleRate > 384'000 || bins <= 0 || bins > 512 ||
         !std::isfinite(lowHz) || !std::isfinite(highHz) || lowHz >= highHz) return env->NewFloatArray(0);
@@ -224,7 +224,7 @@ Java_app_rigweave_mobile_NativeCore_digiSpectrum(JNIEnv *env, jobject, jfloatArr
         env->ReleaseFloatArrayElements(data, samples, JNI_ABORT);
         return env->NewFloatArray(0);
     }
-    const int count = rw_digi_spectrum(samples, static_cast<size_t>(length), static_cast<uint32_t>(sampleRate),
+    const int count = shackcq_digi_spectrum(samples, static_cast<size_t>(length), static_cast<uint32_t>(sampleRate),
                                        lowHz, highHz, static_cast<size_t>(bins), window,
                                        output, static_cast<size_t>(bins));
     env->ReleaseFloatArrayElements(data, samples, JNI_ABORT);
@@ -234,28 +234,28 @@ Java_app_rigweave_mobile_NativeCore_digiSpectrum(JNIEnv *env, jobject, jfloatArr
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_digiDecodePsk31(JNIEnv *env, jobject, jfloatArray data, jfloat carrierHz) {
+Java_app_shackcq_mobile_NativeCore_digiDecodePsk31(JNIEnv *env, jobject, jfloatArray data, jfloat carrierHz) {
     if (!data || !std::isfinite(carrierHz)) return env->NewStringUTF("{}");
     const jsize length = env->GetArrayLength(data);
     if (length <= 0 || length > kMaximumJniInput) return env->NewStringUTF("{}");
     jfloat *samples = env->GetFloatArrayElements(data, nullptr);
     if (!samples) return env->NewStringUTF("{}");
     std::string output(65536, '\0');
-    const int size = rw_digi_decode_psk31(samples, static_cast<size_t>(length), carrierHz, output.data(), output.size());
+    const int size = shackcq_digi_decode_psk31(samples, static_cast<size_t>(length), carrierHz, output.data(), output.size());
     env->ReleaseFloatArrayElements(data, samples, JNI_ABORT);
     return env->NewStringUTF(size >= 0 ? output.c_str() : "{}");
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_app_rigweave_mobile_NativeCore_digiSstvImage(JNIEnv *env, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeCore_digiSstvImage(JNIEnv *env, jobject, jlong handle) {
     if (!handle) return env->NewByteArray(0);
-    const int size = rw_digi_copy_sstv_image(digi(handle), nullptr, 0);
+    const int size = shackcq_digi_copy_sstv_image(digi(handle), nullptr, 0);
     if (size <= 0 || size > kMaximumJniInput) return env->NewByteArray(0);
     jbyteArray result = env->NewByteArray(size);
     if (!result) return env->NewByteArray(0);
     jbyte *bytes = env->GetByteArrayElements(result, nullptr);
     if (!bytes) return env->NewByteArray(0);
-    rw_digi_copy_sstv_image(digi(handle), reinterpret_cast<uint8_t *>(bytes), static_cast<size_t>(size));
+    shackcq_digi_copy_sstv_image(digi(handle), reinterpret_cast<uint8_t *>(bytes), static_cast<size_t>(size));
     env->ReleaseByteArrayElements(result, bytes, 0);
     return result;
 }
@@ -273,41 +273,41 @@ jfloatArray digi_samples(JNIEnv *env, const std::function<int(float *, size_t)> 
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_app_rigweave_mobile_NativeCore_digiEncodeCw(JNIEnv *env, jobject, jstring text, jint wpm, jfloat pitch, jint sampleRate) {
+Java_app_shackcq_mobile_NativeCore_digiEncodeCw(JNIEnv *env, jobject, jstring text, jint wpm, jfloat pitch, jint sampleRate) {
     const auto value = utf(env, text);
     return digi_samples(env, [&](float *out, size_t count) {
-        return rw_digi_encode_cw(value.c_str(), static_cast<uint32_t>(wpm), pitch,
+        return shackcq_digi_encode_cw(value.c_str(), static_cast<uint32_t>(wpm), pitch,
                                  static_cast<uint32_t>(sampleRate), out, count);
     });
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_app_rigweave_mobile_NativeCore_digiEncodeRtty(JNIEnv *env, jobject, jstring text, jint sampleRate, jboolean reverse) {
+Java_app_shackcq_mobile_NativeCore_digiEncodeRtty(JNIEnv *env, jobject, jstring text, jint sampleRate, jboolean reverse) {
     const auto value = utf(env, text);
     return digi_samples(env, [&](float *out, size_t count) {
-        return rw_digi_encode_rtty(value.c_str(), static_cast<uint32_t>(sampleRate),
+        return shackcq_digi_encode_rtty(value.c_str(), static_cast<uint32_t>(sampleRate),
                                    reverse == JNI_TRUE, out, count);
     });
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_app_rigweave_mobile_NativeCore_digiEncodeSlot(JNIEnv *env, jobject, jint mode, jstring text, jfloat baseHz) {
+Java_app_shackcq_mobile_NativeCore_digiEncodeSlot(JNIEnv *env, jobject, jint mode, jstring text, jfloat baseHz) {
     const auto value = utf(env, text);
     return digi_samples(env, [&](float *out, size_t count) {
-        return rw_digi_encode_slot(mode, value.c_str(), baseHz, out, count);
+        return shackcq_digi_encode_slot(mode, value.c_str(), baseHz, out, count);
     });
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_app_rigweave_mobile_NativeCore_digiEncodePsk31(JNIEnv *env, jobject, jstring text, jfloat carrierHz) {
+Java_app_shackcq_mobile_NativeCore_digiEncodePsk31(JNIEnv *env, jobject, jstring text, jfloat carrierHz) {
     const auto value = utf(env, text);
     return digi_samples(env, [&](float *out, size_t count) {
-        return rw_digi_encode_psk31(value.c_str(), carrierHz, out, count);
+        return shackcq_digi_encode_psk31(value.c_str(), carrierHz, out, count);
     });
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_app_rigweave_mobile_NativeCore_digiEncodeSstv(JNIEnv *env, jobject, jint mode, jbyteArray rgb,
+Java_app_shackcq_mobile_NativeCore_digiEncodeSstv(JNIEnv *env, jobject, jint mode, jbyteArray rgb,
                                                     jint width, jint height, jint sampleRate) {
     if (!rgb || width <= 0 || width > 2'048 || height <= 0 || height > 2'048 ||
         sampleRate < 8'000 || sampleRate > 384'000) return env->NewFloatArray(0);
@@ -316,7 +316,7 @@ Java_app_rigweave_mobile_NativeCore_digiEncodeSstv(JNIEnv *env, jobject, jint mo
     jbyte *bytes = env->GetByteArrayElements(rgb, nullptr);
     if (!bytes) return env->NewFloatArray(0);
     auto encode = [&](float *out, size_t count) {
-        return rw_digi_encode_sstv(mode, reinterpret_cast<const uint8_t *>(bytes),
+        return shackcq_digi_encode_sstv(mode, reinterpret_cast<const uint8_t *>(bytes),
                                    static_cast<uint32_t>(width), static_cast<uint32_t>(height),
                                    static_cast<uint32_t>(sampleRate), out, count);
     };
@@ -327,32 +327,32 @@ Java_app_rigweave_mobile_NativeCore_digiEncodeSstv(JNIEnv *env, jobject, jint mo
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_rigweave_mobile_NativeCore_create(JNIEnv *, jobject) {
-    return static_cast<jlong>(reinterpret_cast<intptr_t>(rw_context_create()));
+Java_app_shackcq_mobile_NativeCore_create(JNIEnv *, jobject) {
+    return static_cast<jlong>(reinterpret_cast<intptr_t>(shackcq_context_create()));
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_NativeCore_destroy(JNIEnv *, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeCore_destroy(JNIEnv *, jobject, jlong handle) {
     if (!handle) return;
-    rw_context_destroy(context(handle));
+    shackcq_context_destroy(context(handle));
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_NativeCore_feed(JNIEnv *env, jobject, jlong handle, jbyteArray data) {
+Java_app_shackcq_mobile_NativeCore_feed(JNIEnv *env, jobject, jlong handle, jbyteArray data) {
     if (!handle || !data) return 0;
     const jsize length = env->GetArrayLength(data);
     if (length <= 0 || length > kMaximumJniInput) return 0;
     jbyte *bytes = env->GetByteArrayElements(data, nullptr);
     if (!bytes) return 0;
-    const int applied = rw_context_feed(context(handle), reinterpret_cast<const char *>(bytes), static_cast<size_t>(length));
+    const int applied = shackcq_context_feed(context(handle), reinterpret_cast<const char *>(bytes), static_cast<size_t>(length));
     env->ReleaseByteArrayElements(data, bytes, JNI_ABORT);
     return applied;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_state(JNIEnv *env, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeCore_state(JNIEnv *env, jobject, jlong handle) {
     if (!handle) return env->NewStringUTF("");
-    const auto state = rw_context_state(context(handle));
+    const auto state = shackcq_context_state(context(handle));
     std::ostringstream out;
     out << state.identity << '|' << state.model << '|' << state.mode << '|' << state.vfo_a_hz << '|'
         << state.vfo_b_hz << '|' << state.connected << '|' << state.transmitting << '|' << state.meter << '|'
@@ -367,84 +367,84 @@ Java_app_rigweave_mobile_NativeCore_state(JNIEnv *env, jobject, jlong handle) {
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_NativeCore_classify(JNIEnv *env, jobject, jstring command) {
+Java_app_shackcq_mobile_NativeCore_classify(JNIEnv *env, jobject, jstring command) {
     const auto value = utf(env, command);
-    return static_cast<jint>(rw_classify_command(value.c_str()));
+    return static_cast<jint>(shackcq_classify_command(value.c_str()));
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_qsoIdentity(JNIEnv *env, jobject, jstring callsign, jstring timestamp,
+Java_app_shackcq_mobile_NativeCore_qsoIdentity(JNIEnv *env, jobject, jstring callsign, jstring timestamp,
                                                  jlong frequency, jstring mode) {
     const auto call = utf(env, callsign); const auto time = utf(env, timestamp); const auto modeValue = utf(env, mode);
     char output[32]{};
-    rw_qso_identity(output, sizeof(output), call.c_str(), time.c_str(), static_cast<uint64_t>(frequency), modeValue.c_str());
+    shackcq_qso_identity(output, sizeof(output), call.c_str(), time.c_str(), static_cast<uint64_t>(frequency), modeValue.c_str());
     return env->NewStringUTF(output);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_adif(JNIEnv *env, jobject, jstring identity, jstring callsign,
+Java_app_shackcq_mobile_NativeCore_adif(JNIEnv *env, jobject, jstring identity, jstring callsign,
                                          jstring date, jstring time, jlong frequency, jstring mode,
                                          jstring sent, jstring received) {
     const auto id = utf(env, identity); const auto call = utf(env, callsign); const auto day = utf(env, date);
     const auto clock = utf(env, time); const auto modeValue = utf(env, mode); const auto s = utf(env, sent); const auto r = utf(env, received);
     char output[768]{};
-    rw_adif_serialize(output, sizeof(output), id.c_str(), call.c_str(), day.c_str(), clock.c_str(),
+    shackcq_adif_serialize(output, sizeof(output), id.c_str(), call.c_str(), day.c_str(), clock.c_str(),
                       static_cast<uint64_t>(frequency), modeValue.c_str(), s.c_str(), r.c_str());
     return env->NewStringUTF(output);
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_version(JNIEnv *env, jobject) {
-    return env->NewStringUTF(rw_core_version());
+Java_app_shackcq_mobile_NativeCore_version(JNIEnv *env, jobject) {
+    return env->NewStringUTF(shackcq_core_version());
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_rigweave_mobile_NativeCore_featureCreate(JNIEnv *, jobject) {
-    return static_cast<jlong>(reinterpret_cast<intptr_t>(rw_feature_context_create()));
+Java_app_shackcq_mobile_NativeCore_featureCreate(JNIEnv *, jobject) {
+    return static_cast<jlong>(reinterpret_cast<intptr_t>(shackcq_feature_context_create()));
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_NativeCore_featureDestroy(JNIEnv *, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeCore_featureDestroy(JNIEnv *, jobject, jlong handle) {
     if (!handle) return;
-    rw_feature_context_destroy(features(handle));
+    shackcq_feature_context_destroy(features(handle));
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_NativeCore_featureWatchlist(JNIEnv *env, jobject, jlong handle, jstring value) {
+Java_app_shackcq_mobile_NativeCore_featureWatchlist(JNIEnv *env, jobject, jlong handle, jstring value) {
     if (!handle) return;
-    const auto text = utf(env, value); rw_feature_set_watchlist(features(handle), text.c_str());
+    const auto text = utf(env, value); shackcq_feature_set_watchlist(features(handle), text.c_str());
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_rigweave_mobile_NativeCore_featureLoadCty(JNIEnv *env, jobject, jlong handle, jstring value) {
+Java_app_shackcq_mobile_NativeCore_featureLoadCty(JNIEnv *env, jobject, jlong handle, jstring value) {
     if (!handle) return JNI_FALSE;
     const auto text = utf(env, value);
-    return rw_feature_load_cty_text(features(handle), text.c_str()) ? JNI_TRUE : JNI_FALSE;
+    return shackcq_feature_load_cty_text(features(handle), text.c_str()) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_rigweave_mobile_NativeCore_featureClusterLine(JNIEnv *env, jobject, jlong handle, jstring value, jlong epoch) {
+Java_app_shackcq_mobile_NativeCore_featureClusterLine(JNIEnv *env, jobject, jlong handle, jstring value, jlong epoch) {
     if (!handle) return JNI_FALSE;
     const auto text = utf(env, value);
-    return rw_feature_ingest_cluster_line(features(handle), text.c_str(), static_cast<int64_t>(epoch)) ? JNI_TRUE : JNI_FALSE;
+    return shackcq_feature_ingest_cluster_line(features(handle), text.c_str(), static_cast<int64_t>(epoch)) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeCore_featureDxSnapshot(JNIEnv *env, jobject, jlong handle, jlong epoch) {
+Java_app_shackcq_mobile_NativeCore_featureDxSnapshot(JNIEnv *env, jobject, jlong handle, jlong epoch) {
     if (!handle) return env->NewStringUTF("{}");
     std::string output(131072, '\0');
-    const int size = rw_feature_dx_snapshot_json(features(handle), output.data(), output.size(), static_cast<int64_t>(epoch));
+    const int size = shackcq_feature_dx_snapshot_json(features(handle), output.data(), output.size(), static_cast<int64_t>(epoch));
     return env->NewStringUTF(size > 0 ? output.c_str() : "{}");
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_rigweave_mobile_NativeCore_featureBeginWorkedSync(JNIEnv *, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeCore_featureBeginWorkedSync(JNIEnv *, jobject, jlong handle) {
     if (!handle) return JNI_FALSE;
-    return rw_feature_begin_worked_sync(features(handle)) ? JNI_TRUE : JNI_FALSE;
+    return shackcq_feature_begin_worked_sync(features(handle)) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_rigweave_mobile_NativeCore_featureAddWorkedQso(JNIEnv *env, jobject, jlong handle,
+Java_app_shackcq_mobile_NativeCore_featureAddWorkedQso(JNIEnv *env, jobject, jlong handle,
         jstring callsign, jstring entity, jstring band, jstring mode, jstring submode,
         jlong epoch, jboolean from_wavelog) {
     if (!handle) return JNI_FALSE;
@@ -453,43 +453,43 @@ Java_app_rigweave_mobile_NativeCore_featureAddWorkedQso(JNIEnv *env, jobject, jl
     const auto band_text = utf(env, band);
     const auto mode_text = utf(env, mode);
     const auto submode_text = utf(env, submode);
-    return rw_feature_add_worked_qso(features(handle), call_text.c_str(), entity_text.c_str(),
+    return shackcq_feature_add_worked_qso(features(handle), call_text.c_str(), entity_text.c_str(),
         band_text.c_str(), mode_text.c_str(), submode_text.c_str(), static_cast<int64_t>(epoch),
         from_wavelog == JNI_TRUE ? 1 : 0) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_rigweave_mobile_NativeCore_featureEndWorkedSync(JNIEnv *, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativeCore_featureEndWorkedSync(JNIEnv *, jobject, jlong handle) {
     if (!handle) return JNI_FALSE;
-    return rw_feature_end_worked_sync(features(handle)) ? JNI_TRUE : JNI_FALSE;
+    return shackcq_feature_end_worked_sync(features(handle)) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_NativeCore_featureSolar(JNIEnv *, jobject, jlong handle, jfloat flux, jfloat a, jfloat kp, jlong epoch) {
+Java_app_shackcq_mobile_NativeCore_featureSolar(JNIEnv *, jobject, jlong handle, jfloat flux, jfloat a, jfloat kp, jlong epoch) {
     if (!handle) return;
-    rw_feature_set_solar(features(handle), flux, a, kp, static_cast<int64_t>(epoch));
+    shackcq_feature_set_solar(features(handle), flux, a, kp, static_cast<int64_t>(epoch));
 }
 
 extern "C" JNIEXPORT jlong JNICALL
-Java_app_rigweave_mobile_NativePanadapter_create(JNIEnv *, jobject) {
-    return static_cast<jlong>(reinterpret_cast<intptr_t>(rw_panadapter_context_create()));
+Java_app_shackcq_mobile_NativePanadapter_create(JNIEnv *, jobject) {
+    return static_cast<jlong>(reinterpret_cast<intptr_t>(shackcq_panadapter_context_create()));
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_NativePanadapter_destroy(JNIEnv *, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativePanadapter_destroy(JNIEnv *, jobject, jlong handle) {
     if (!handle) return;
-    rw_panadapter_context_destroy(panadapter(handle));
+    shackcq_panadapter_context_destroy(panadapter(handle));
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_rigweave_mobile_NativePanadapter_configure(
+Java_app_shackcq_mobile_NativePanadapter_configure(
     JNIEnv *, jobject, jlong handle, jint sampleRate, jint fftSize, jint overlap, jint window,
     jfloat floorDb, jfloat topDb, jfloat attack, jfloat release, jint averageFrames,
     jboolean peakHold, jfloat peakDecay, jboolean flatness, jboolean swapIq,
     jboolean invertI, jboolean invertQ, jboolean conjugate, jfloat iTrim, jfloat qTrim,
     jint zoomDecimation, jfloat zoomOffset) {
     if (!handle || sampleRate <= 0 || fftSize <= 0) return JNI_FALSE;
-    rw_panadapter_config config{};
+    shackcq_panadapter_config config{};
     config.sample_rate = static_cast<uint32_t>(sampleRate);
     config.fft_size = static_cast<uint32_t>(fftSize);
     config.overlap_percent = static_cast<uint32_t>(overlap);
@@ -503,18 +503,18 @@ Java_app_rigweave_mobile_NativePanadapter_configure(
     config.i_trim = iTrim; config.q_trim = qTrim;
     config.zoom_decimation = static_cast<uint32_t>(zoomDecimation);
     config.zoom_offset_hz = zoomOffset;
-    return rw_panadapter_configure(panadapter(handle), &config) ? JNI_TRUE : JNI_FALSE;
+    return shackcq_panadapter_configure(panadapter(handle), &config) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_rigweave_mobile_NativePanadapter_push(JNIEnv *env, jobject, jlong handle,
+Java_app_shackcq_mobile_NativePanadapter_push(JNIEnv *env, jobject, jlong handle,
                                                 jshortArray samples, jint sampleCount,
                                                 jboolean discontinuity) {
     if (!handle || samples == nullptr || sampleCount <= 0) return JNI_FALSE;
     const jsize available = env->GetArrayLength(samples);
     const jsize count = std::min(available, sampleCount);
     jshort *values = env->GetShortArrayElements(samples, nullptr);
-    const int ready = rw_panadapter_push(panadapter(handle),
+    const int ready = shackcq_panadapter_push(panadapter(handle),
         reinterpret_cast<const uint8_t *>(values), static_cast<size_t>(count) * sizeof(jshort),
         2U, sizeof(jshort), 16U, discontinuity ? 1 : 0);
     env->ReleaseShortArrayElements(samples, values, JNI_ABORT);
@@ -522,19 +522,19 @@ Java_app_rigweave_mobile_NativePanadapter_push(JNIEnv *env, jobject, jlong handl
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_rigweave_mobile_NativePanadapter_pushFloat(JNIEnv *env, jobject, jlong handle,
+Java_app_shackcq_mobile_NativePanadapter_pushFloat(JNIEnv *env, jobject, jlong handle,
                                                      jfloatArray data, jint count, jboolean discontinuity) {
     if (!handle || !data || count <= 0 || count > kMaximumJniInput || count > env->GetArrayLength(data)) return JNI_FALSE;
     jfloat *samples = env->GetFloatArrayElements(data, nullptr);
     if (!samples) return JNI_FALSE;
-    const int ready = rw_panadapter_push_float_iq(panadapter(handle), samples, static_cast<size_t>(count), discontinuity == JNI_TRUE ? 1 : 0);
+    const int ready = shackcq_panadapter_push_float_iq(panadapter(handle), samples, static_cast<size_t>(count), discontinuity == JNI_TRUE ? 1 : 0);
     env->ReleaseFloatArrayElements(data, samples, JNI_ABORT);
     return ready == 1 ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT jobjectArray JNICALL
-Java_app_rigweave_mobile_NativeTci_parseStatus(JNIEnv *env, jobject, jstring value) {
-    const auto commands = rigweave::tci::parse_status(utf(env, value));
+Java_app_shackcq_mobile_NativeTci_parseStatus(JNIEnv *env, jobject, jstring value) {
+    const auto commands = shackcq::tci::parse_status(utf(env, value));
     jclass string_class = env->FindClass("java/lang/String");
     jobjectArray output = env->NewObjectArray(static_cast<jsize>(commands.size()), string_class, nullptr);
     for (std::size_t index = 0; index < commands.size(); ++index) {
@@ -545,14 +545,14 @@ Java_app_rigweave_mobile_NativeTci_parseStatus(JNIEnv *env, jobject, jstring val
 }
 
 extern "C" JNIEXPORT jfloatArray JNICALL
-Java_app_rigweave_mobile_NativeTci_decodeBinary(JNIEnv *env, jobject, jbyteArray data, jintArray metadata) {
+Java_app_shackcq_mobile_NativeTci_decodeBinary(JNIEnv *env, jobject, jbyteArray data, jintArray metadata) {
     if (!data || !metadata || env->GetArrayLength(metadata) < 7) return env->NewFloatArray(0);
     const jsize length = env->GetArrayLength(data);
     if (length <= 0 || length > kMaximumJniInput) return env->NewFloatArray(0);
     jbyte *bytes = env->GetByteArrayElements(data, nullptr);
     if (!bytes) return env->NewFloatArray(0);
-    rigweave::tci::BinaryError error{};
-    const auto frame = rigweave::tci::decode_binary(reinterpret_cast<const std::uint8_t *>(bytes),
+    shackcq::tci::BinaryError error{};
+    const auto frame = shackcq::tci::decode_binary(reinterpret_cast<const std::uint8_t *>(bytes),
         static_cast<std::size_t>(length), &error);
     env->ReleaseByteArrayElements(data, bytes, JNI_ABORT);
     jint meta[7]{};
@@ -575,9 +575,9 @@ Java_app_rigweave_mobile_NativeTci_decodeBinary(JNIEnv *env, jobject, jbyteArray
 }
 
 extern "C" JNIEXPORT jstring JNICALL
-Java_app_rigweave_mobile_NativeTci_buildCommand(JNIEnv *env, jobject, jint kind, jint receiver,
+Java_app_shackcq_mobile_NativeTci_buildCommand(JNIEnv *env, jobject, jint kind, jint receiver,
                                                  jint channel, jlong number, jstring text) {
-    using namespace rigweave::tci;
+    using namespace shackcq::tci;
     std::optional<std::string> command;
     switch (kind) {
     case 0: command = build_vfo(static_cast<std::uint32_t>(receiver), static_cast<std::uint32_t>(channel), static_cast<std::uint64_t>(number)); break;
@@ -608,7 +608,7 @@ Java_app_rigweave_mobile_NativeTci_buildCommand(JNIEnv *env, jobject, jint kind,
 }
 
 extern "C" JNIEXPORT jbyteArray JNICALL
-Java_app_rigweave_mobile_NativeTci_buildTxAudio(JNIEnv *env, jobject, jfloatArray mono,
+Java_app_shackcq_mobile_NativeTci_buildTxAudio(JNIEnv *env, jobject, jfloatArray mono,
     jint sourceRate, jint targetRate, jint receiver, jlong targetFrameOffset,
     jint requestedValues, jfloat level) {
     if (!mono || sourceRate <= 0 || targetRate <= 0 || receiver < 0 || targetFrameOffset < 0 ||
@@ -617,7 +617,7 @@ Java_app_rigweave_mobile_NativeTci_buildTxAudio(JNIEnv *env, jobject, jfloatArra
     if (count <= 0 || count > kMaximumJniInput) return env->NewByteArray(0);
     jfloat *samples = env->GetFloatArrayElements(mono, nullptr);
     if (!samples) return env->NewByteArray(0);
-    const auto frame = rigweave::tci::build_tx_audio(static_cast<std::uint32_t>(receiver),
+    const auto frame = shackcq::tci::build_tx_audio(static_cast<std::uint32_t>(receiver),
         static_cast<std::uint32_t>(sourceRate), static_cast<std::uint32_t>(targetRate),
         samples, static_cast<std::size_t>(count), static_cast<std::uint64_t>(targetFrameOffset),
         static_cast<std::uint32_t>(requestedValues), level);
@@ -631,7 +631,7 @@ Java_app_rigweave_mobile_NativeTci_buildTxAudio(JNIEnv *env, jobject, jfloatArra
 }
 
 extern "C" JNIEXPORT jint JNICALL
-Java_app_rigweave_mobile_NativePanadapter_snapshot(JNIEnv *env, jobject, jlong handle,
+Java_app_shackcq_mobile_NativePanadapter_snapshot(JNIEnv *env, jobject, jlong handle,
     jlongArray meta, jfloatArray metrics, jfloatArray trace, jfloatArray waterfall,
     jfloatArray peakHold) {
     if (!handle || meta == nullptr || metrics == nullptr || trace == nullptr || waterfall == nullptr || peakHold == nullptr ||
@@ -648,8 +648,8 @@ Java_app_rigweave_mobile_NativePanadapter_snapshot(JNIEnv *env, jobject, jlong h
         if (peakValues) env->ReleaseFloatArrayElements(peakHold, peakValues, JNI_ABORT);
         return 0;
     }
-    rw_panadapter_snapshot value{};
-    const int count = rw_panadapter_copy_frame(panadapter(handle), &value, traceValues,
+    shackcq_panadapter_snapshot value{};
+    const int count = shackcq_panadapter_copy_frame(panadapter(handle), &value, traceValues,
         waterfallValues, peakValues, static_cast<size_t>(capacity));
     env->ReleaseFloatArrayElements(trace, traceValues, 0);
     env->ReleaseFloatArrayElements(waterfall, waterfallValues, 0);
@@ -673,15 +673,15 @@ Java_app_rigweave_mobile_NativePanadapter_snapshot(JNIEnv *env, jobject, jlong h
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
-Java_app_rigweave_mobile_NativePanadapter_setIqCorrection(JNIEnv *, jobject, jlong handle,
+Java_app_shackcq_mobile_NativePanadapter_setIqCorrection(JNIEnv *, jobject, jlong handle,
     jfloat aReal, jfloat aImag, jfloat bReal, jfloat bImag, jboolean enabled) {
     if (!handle) return JNI_FALSE;
-    return rw_panadapter_set_iq_correction(panadapter(handle), aReal, aImag, bReal, bImag,
+    return shackcq_panadapter_set_iq_correction(panadapter(handle), aReal, aImag, bReal, bImag,
                                             enabled ? 1 : 0) ? JNI_TRUE : JNI_FALSE;
 }
 
 extern "C" JNIEXPORT void JNICALL
-Java_app_rigweave_mobile_NativePanadapter_resetPeakHold(JNIEnv *, jobject, jlong handle) {
+Java_app_shackcq_mobile_NativePanadapter_resetPeakHold(JNIEnv *, jobject, jlong handle) {
     if (!handle) return;
-    rw_panadapter_reset_peak_hold(panadapter(handle));
+    shackcq_panadapter_reset_peak_hold(panadapter(handle));
 }

@@ -11,7 +11,7 @@
 - LICENSE SHA-256: `eb9507064a15ee9a14b9e3ffb22711ce29564ea2be4ca7acda77e249f608c385`
 - Copyright: `Copyright (c) 2026 Steffen Lav (OZ1LAV)`
 
-The RigWeave owner reports explicit permission from OZ1LAV. That statement is recorded as owner-provided evidence; RigWeave relies on the repository's MIT licence as the legal source.
+The ShackCQ owner reports explicit permission from OZ1LAV. That statement is recorded as owner-provided evidence; ShackCQ relies on the repository's MIT licence as the legal source.
 
 ## Review scope
 
@@ -21,7 +21,7 @@ The brief named `main/settings/**`, but that path is absent at the pin. QMX sett
 
 ## Adaptation boundary
 
-The Kotlin implementation is independently written from observed behavior and documented protocol facts. No ESP32 source, comments, UI assets, fixtures, state shapes, FT exchange engine, provider client, logbook code, binary, component or build dependency was copied. RigWeave retains GPL-3.0-only source and adds no runtime dependency.
+The Kotlin implementation is independently written from observed behavior and documented protocol facts. No ESP32 source, comments, UI assets, fixtures, state shapes, FT exchange engine, provider client, logbook code, binary, component or build dependency was copied. ShackCQ retains GPL-3.0-only source and adds no runtime dependency.
 
 Reviewed behavior used in the independent implementation includes:
 
@@ -39,4 +39,4 @@ Reviewed behavior used in the independent implementation includes:
 
 This branch does not edit `NOTICE` because it incorporates no upstream source or asset. If a later integration copies or adapts a substantial MIT portion, add this exact entry after confirming that later diff:
 
-> QMX Panadapter by Steffen Lav (OZ1LAV), version 1.9.2, commit 30c61f6142153d61d3160689aab1edbf95de810d, MIT License. RigWeave's QMX/QMX+ integration is independently maintained and does not imply upstream endorsement.
+> QMX Panadapter by Steffen Lav (OZ1LAV), version 1.9.2, commit 30c61f6142153d61d3160689aab1edbf95de810d, MIT License. ShackCQ's QMX/QMX+ integration is independently maintained and does not imply upstream endorsement.

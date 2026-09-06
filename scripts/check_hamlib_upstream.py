@@ -105,7 +105,7 @@ def verify_source() -> list[str]:
 def check_latest() -> list[str]:
     headers = {
         "Accept": "application/vnd.github+json",
-        "User-Agent": "RigWeave-Hamlib-Watcher",
+        "User-Agent": "ShackCQ-Hamlib-Watcher",
         "X-GitHub-Api-Version": "2022-11-28",
     }
     token = os.environ.get("GITHUB_TOKEN", "").strip()

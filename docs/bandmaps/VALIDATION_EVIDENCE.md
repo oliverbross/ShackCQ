@@ -36,7 +36,7 @@ regression. `scripts/run_release_soak.py` also passed all five deterministic 100
 ### Shared core and release policy
 
 - The shell's default `cmake` command was unavailable. The repository-compatible Android SDK CMake 3.22.1 binaries
-  configured and built the unchanged shared core successfully at `/tmp/rigweave-bandmaps-core`.
+  configured and built the unchanged shared core successfully at `/tmp/shackcq-bandmaps-core`.
 - `ctest`: PASS — 2/2 tests, 0 failures, 1.08s.
 - `scripts/check_release_candidate.py`: PASS — documentation, schemas, golden configuration and privacy contracts.
 - `scripts/audit_android_package_size.py`: PASS (exit 0). Debug APK delta was +2,012,144 bytes versus the combined

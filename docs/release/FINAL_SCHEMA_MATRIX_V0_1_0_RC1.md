@@ -1,4 +1,4 @@
-# Final Schema and Storage Matrix — RigWeave 0.1.0 RC1
+# Final Schema and Storage Matrix — ShackCQ 0.1.0 RC1
 
 | Store | Version | Migration/restore rule | Secrets |
 |---|---:|---|---|

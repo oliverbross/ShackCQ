@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/desktop/RemoteStationService.hpp"
-#include "rigweave/desktop/RemoteStationClient.hpp"
+#include "shackcq/desktop/RemoteStationService.hpp"
+#include "shackcq/desktop/RemoteStationClient.hpp"
 
 #include <QHash>
 #include <QJsonDocument>
 #include <QTcpServer>
 #include <QtTest>
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 
 class MemoryVault final : public DesktopCredentialVault {
 public:

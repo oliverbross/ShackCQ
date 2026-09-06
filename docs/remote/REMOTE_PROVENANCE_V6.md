@@ -1,6 +1,6 @@
 # Remote Station Provenance v6
 
-All new RigWeave source is `GPL-3.0-only` and authored for this programme.
+All new ShackCQ source is `GPL-3.0-only` and authored for this programme.
 
 Reviewed references:
 

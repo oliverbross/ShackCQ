@@ -4,4 +4,4 @@ The existing `GroupsIoController` and database remain authoritative. Foreground 
 
 One alert is shown at a time with group, sender, subject/excerpt and server time. Open navigates to the exact group/topic/message; Dismiss changes no server read state; Mute suppresses future alerts for that group without deleting content. The debug injection is compiled only for debug diagnostics and writes no database row.
 
-New-message alerts are shown when RigWeave refreshes Groups.io while active. No permanent background polling was added.
+New-message alerts are shown when ShackCQ refreshes Groups.io while active. No permanent background polling was added.

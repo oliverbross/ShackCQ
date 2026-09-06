@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/desktop/DesktopPanadapter.hpp"
-#include "rigweave/desktop/DesktopPlatform.hpp"
-#include "rigweave/desktop/DesktopRadioController.hpp"
-#include "rigweave/desktop/DesktopRotatorController.hpp"
-#include "rigweave/desktop/RemoteStationService.hpp"
+#include "shackcq/desktop/DesktopPanadapter.hpp"
+#include "shackcq/desktop/DesktopPlatform.hpp"
+#include "shackcq/desktop/DesktopRadioController.hpp"
+#include "shackcq/desktop/DesktopRotatorController.hpp"
+#include "shackcq/desktop/RemoteStationService.hpp"
 
 #include <QCommandLineParser>
 #include <QCoreApplication>
@@ -13,9 +13,9 @@
 #include <QLocalSocket>
 #include <QTextStream>
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 namespace {
-const QString AdminSocket = QStringLiteral("rigweave-stationd-v1");
+const QString AdminSocket = QStringLiteral("shackcq-stationd-v1");
 
 QJsonObject adminRequest(const QCommandLineParser &parser) {
   if (parser.isSet("status")) return {{"action", "status"}};
@@ -39,10 +39,10 @@ int sendAdminRequest(const QJsonObject &request) {
 
 int main(int argc, char **argv) {
   QCoreApplication application(argc, argv);
-  QCoreApplication::setApplicationName("rigweave-stationd");
+  QCoreApplication::setApplicationName("shackcq-stationd");
   QCoreApplication::setApplicationVersion("1.0");
   QCommandLineParser parser;
-  parser.setApplicationDescription("RigWeave Remote Station Service v1");
+  parser.setApplicationDescription("ShackCQ Remote Station Service v1");
   parser.addHelpOption(); parser.addVersionOption();
   parser.addOption(QCommandLineOption({"f", "foreground"}, "Run the explicitly enabled service in the foreground"));
   parser.addOption(QCommandLineOption({"s", "status"}, "Print bounded service status"));
@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
   QLocalSocket existing;
   existing.connectToServer(AdminSocket);
   if (existing.waitForConnected(250)) {
-    QTextStream(stderr) << "Another rigweave-stationd instance already owns local administration\n";
+    QTextStream(stderr) << "Another shackcq-stationd instance already owns local administration\n";
     return 4;
   }
   QLocalServer::removeServer(AdminSocket);

@@ -15,7 +15,7 @@ notice says the software may be used by implementers free from copyright asserti
 written ITU permission. Equivalent restrictive text is present in P372 and ITURHFProp headers.
 
 Those statements do not establish an unambiguous permission to redistribute the source or data
-inside a GPL-3.0-only Android application. RigWeave therefore does not vendor, adapt, or ship any
+inside a GPL-3.0-only Android application. ShackCQ therefore does not vendor, adapt, or ship any
 v14.3 source or coefficient data in this phase. Written clarification from ITU is the precise
 legal unblocker.
 
@@ -29,7 +29,7 @@ downloaded executable code and an app-private last-good cache.
 
 ## Implemented boundary
 
-RigWeave includes only an independently written input-validation and JNI adapter boundary. It
+ShackCQ includes only an independently written input-validation and JNI adapter boundary. It
 returns explicit `LICENSE_BLOCKED` unavailability and never fabricates P.533 values. The existing
 bounded OpenHamClock REST adapter remains the truthful fallback for its current-band response.
 

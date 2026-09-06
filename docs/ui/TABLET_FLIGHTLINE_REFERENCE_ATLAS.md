@@ -1,6 +1,6 @@
 # Tablet Flightline Reference Atlas
 
-Reference device: Lenovo TB373FU (`HA248BS3`), package `app.rigweave.mobile` 0.1.0, exact APK SHA-256 `db0568854cfc7e68b66d1985b5363bf492e272ae7459ecbab1131682da54e50a`. The 41 new captures are 2944×1840, unlocked, non-blank, and stored privately under `build/evidence/tablet-reference-ce1b99f-20260825T213846Z/`. They are intentionally ignored by Git because visible operator/provider data may be private.
+Reference device: Lenovo TB373FU (`HA248BS3`), package `app.shackcq.mobile` 0.1.0, exact APK SHA-256 `db0568854cfc7e68b66d1985b5363bf492e272ae7459ecbab1131682da54e50a`. The 41 new captures are 2944×1840, unlocked, non-blank, and stored privately under `build/evidence/tablet-reference-ce1b99f-20260825T213846Z/`. They are intentionally ignored by Git because visible operator/provider data may be private.
 
 Capture used one explicit ADB serial, `192.168.4.232:46455`. It launched the already-installed app only. It did not install an APK, clear data, reveal credentials, connect radio/rotator services, invoke PTT/TUNE/Digi TX, or move hardware. Panadapter and EQ destinations were hidden by the saved tablet capability settings; Rotator was reviewed through Settings without altering that configuration.
 

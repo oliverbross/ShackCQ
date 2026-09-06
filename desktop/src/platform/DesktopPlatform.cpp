@@ -1,4 +1,4 @@
-#include "rigweave/desktop/DesktopPlatform.hpp"
+#include "shackcq/desktop/DesktopPlatform.hpp"
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -28,7 +28,7 @@
 #pragma pop_macro("signals")
 #endif
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 QMutex logMutex;
 std::unique_ptr<QFile> logFile;
@@ -38,7 +38,7 @@ QString logDirectory;
 const SecretSchema &credentialSchema() {
   static const SecretSchema schema = [] {
     SecretSchema value{};
-    value.name = "app.rigweave.desktop";
+    value.name = "app.shackcq.desktop";
     value.flags = SECRET_SCHEMA_NONE;
     value.attributes[0] = {"alias", SECRET_SCHEMA_ATTRIBUTE_STRING};
     return value;
@@ -217,7 +217,7 @@ DesktopPaths::DesktopPaths(QObject *parent) : QObject(parent) {
   m_logs = data + "/logs";
   m_exports =
       QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation) +
-      "/RigWeave Exports";
+      "/ShackCQ Exports";
   m_supportBundles = data + "/support-bundles";
 }
 void DesktopPaths::setEphemeralRoot(const QString &root) {
@@ -270,7 +270,7 @@ bool SystemCredentialVault::write(const QString &alias, const QString &label,
   }
 #ifdef Q_OS_WIN
   const std::wstring target =
-                         (QStringLiteral("RigWeave/") + alias).toStdWString(),
+                         (QStringLiteral("ShackCQ/") + alias).toStdWString(),
                      comment = label.toStdWString();
   const QByteArray bytes = secret.toUtf8();
   CREDENTIALW credential{};
@@ -281,7 +281,7 @@ bool SystemCredentialVault::write(const QString &alias, const QString &label,
   credential.CredentialBlob =
       reinterpret_cast<LPBYTE>(const_cast<char *>(bytes.constData()));
   credential.Persist = CRED_PERSIST_LOCAL_MACHINE;
-  credential.UserName = const_cast<wchar_t *>(L"RigWeave");
+  credential.UserName = const_cast<wchar_t *>(L"ShackCQ");
   if (!CredWriteW(&credential, 0)) {
     if (error)
       *error = QStringLiteral(
@@ -292,7 +292,7 @@ bool SystemCredentialVault::write(const QString &alias, const QString &label,
   return true;
 #elif defined(Q_OS_MACOS)
   const QByteArray bytes = secret.toUtf8();
-  const CFStringRef service = CFSTR("app.rigweave.desktop");
+  const CFStringRef service = CFSTR("app.shackcq.desktop");
   const CFStringRef account = alias.toCFString();
   const CFStringRef display = label.toCFString();
   const CFDataRef value = CFDataCreate(kCFAllocatorDefault,
@@ -345,7 +345,7 @@ std::optional<QString> SystemCredentialVault::read(const QString &alias,
                                                    QString *error) const {
 #ifdef Q_OS_WIN
   const std::wstring target =
-      (QStringLiteral("RigWeave/") + alias).toStdWString();
+      (QStringLiteral("ShackCQ/") + alias).toStdWString();
   PCREDENTIALW credential = nullptr;
   if (!CredReadW(target.c_str(), CRED_TYPE_GENERIC, 0, &credential)) {
     if (GetLastError() != ERROR_NOT_FOUND && error)
@@ -364,7 +364,7 @@ std::optional<QString> SystemCredentialVault::read(const QString &alias,
   const void *keys[] = {kSecClass, kSecAttrService, kSecAttrAccount,
                         kSecReturnData, kSecMatchLimit};
   const void *values[] = {kSecClassGenericPassword,
-      CFSTR("app.rigweave.desktop"), account, kCFBooleanTrue,
+      CFSTR("app.shackcq.desktop"), account, kCFBooleanTrue,
       kSecMatchLimitOne};
   const CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault, keys,
       values, 5, &kCFTypeDictionaryKeyCallBacks,
@@ -405,7 +405,7 @@ std::optional<QString> SystemCredentialVault::read(const QString &alias,
 bool SystemCredentialVault::remove(const QString &alias, QString *error) {
 #ifdef Q_OS_WIN
   const std::wstring target =
-      (QStringLiteral("RigWeave/") + alias).toStdWString();
+      (QStringLiteral("ShackCQ/") + alias).toStdWString();
   if (!CredDeleteW(target.c_str(), CRED_TYPE_GENERIC, 0) &&
       GetLastError() != ERROR_NOT_FOUND) {
     if (error)
@@ -418,7 +418,7 @@ bool SystemCredentialVault::remove(const QString &alias, QString *error) {
   const CFStringRef account = alias.toCFString();
   const void *keys[] = {kSecClass, kSecAttrService, kSecAttrAccount};
   const void *values[] = {kSecClassGenericPassword,
-      CFSTR("app.rigweave.desktop"), account};
+      CFSTR("app.shackcq.desktop"), account};
   const CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault, keys,
       values, 3, &kCFTypeDictionaryKeyCallBacks,
       &kCFTypeDictionaryValueCallBacks);
@@ -663,17 +663,17 @@ bool BoundedLogger::install(const QString &directory, QString *error) {
     return false;
   }
   for (int i = 4; i >= 1; --i) {
-    const QString from = directory + QStringLiteral("/rigweave.%1.log").arg(i),
+    const QString from = directory + QStringLiteral("/shackcq.%1.log").arg(i),
                   to =
-                      directory + QStringLiteral("/rigweave.%1.log").arg(i + 1);
+                      directory + QStringLiteral("/shackcq.%1.log").arg(i + 1);
     if (QFile::exists(from)) {
       QFile::remove(to);
       QFile::rename(from, to);
     }
   }
-  const QString active = directory + "/rigweave.log";
+  const QString active = directory + "/shackcq.log";
   if (QFileInfo(active).size() > 1048576)
-    QFile::rename(active, directory + "/rigweave.1.log");
+    QFile::rename(active, directory + "/shackcq.1.log");
   logFile = std::make_unique<QFile>(active);
   if (!logFile->open(QIODevice::WriteOnly | QIODevice::Append |
                      QIODevice::Text)) {
@@ -702,7 +702,7 @@ void BoundedLogger::handler(QtMsgType type, const QMessageLogContext &,
     logFile->write(line);
     logFile->flush();
   }
-  if (qEnvironmentVariableIntValue("RIGWEAVE_LOG_TO_STDERR") == 1) {
+  if (qEnvironmentVariableIntValue("SHACKCQ_LOG_TO_STDERR") == 1) {
     fwrite(line.constData(), 1, size_t(line.size()), stderr);
     fflush(stderr);
   }
@@ -728,7 +728,7 @@ QString SupportBundle::create(const QVariantMap &health, QString *error) const {
   const QVariantMap sanitized = sanitizeValue(health).toMap();
   const QString output =
       m_paths->supportBundles() +
-      QStringLiteral("/RigWeave-Support-%1.zip")
+      QStringLiteral("/ShackCQ-Support-%1.zip")
           .arg(QDateTime::currentDateTimeUtc().toString("yyyyMMdd-HHmmss"));
   QMap<QString, QByteArray> entries{
       {"health.json",
@@ -738,7 +738,7 @@ QString SupportBundle::create(const QVariantMap &health, QString *error) const {
        "credentials, QSO payloads/comments, raw audio/IQ, WebSocket payloads, "
        "cluster/CAT/serial traffic, and private paths are excluded.\n"},
       {"build.txt",
-       QStringLiteral("RigWeave Windows Desktop Alpha\nQt %1\nSchema 16\n")
+       QStringLiteral("ShackCQ Windows Desktop Alpha\nQt %1\nSchema 16\n")
            .arg(qVersion())
            .toUtf8()}};
   return writeZip(output, entries, error) ? output : QString{};
@@ -752,4 +752,4 @@ bool openAllowlistedExternalUrl(const QUrl &url) {
          QDesktopServices::openUrl(url);
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

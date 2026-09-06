@@ -3,7 +3,7 @@
 `scripts/check_wavelog_upstream.py` compares the reviewed Wavelog release and
 peeled commit in `upstream.json` with GitHub's latest stable release. It is
 read-only by design: a changed release fails the scheduled/manual workflow and
-produces a review artifact, but never changes the pin or RigWeave source.
+produces a review artifact, but never changes the pin or ShackCQ source.
 
 Run locally:
 

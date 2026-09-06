@@ -14,7 +14,7 @@ ms and could select the wrong parity. `DigiDecodeEvent.slotStartMillis` now
 retains exact epoch milliseconds through capture, identity, history, selection,
 engine input, re-decode and WSJT-X milliseconds-since-midnight.
 
-`rigweave-digi.sqlite` upgrades non-destructively from schema 1 to 2. It adds
+`shackcq-digi.sqlite` upgrades non-destructively from schema 1 to 2. It adds
 `slot_start_millis`, `decode_source`, `timing_exact` and
 `dial_frequency_hz`. Existing rows, sessions, drafts, gallery metadata and
 history remain. Legacy rows are converted with

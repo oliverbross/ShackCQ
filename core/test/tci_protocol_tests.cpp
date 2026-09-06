@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/tci.hpp"
+#include "shackcq/tci.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -10,7 +10,7 @@
 #include <vector>
 
 int main() {
-    using namespace rigweave::tci;
+    using namespace shackcq::tci;
 
     const auto commands = parse_status(
         " protocol:ExpertSDR3,1.8;trx_count:2;VFO:0,0,14074000; ready; bad-name:x;");

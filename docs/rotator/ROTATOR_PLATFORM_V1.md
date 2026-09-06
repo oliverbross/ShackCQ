@@ -1,6 +1,6 @@
-# RigWeave Rotator Platform Core v1
+# ShackCQ Rotator Platform Core v1
 
-This package-local Android core is based on frozen RigWeave SHA `4cd3aa3b401a9f7bc9838b94217444d5b4cae3bc`. It owns no central navigation, radio, USB permission, operating-context, configuration, satellite-provider, QSO, or System Health implementation.
+This package-local Android core is based on frozen ShackCQ SHA `4cd3aa3b401a9f7bc9838b94217444d5b4cae3bc`. It owns no central navigation, radio, USB permission, operating-context, configuration, satellite-provider, QSO, or System Health implementation.
 
 The core provides typed device profiles and capabilities, one active backend per physical identity, common native protocols, persistent bounded TCP, a serial transport port, remote `rotctld`, an embedded Hamlib port, deterministic bearing/path planning, session-only automation, explicit satellite tracking, diagnostics, settings import/export, and a responsive Compose workspace.
 

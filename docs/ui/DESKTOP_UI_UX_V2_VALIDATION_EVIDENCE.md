@@ -43,7 +43,7 @@ No additional functionality claim follows from this visual disposition.
 ## Shared and mobile regressions
 
 - Shared native CTest: normal 5/5 PASS, ASan 5/5 PASS and UBSan 5/5 PASS.
-- Rust RigWeave Flex: 98 passed, 0 failed, 1 ignored.
+- Rust ShackCQ Flex: 98 passed, 0 failed, 1 ignored.
 - Rust Tempo SSTV: 160 passed, 0 failed.
 - Vendored MFSK all-features library gate: 407 passed, 0 failed, 28 ignored.
   Its default all-target command exposes an upstream example that requires the
@@ -53,7 +53,7 @@ No additional functionality claim follows from this visual disposition.
   skips, lint with zero errors, debug APK, debug AAB and Android-test source
   compilation. No emulator/device execution or install occurred.
 - Apple: unsigned generic-device and generic-simulator builds PASS for both
-  `RigWeave` and `RigWeaveHardware`.
+  `ShackCQ` and `ShackCQHardware`.
 - Android, iOS, shared-core and Rust source are unchanged by this desktop-only
   programme.
 

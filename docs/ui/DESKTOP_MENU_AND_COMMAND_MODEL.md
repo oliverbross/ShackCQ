@@ -4,7 +4,7 @@
 
 ## Platform menus
 
-macOS uses a native `QMenuBar` created in C++ and suppresses the QML in-window menu. Qt menu roles place About, Settings and Quit into the RigWeave app menu. File, Edit, View, Radio, Navigate, Window and Help use Command shortcuts and system window chrome. Services/Hide/Show All remain platform managed.
+macOS uses a native `QMenuBar` created in C++ and suppresses the QML in-window menu. Qt menu roles place About, Settings and Quit into the ShackCQ app menu. File, Edit, View, Radio, Navigate, Window and Help use Command shortcuts and system window chrome. Services/Hide/Show All remain platform managed.
 
 Windows uses an `HMENU` attached to the `QQuickWindow` HWND with `&File`, `&Edit`, `&View`, `&Radio`, `&Navigate`, `&Tools`, `&Window`, and `&Help`. It occupies native window chrome, preserves Alt access, and leaves the entire QML client area to the active workspace. The offscreen gallery skips HWND attachment; source/hosted compilation proves that path, while physical rendering remains separately pending.
 

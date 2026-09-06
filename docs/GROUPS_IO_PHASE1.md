@@ -2,7 +2,7 @@
 
 ## Scope
 
-RigWeave provides an optional native **Groups.io** destination on iPad and expanded Android layouts. Compact Android reaches the same screen from Settings → Integrations without changing the established bottom navigation. The feature reads subscribed groups, topics and messages, caches successful pages locally, and searches downloaded content with SQLite FTS5. It does not post, reply, mirror a full archive, download attachments, poll in the background, or display the Groups.io website in a WebView.
+ShackCQ provides an optional native **Groups.io** destination on iPad and expanded Android layouts. Compact Android reaches the same screen from Settings → Integrations without changing the established bottom navigation. The feature reads subscribed groups, topics and messages, caches successful pages locally, and searches downloaded content with SQLite FTS5. It does not post, reply, mirror a full archive, download attachments, poll in the background, or display the Groups.io website in a WebView.
 
 The feature is disabled by default. Disabled means the destination is hidden, active work is cancelled, and no Groups.io request or startup sync occurs. Credentials and downloaded content remain until their separate explicit actions are used.
 
@@ -27,17 +27,17 @@ List requests use `limit=50`. Pagination treats `page_token` and `next_page_toke
 
 Settings explains that an API key, not a password, is required and links to <https://groups.io/settings/apikeys>. **Connect and Verify** performs the smallest authenticated memberships request, completes its pagination, and stores the candidate only after successful validation.
 
-- Apple stores `groupsIoApiKey` as a generic-password Keychain item for service `app.rigweave.mobile` with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
-- Android encrypts the key with an AES-GCM key generated in Android Keystore under alias `app.rigweave.mobile.groupsio.api-key`; only ciphertext is placed in feature-private preferences.
+- Apple stores `groupsIoApiKey` as a generic-password Keychain item for service `app.shackcq.mobile` with `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`.
+- Android encrypts the key with an AES-GCM key generated in Android Keystore under alias `app.shackcq.mobile.groupsio.api-key`; only ciphertext is placed in feature-private preferences.
 
 The saved key is never redisplayed. **Disconnect Groups.io** cancels work and deletes only the Keychain/Keystore-backed credential; it preserves the cache and leaves the feature enabled. **Delete Downloaded Groups.io Data** requires confirmation, closes the database, deletes the feature database/WAL/SHM and feature-owned future attachment/import directories, preserves the credential, and recreates schema version 1 on the next feature access.
 
 ## Separate database and schema
 
-The Groups.io cache has its own handle, schema version, transactions, repository operations and deletion lifecycle. It is never attached to or joined with the main RigWeave database.
+The Groups.io cache has its own handle, schema version, transactions, repository operations and deletion lifecycle. It is never attached to or joined with the main ShackCQ database.
 
-- Apple: `Application Support/RigWeave/GroupsIO/rigweave-groupsio.sqlite`
-- Android: app-private database `rigweave-groupsio.sqlite`
+- Apple: `Application Support/ShackCQ/GroupsIO/shackcq-groupsio.sqlite`
+- Android: app-private database `shackcq-groupsio.sqlite`
 
 Schema version 1 owns only:
 
@@ -70,9 +70,9 @@ Message markup is reduced to normalised plain text. Script, style, iframe and fo
 
 Repository baseline at implementation start was branch `feature/groupsio-offline-reader`, commit `c45fb567f2c6db6b986f95cf14d35964511ea26b`, with a clean worktree. Baseline SHA-256 values for the pre-existing main-database files were recorded and are checked again at completion:
 
-- `android/app/src/main/java/app/rigweave/mobile/QsoDatabase.kt`: `f3ad7766810158556860836b3a7e5dd5b87d257abac9e5dd992d736f0ae248a5`
-- `android/app/src/androidTest/java/app/rigweave/mobile/QsoDatabaseInstrumentedTest.kt`: `e1db63b39b1691c2f6464418ced399f5d0f42e5aec7e23ee59b7ad788de266f4`
-- `ios/RigWeave/QSOStore.swift`: `8874808b5bbf34cea9ffdf277aa3839ff4cb1b86713ca583bf3114ea85ec087d`
+- `android/app/src/main/java/app/shackcq/mobile/QsoDatabase.kt`: `f3ad7766810158556860836b3a7e5dd5b87d257abac9e5dd992d736f0ae248a5`
+- `android/app/src/androidTest/java/app/shackcq/mobile/QsoDatabaseInstrumentedTest.kt`: `e1db63b39b1691c2f6464418ced399f5d0f42e5aec7e23ee59b7ad788de266f4`
+- `ios/ShackCQ/QSOStore.swift`: `8874808b5bbf34cea9ffdf277aa3839ff4cb1b86713ca583bf3114ea85ec087d`
 
 Android deterministic JVM tests cover disabled/expanded/compact visibility, opaque pagination, safe text normalisation and documented error categories. Existing Android instrumentation infrastructure contains isolated-database tests for feature-only schema, repeated-page idempotency/offline reads/FTS, and deletion that preserves a supplied main-database fixture. Instrumentation is not run on an operator tablet.
 

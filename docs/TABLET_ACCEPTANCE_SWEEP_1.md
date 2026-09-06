@@ -4,7 +4,7 @@
 
 - Frozen `main`: `fb04d52df0c9ccc305125449bb188ef8e3f0185e`
 - Feature branch: `fix/tablet-acceptance-sweep-1`
-- Worktree: `/Users/oliver/Documents/Projects/RigWeave/rigweave-tablet-acceptance-sweep-1`
+- Worktree: `/Users/oliver/Documents/Projects/ShackCQ/shackcq-tablet-acceptance-sweep-1`
 - Baseline QSO database: schema 16, projection contract 5
 - Main is not modified or merged by this programme.
 - Physical, authenticated-service, audio and RF evidence remain separate from source/build evidence.

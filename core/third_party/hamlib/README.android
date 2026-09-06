@@ -19,9 +19,9 @@ Prerequisites
 
 Install the Android NDK (e.g. via Android Studio's SDK Manager or
 `sdkmanager`). USB support (libusb) is not available in the Android cross
-build, so `--without-libusb` is required. RigWeave supplies an application-
+build, so `--without-libusb` is required. ShackCQ supplies an application-
 owned external serial bridge instead of granting Hamlib direct USB access.
 
-The upstream example and current RigWeave build decision are recorded in
+The upstream example and current ShackCQ build decision are recorded in
 `docs/radio/hamlib/LICENCE_AND_PACKAGING.md` and
 `docs/radio/hamlib/TRANSPORT_BRIDGE.md`.

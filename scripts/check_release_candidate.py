@@ -11,11 +11,11 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED_DOCS = [
-    "RIGWEAVE_FINAL_WHOLE_APP_CONVERGENCE.md",
+    "SHACKCQ_FINAL_WHOLE_APP_CONVERGENCE.md",
     "FINAL_WHOLE_APP_COMPLETION_MATRIX.md",
     "FINAL_WHOLE_APP_OWNERSHIP.md",
     "FINAL_INTEGRATED_LIVE_ACCEPTANCE.md",
-    "RIGWEAVE_FINAL_CONVERGENCE.md",
+    "SHACKCQ_FINAL_CONVERGENCE.md",
     "FINAL_CORE_COMPLETION_MATRIX.md",
     "FINAL_CORE_OWNERSHIP.md",
     "RELEASE_CANDIDATE_READINESS.md",
@@ -37,7 +37,7 @@ SCHEMA_PATTERNS = {
     "Contest schema 2": r"class ContestSessionStore[^\n]+SQLiteOpenHelper\(context, name, null, 2\)",
     "Contest staging table": r"CREATE TABLE IF NOT EXISTS contest_qso_entry",
     "DX Chaser schema 1": r"class DxChaserStore[^\n]+SQLiteOpenHelper\(context, DATABASE_NAME, null, 1\)",
-    "Band Maps preferences only": r"BAND_MAP_PREFERENCES\s*=\s*\"rigweave-bandmaps-v1\"",
+    "Band Maps preferences only": r"BAND_MAP_PREFERENCES\s*=\s*\"shackcq-bandmaps-v1\"",
 }
 
 
@@ -51,7 +51,7 @@ for name in REQUIRED_DOCS:
 
 source = "\n".join(
     path.read_text(errors="replace")
-    for path in (ROOT / "android/app/src/main/java/app/rigweave/mobile").rglob("*.kt")
+    for path in (ROOT / "android/app/src/main/java/app/shackcq/mobile").rglob("*.kt")
 )
 for label, pattern in SCHEMA_PATTERNS.items():
     if not re.search(pattern, source):
@@ -59,7 +59,7 @@ for label, pattern in SCHEMA_PATTERNS.items():
 
 fixture_path = ROOT / "fixtures/configuration/golden-v1.json"
 fixture = json.loads(fixture_path.read_text())
-if fixture.get("format_signature") != "RIGWEAVE_CONFIGURATION_BUNDLE" or fixture.get("schema") != 1:
+if fixture.get("format_signature") != "SHACKCQ_CONFIGURATION_BUNDLE" or fixture.get("schema") != 1:
     fail("configuration fixture signature/schema mismatch")
 canonical = json.dumps(fixture["sections"], separators=(",", ":"), ensure_ascii=False)
 if hashlib.sha256(canonical.encode()).hexdigest() != fixture.get("payload_sha256"):
@@ -69,7 +69,7 @@ for forbidden in ("password", "secret", "api_key", "credential", "tx_arm", "tran
     if forbidden in serialized:
         fail(f"configuration fixture contains forbidden key {forbidden}")
 
-health = (ROOT / "android/app/src/main/java/app/rigweave/mobile/SystemHealthCentre.kt").read_text()
+health = (ROOT / "android/app/src/main/java/app/shackcq/mobile/SystemHealthCentre.kt").read_text()
 for forbidden in ("message_body", "qso_payload", "credential_value"):
     if forbidden in health.lower():
         fail(f"support-bundle implementation contains forbidden payload marker {forbidden}")

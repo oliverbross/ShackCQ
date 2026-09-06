@@ -2,9 +2,9 @@
 
 ## Truth model
 
-RfObservationModel is derived, non-canonical state beneath RigWeave's existing QSO, spot, Neural DX, Band Health, and provider owners. Every row records source identity, observation time, evidence class (LIVE, HISTORICAL, or OUTLOOK), endpoint precision, coordinates, band/mode, distance/bearing, and applicable worked/confirmed/needed fields.
+RfObservationModel is derived, non-canonical state beneath ShackCQ's existing QSO, spot, Neural DX, Band Health, and provider owners. Every row records source identity, observation time, evidence class (LIVE, HISTORICAL, or OUTLOOK), endpoint precision, coordinates, band/mode, distance/bearing, and applicable worked/confirmed/needed fields.
 
-Reported SNR is displayed only when the source genuinely supplied it. A logged QSO contributes a historical path and no invented SNR. COARSE endpoints are hollow and never presented as exact. Demo records load only when RIGWEAVE_DESKTOP_DEMO=1.
+Reported SNR is displayed only when the source genuinely supplied it. A logged QSO contributes a historical path and no invented SNR. COARSE endpoints are hollow and never presented as exact. Demo records load only when SHACKCQ_DESKTOP_DEMO=1.
 
 Filters run in C++ for source, band, mode, evidence class, age, distance, callsign, worked, confirmed, needed DXCC, freshness, and explicit long path. Preferences are schema-versioned and safe to persist. Storage is capped at 100,000 observations. Rendering samples at most 4,096 deterministic rows plus the selected row, avoiding thousands of QML delegates or unbounded geometry.
 

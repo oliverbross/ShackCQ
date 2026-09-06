@@ -1,6 +1,6 @@
 # SDRoxide Android v2 Crosswalk
 
-| Capability | RigWeave owner | Status | Boundary |
+| Capability | ShackCQ owner | Status | Boundary |
 |---|---|---|---|
 | TCI safe setters/readback | `AndroidTciBackend` plus shared TCI codec | SOURCE_COMPLETE | Receive/control only; latest-write-wins; no reconnect replay |
 | Receiver linking | `SdrOperationalV2` | SOURCE_COMPLETE | Explicit, at most one peer receiver |

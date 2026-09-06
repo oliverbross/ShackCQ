@@ -1,18 +1,18 @@
 # OpenHamClock parity ledger
 
-Audited against `accius/openhamclock` stable `main` at `d4a50eaaa61d3432a1de5f80cbe61790739930a5` (26.5.0) on 2026-08-20. Status means an operator-visible Android outcome, not the existence of a model, enum, provider, document, or test. Dedicated RigWeave workspaces remain authoritative.
+Audited against `accius/openhamclock` stable `main` at `d4a50eaaa61d3432a1de5f80cbe61790739930a5` (26.5.0) on 2026-08-20. Status means an operator-visible Android outcome, not the existence of a model, enum, provider, document, or test. Dedicated ShackCQ workspaces remain authoritative.
 
-Status vocabulary: `NATIVE` is a working native Home outcome; `PARTIAL` is useful but lacks stable behaviour; `DELEGATED` routes to a stronger native RigWeave workspace; `MISSING` is not available; `EXCLUDED` is intentionally outside RigWeave Home.
+Status vocabulary: `NATIVE` is a working native Home outcome; `PARTIAL` is useful but lacks stable behaviour; `DELEGATED` routes to a stronger native ShackCQ workspace; `MISSING` is not available; `EXCLUDED` is intentionally outside ShackCQ Home.
 
 ## Stable panels
 
 All IDs are the keys returned by `panelDefs` in upstream `src/DockableApp.jsx`. Conditional stable panels (`rotator`, `ambient`) remain inventoried.
 
-| Upstream id / name | Upstream paths | Operator outcome | RigWeave status | RigWeave owner/files | Provider owner | Notes / gaps |
+| Upstream id / name | Upstream paths | Operator outcome | ShackCQ status | ShackCQ owner/files | Provider owner | Notes / gaps |
 |---|---|---|---|---|---|---|
-| `world-map` / World Map | `src/DockableApp.jsx`, `src/components/WorldMap.jsx` | Map-first RF activity view | NATIVE | `HamClockHomeMap.kt`, `HamClockRegistries.kt` | RigWeave controllers | Persistent lifecycle-managed MapLibre view; DARK and LIGHT use attributed OpenFreeMap network styles, with bounded GeoJSON layers and guarded camera persistence. |
+| `world-map` / World Map | `src/DockableApp.jsx`, `src/components/WorldMap.jsx` | Map-first RF activity view | NATIVE | `HamClockHomeMap.kt`, `HamClockRegistries.kt` | ShackCQ controllers | Persistent lifecycle-managed MapLibre view; DARK and LIGHT use attributed OpenFreeMap network styles, with bounded GeoJSON layers and guarded camera persistence. |
 | `map-list-view` / Map Data (text view) | `src/DockableApp.jsx`, `src/components/MapDataListView.jsx` | Accessible text equivalent of map layers | NATIVE | `HamClockHomeMap.kt` | Same native snapshots | Low-data and map-failure paths expose the same visible bounded layers and actions without tile work. |
-| `de-location` / DE Location | `src/DockableApp.jsx` | Station identity and position | NATIVE | `HamClockHomeScreen.kt`, `AppController.kt`, `WavelogController.kt` | RigWeave local/Wavelog | Live station identity; no upstream component embedded. |
+| `de-location` / DE Location | `src/DockableApp.jsx` | Station identity and position | NATIVE | `HamClockHomeScreen.kt`, `AppController.kt`, `WavelogController.kt` | ShackCQ local/Wavelog | Live station identity; no upstream component embedded. |
 | `dx-location` / DX Target | `src/DockableApp.jsx` | Current DX target and path | NATIVE | `HamClockHomeScreen.kt`, `HamClockHomeMap.kt` | Callbook + CTY + DX cluster | Persisted manual target, grid/coordinate resolution, lock and clear; locked manual state blocks automatic replacement. |
 | `analog-clock` / Analog Clock | `src/DockableApp.jsx`, `src/components/AnalogClockPanel.jsx` | Analogue clock face | NATIVE | `HamClockAnalogClock.kt` | Local time calculation | Optional registry module; UTC/local selection follows Home display preferences. |
 | `solar` / Solar (all views) | `src/DockableApp.jsx`, `src/components/SolarPanel.jsx` | Solar condition overview | PARTIAL | `HamClockHomeScreen.kt`, `FeatureController.kt` | NOAA SWPC + local astronomy | Core indices/X-ray/celestial truth; not every upstream view. |
@@ -23,9 +23,9 @@ All IDs are the keys returned by `panelDefs` in upstream `src/DockableApp.jsx`. 
 | `propagation` / Propagation (all views) | `src/DockableApp.jsx`, `src/components/PropagationPanel.jsx` | Path prediction overview | PARTIAL | `HamClockPropagationRepository.kt`, `HamClockHomeScreen.kt` | openhamclock.com public propagation API | Schema-validated live/cache/fallback state; provider dependency remains. |
 | `propagation-chart` / VOACAP Chart | `src/DockableApp.jsx`, `src/components/PropagationPanel.jsx` | Time/band prediction chart | PARTIAL | `HamClockHomeScreen.kt` | openhamclock.com | Current path/band snapshot, not a full chart. |
 | `propagation-bars` / VOACAP Bars | `src/DockableApp.jsx`, `src/components/PropagationPanel.jsx` | Per-band reliability | NATIVE | `HamClockHomeScreen.kt`, `HamClockPropagationRepository.kt` | openhamclock.com | Bounded per-band reliability/status rows. |
-| `band-conditions` / Band Conditions | `src/DockableApp.jsx`, `src/components/BandConditionsPanel.jsx` | Current usable-band summary | NATIVE | `HamClockHomeScreen.kt`, `NeuralDxController.kt` | RigWeave measured data | Behaviour parity from native RF evidence. |
-| `band-health` / Band Health | `src/DockableApp.jsx`, `src/components/BandHealthPanel.jsx` | Provider health by band | NATIVE | `HamClockRfEvidence.kt`, `HamClockHomeScreen.kt`, `NeuralDxScreen.kt`, `ProgressScreen.kt` | RigWeave measured evidence | One shared immutable live snapshot; indexed `qso_projection` aggregates are historical comparison only. Stale/degraded sources are explicit and the reducer never reports `CLOSED`. |
-| `band-activity` / Band Activity | `src/DockableApp.jsx`, `src/components/BandActivityHeatmap.jsx` | Activity counts/heat | NATIVE | `HamClockHomeScreen.kt`, `NeuralDxController.kt` | RigWeave measured data | Native activity summary. |
+| `band-conditions` / Band Conditions | `src/DockableApp.jsx`, `src/components/BandConditionsPanel.jsx` | Current usable-band summary | NATIVE | `HamClockHomeScreen.kt`, `NeuralDxController.kt` | ShackCQ measured data | Behaviour parity from native RF evidence. |
+| `band-health` / Band Health | `src/DockableApp.jsx`, `src/components/BandHealthPanel.jsx` | Provider health by band | NATIVE | `HamClockRfEvidence.kt`, `HamClockHomeScreen.kt`, `NeuralDxScreen.kt`, `ProgressScreen.kt` | ShackCQ measured evidence | One shared immutable live snapshot; indexed `qso_projection` aggregates are historical comparison only. Stale/degraded sources are explicit and the reducer never reports `CLOSED`. |
+| `band-activity` / Band Activity | `src/DockableApp.jsx`, `src/components/BandActivityHeatmap.jsx` | Activity counts/heat | NATIVE | `HamClockHomeScreen.kt`, `NeuralDxController.kt` | ShackCQ measured data | Native activity summary. |
 | `ibp` / IBP Beacons | `src/DockableApp.jsx`, `src/components/IBPPanel.jsx` | Current beacon schedule | NATIVE | `HamClockRfEvidence.kt`, `HamClockHomeMap.kt`, `HamClockHomeScreen.kt` | NCDXF/IARU local manifest | Versioned/hash-recorded 18-site manifest, five bands, 10-second slots and 180-second cycle; schedule is explicitly not heard evidence. |
 | `dx-cluster` / DX Cluster | `src/DockableApp.jsx`, `src/components/DXClusterPanel.jsx` | Live DX spots | NATIVE | `HamClockHomeScreen.kt`, `FeatureController.kt` | User-configured DX cluster | Home summary plus authoritative DX workspace. |
 | `dx-news-ticker` / DX News | `src/components/DXNewsTicker.jsx`, `server/routes/dxNewsSources/*`, `server/utils/dxNewsMerge.js` | Source-attributed current/upcoming DX news | NATIVE | `HamClockHomeScreen.kt`, `NeuralDxScreen.kt`, `DxNewsPskRepository.kt` | DX-World RSS + shared NG3K ADXO | Typed merge, bounded cache, source truth, search/filter, exact article/log/watch actions. DXNews.com is explicitly unavailable because no stable direct structured contract was verified. |
@@ -52,9 +52,9 @@ All IDs are the keys returned by `panelDefs` in upstream `src/DockableApp.jsx`. 
 
 These are all 24 static modules in upstream `src/plugins/layerRegistry.js`; local auto-discovered plugins are not stable inventory.
 
-| Upstream id / name | Upstream path | Operator outcome | RigWeave status | RigWeave owner/files | Provider owner | Notes / gaps |
+| Upstream id / name | Upstream path | Operator outcome | ShackCQ status | ShackCQ owner/files | Provider owner | Notes / gaps |
 |---|---|---|---|---|---|---|
-| `n3fjp_logged_qsos` / Logged QSOs (N3FJP) | `src/plugins/layers/useN3FJPLoggedQSOs.js` | Logged-QSO map overlay | NATIVE | `HamClockHomeMap.kt`, `QsoDatabase.kt` | RigWeave local/Wavelog | Bounded 120-row compact projection query replaces N3FJP-specific transport and canonical JSON decoding. |
+| `n3fjp_logged_qsos` / Logged QSOs (N3FJP) | `src/plugins/layers/useN3FJPLoggedQSOs.js` | Logged-QSO map overlay | NATIVE | `HamClockHomeMap.kt`, `QsoDatabase.kt` | ShackCQ local/Wavelog | Bounded 120-row compact projection query replaces N3FJP-specific transport and canonical JSON decoding. |
 | `wxradar` / Weather Radar | `src/plugins/layers/useWXRadar.js` | Radar overlay | MISSING | — | — | Not currently available. |
 | `owm-clouds` / Global Clouds (OWM) | `src/plugins/layers/useOWMClouds.js` | Cloud overlay | MISSING | — | OpenWeatherMap | Not currently available. |
 | `citylights` / City Lights (Night) | `src/plugins/layers/useCityLights.js` | Night imagery | MISSING | — | — | Grayline is native; imagery is not. |
@@ -67,9 +67,9 @@ These are all 24 static modules in upstream `src/plugins/layerRegistry.js`; loca
 | `grayline` / Gray Line | `src/plugins/layers/useGrayLine.js` | Day/night terminator | NATIVE | `NeuralDxMap.kt`, `HamClockHomeMap.kt` | Local calculation | GeoJSON night fill and dateline-safe terminator line. |
 | `lightning` / Lightning | `src/plugins/layers/useLightning.js` | Lightning strikes | NATIVE | `NeuralDxController.kt`, `HamClockHomeMap.kt` | Public lightning feed | Bounded selectable GeoJSON points with source truth. |
 | `rbn` / Reverse Beacon Network | `src/plugins/layers/useRBN.js` | RBN spots | NATIVE | `FeatureController.kt`, `HamClockRfEvidence.kt`, `HamClockHomeMap.kt` | Operator-configured retail DX cluster | Typed, bounded RBN observations parsed from the existing retail cluster socket; no official raw RBN firehose. |
-| `contest_qsos` / Contest QSOs | `src/plugins/layers/useContestQsos.js` | Contest-specific QSO overlay | PARTIAL | `QsoDatabase.kt`, `HamClockHomeScreen.kt` | RigWeave log | Logged QSOs visible; contest-specific selection is absent. |
+| `contest_qsos` / Contest QSOs | `src/plugins/layers/useContestQsos.js` | Contest-specific QSO overlay | PARTIAL | `QsoDatabase.kt`, `HamClockHomeScreen.kt` | ShackCQ log | Logged QSOs visible; contest-specific selection is absent. |
 | `great-circle` / DE/DX Great Circle | `src/plugins/layers/useGreatCircle.js` | DE-to-DX path | NATIVE | `NeuralDxMap.kt`, `HamClockHomeScreen.kt` | Local geometry | Native reporting paths. |
-| `voacap-heatmap` / VOACAP Propagation Map | `src/plugins/layers/useVOACAPHeatmap.js` | Propagation heatmap | PARTIAL | `HamClockPropagationRepository.kt`, `NeuralDxMap.kt` | openhamclock.com + RigWeave evidence | Path prediction exists; no full heatmap. |
+| `voacap-heatmap` / VOACAP Propagation Map | `src/plugins/layers/useVOACAPHeatmap.js` | Propagation heatmap | PARTIAL | `HamClockPropagationRepository.kt`, `NeuralDxMap.kt` | openhamclock.com + ShackCQ evidence | Path prediction exists; no full heatmap. |
 | `muf-map` / MUF Map | `src/plugins/layers/useMUFMap.js` | Global MUF layer | MISSING | — | — | Not currently available. |
 | `satellites` / Satellite Tracks | `src/plugins/layers/useSatelliteLayer.js` | Satellite positions/tracks | PARTIAL | `SatelliteOperationsController.kt`, `HamClockHomeScreen.kt` | CelesTrak/SatNOGS/local SGP4 | Positions visible; Home track/footprint preferences inactive. |
 | `meshtastic` / Meshtastic Nodes | `src/plugins/layers/useMeshtastic.js` | Mesh nodes | MISSING | — | — | Not currently available. |

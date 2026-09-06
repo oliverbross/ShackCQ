@@ -1,4 +1,4 @@
-# Executed Branch and Worktree Cleanup — RigWeave 0.1.0 RC1
+# Executed Branch and Worktree Cleanup — ShackCQ 0.1.0 RC1
 
 Cleanup is intentionally deferred until the release is published and all equality/hash checks pass. Only refs explicitly classified SAFE_TO_DELETE_AFTER_RELEASE may be removed. Canonical final/main, the v6 starting branch, protected `local-main-27c70d0-preserved`, and `origin/recovery/local-main-27c70d0` must remain.
 

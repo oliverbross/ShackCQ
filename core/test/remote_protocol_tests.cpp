@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/remote.h"
+#include "shackcq/remote.h"
 
 #include <cassert>
 #include <iostream>
 
-using namespace rigweave::remote;
+using namespace shackcq::remote;
 
 int main() {
   SessionAuthority authority;

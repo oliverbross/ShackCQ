@@ -1,4 +1,4 @@
-#include "rigweave/desktop/DesktopApplication.hpp"
+#include "shackcq/desktop/DesktopApplication.hpp"
 
 #include <QFile>
 #include <QDirIterator>
@@ -7,7 +7,7 @@
 
 #include <algorithm>
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 
 class DesktopUiContractTests final : public QObject {
   Q_OBJECT
@@ -61,7 +61,7 @@ void DesktopUiContractTests::commandRegistryIsCompleteAndUnique() {
 }
 
 void DesktopUiContractTests::shellUsesCanonicalCommandsAndNativeMenus() {
-  QFile file(QStringLiteral(RIGWEAVE_DESKTOP_QML_DIR "/App/Main.qml"));
+  QFile file(QStringLiteral(SHACKCQ_DESKTOP_QML_DIR "/App/Main.qml"));
   QVERIFY(file.open(QIODevice::ReadOnly));
   const QByteArray qml = file.readAll();
   QVERIFY(qml.contains("Desktop.invokeCommand"));
@@ -71,7 +71,7 @@ void DesktopUiContractTests::shellUsesCanonicalCommandsAndNativeMenus() {
   QVERIFY(qml.contains("EDIT LAYOUT"));
   QVERIFY(qml.contains("Done Editing"));
   QVERIFY(!qml.contains("SplitView"));
-  QFile appSource(QStringLiteral(RIGWEAVE_DESKTOP_APP_DIR "/main.cpp"));
+  QFile appSource(QStringLiteral(SHACKCQ_DESKTOP_APP_DIR "/main.cpp"));
   QVERIFY(appSource.open(QIODevice::ReadOnly));
   const QByteArray nativeMenus = appSource.readAll();
   QVERIFY(nativeMenus.contains("buildNativeMenuBar"));
@@ -80,13 +80,13 @@ void DesktopUiContractTests::shellUsesCanonicalCommandsAndNativeMenus() {
   QVERIFY(nativeMenus.contains("addMenu(L\"&Navigate\")"));
   QVERIFY(nativeMenus.contains("view.editLayout"));
   QVERIFY(qml.contains("Accessible.name"));
-  QVERIFY(!qml.contains("RigWeave Windows Desktop"));
+  QVERIFY(!qml.contains("ShackCQ Windows Desktop"));
 }
 
 void DesktopUiContractTests::routedWorkspacesUseOfficialLayoutsWithExplicitEditing() {
-  QFile canvas(QStringLiteral(RIGWEAVE_DESKTOP_QML_DIR
+  QFile canvas(QStringLiteral(SHACKCQ_DESKTOP_QML_DIR
                               "/Components/WorkspaceCanvas.qml"));
-  QFile panel(QStringLiteral(RIGWEAVE_DESKTOP_QML_DIR
+  QFile panel(QStringLiteral(SHACKCQ_DESKTOP_QML_DIR
                              "/Components/CanvasPanel.qml"));
   QVERIFY(canvas.open(QIODevice::ReadOnly));
   QVERIFY(panel.open(QIODevice::ReadOnly));
@@ -123,14 +123,14 @@ void DesktopUiContractTests::routedWorkspacesUseOfficialLayoutsWithExplicitEditi
       "Settings/SettingsPage.qml", "Health/HealthPage.qml",
       "Settings/AboutPage.qml",  "Home/ShackDisplay.qml"};
   for (const QString &relative : routedPages) {
-    QFile page(QStringLiteral(RIGWEAVE_DESKTOP_QML_DIR "/") + relative);
+    QFile page(QStringLiteral(SHACKCQ_DESKTOP_QML_DIR "/") + relative);
     QVERIFY2(page.open(QIODevice::ReadOnly), qPrintable(relative));
     const QByteArray source = page.readAll();
     QVERIFY2(source.contains("WorkspaceCanvas"), qPrintable(relative));
     QVERIFY2(source.contains("CanvasPanel"), qPrintable(relative));
   }
 
-  QFile application(QStringLiteral(RIGWEAVE_DESKTOP_APP_DIR
+  QFile application(QStringLiteral(SHACKCQ_DESKTOP_APP_DIR
                                    "/DesktopApplication.cpp"));
   QVERIFY(application.open(QIODevice::ReadOnly));
   const QByteArray applicationSource = application.readAll();
@@ -149,7 +149,7 @@ void DesktopUiContractTests::originalIconFamilyCoversEveryWorkspaceDestination()
     const QVariantMap command = value.toMap();
     if (!command.value("workspace").toBool())
       continue;
-    const QString path = QStringLiteral(RIGWEAVE_DESKTOP_ICON_DIR "/") +
+    const QString path = QStringLiteral(SHACKCQ_DESKTOP_ICON_DIR "/") +
                          command.value("icon").toString() + QStringLiteral(".svg");
     QFile file(path);
     QVERIFY2(file.open(QIODevice::ReadOnly), qPrintable(path));

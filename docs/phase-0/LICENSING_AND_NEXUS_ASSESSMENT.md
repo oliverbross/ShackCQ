@@ -4,7 +4,7 @@
 
 This is technical licence due diligence, not legal advice. It records declarations and practical release gates; it does not decide ownership, trademark rights, App Store compatibility, or provider redistribution terms.
 
-## RigWeave baseline
+## ShackCQ baseline
 
 - Before Phase 0, the repository had no root COPYING or LICENSE and no project-wide SPDX declaration.
 - Phase 0 adopts GPL-3.0-only and adds the unmodified GNU GPL version 3 text in COPYING.
@@ -45,7 +45,7 @@ GPLv3-covered source development and local device builds may continue. Distribut
 
 Every distributed covered binary must map to an immutable source commit/tag and retain:
 
-- complete corresponding source for RigWeave and incorporated covered components;
+- complete corresponding source for ShackCQ and incorporated covered components;
 - reproducible build instructions and required tool versions;
 - exact dependency manifests/resolution data and source offers/access;
 - applicable patches, generated inputs, build scripts, notices and attribution;
@@ -69,23 +69,23 @@ GPLv3 permits charging for binaries, support, and services.
 
 Nexus NOTICE consistently explains a GPL-3.0-only combined work and extensive upstream lineage. SECURITY.md line 120 at the inspected commit says GPL-3.0-or-later; this conflicts with Cargo/NOTICE and is treated as a stale upstream document, not as permission to ignore component-level terms.
 
-Architecture: React/TypeScript UI → Tauri shell → Rust domain crates → vendored/native libtempo. The Tauri/React shell is reference-only for RigWeave.
+Architecture: React/TypeScript UI → Tauri shell → Rust domain crates → vendored/native libtempo. The Tauri/React shell is reference-only for ShackCQ.
 
 ## Nexus candidate matrix
 
 | Candidate | Exact upstream paths | Evidence/coupling | Preferred later strategy | Risk/phase |
 |---|---|---|---|---|
-| Flex discovery/control/VITA | crates/tempo-net/src/flexdisc.rs, flexcat.rs, flexvita.rs | Pure protocol parsers/encoders with unit tests; official API facts claimed; SmartLink auth is not established for RigWeave | Audit direct Rust reuse behind narrow C ABI or GPL-attributed C++ adaptation; revalidate with official Flex docs | High; Phase 5A/5B |
+| Flex discovery/control/VITA | crates/tempo-net/src/flexdisc.rs, flexcat.rs, flexvita.rs | Pure protocol parsers/encoders with unit tests; official API facts claimed; SmartLink auth is not established for ShackCQ | Audit direct Rust reuse behind narrow C ABI or GPL-attributed C++ adaptation; revalidate with official Flex docs | High; Phase 5A/5B |
 | Flex spectrum/DAX | crates/tempo-audio/src/flexspectrum.rs, flexdax.rs | Depends on tempo-app Engine/global state, sockets/audio/device features; physical verification comments are upstream-specific | Extract only rendering-independent protocol/data pieces; reject wholesale audio orchestration | High; Phase 5B/5C |
 | Propagation/opportunity ranking | crates/propagation/src/advisor.rs, needalert.rs, model.rs, spot.rs and related tests | Mostly pure Rust with serde; large tested domain surface | Focused crate/C ABI evaluation or behavioural reimplementation | Medium; Phase 2/4 |
 | POTA/SOTA spot parsing | crates/propagation/src/pota.rs and live/pota.rs | Pure parsers separated from reqwest live adapter; no WWFF equivalent established | Prefer focused parser/domain assessment; independently confirm provider terms/data | Medium; Phase 2 |
 | Awards/progress | crates/propagation/src/awards.rs, achievements.rs, journey.rs | Coupled to Nexus models/catalogues; data terms vary | Behavioural/reference-only until a bounded model is selected | Medium/high; Phase 4 |
 | QRZ/Club Log/eQSL/LoTW | crates/propagation/src/live/qrz.rs, clublog.rs, eqsl.rs, lotw.rs plus tempo-core helpers | Network transports include redirect/error safeguards; credentials and provider contracts remain app-specific | Reuse pure formatting/validation only after authority/secret review; likely adapt behaviour | High; Phase 4 |
-| Spectrum DSP | crates/tempo-core/src/spectrum.rs | Rendering-independent pure DSP, many tests, intentionally no serde model | Compare against existing RigWeave DSP first; reference-only unless a measured defect justifies derived reuse | Medium; Phase 1A |
-| Audio/CAT/PTT safety | crates/tempo-audio and tempo-core/src/tx.rs/qso.rs | Desktop/audio/Hamlib/global-engine coupling and digital-mode assumptions | Reject wholesale; extract safety ideas only with independent RigWeave design | High; later radio phases |
+| Spectrum DSP | crates/tempo-core/src/spectrum.rs | Rendering-independent pure DSP, many tests, intentionally no serde model | Compare against existing ShackCQ DSP first; reference-only unless a measured defect justifies derived reuse | Medium; Phase 1A |
+| Audio/CAT/PTT safety | crates/tempo-audio and tempo-core/src/tx.rs/qso.rs | Desktop/audio/Hamlib/global-engine coupling and digital-mode assumptions | Reject wholesale; extract safety ideas only with independent ShackCQ design | High; later radio phases |
 | Logbook/durable queues | tempo-app/tempo-core store/logbook/outbox-related modules | Significant Nexus domain/global-state coupling; some queues are digital-message rather than upload outboxes | Behavioural/reference-only until an exact connector/outbox component is located | High; Phase 4 |
 | Offline catalogues/updaters | crates/propagation/data and live modules | Numerous separate data copyrights/terms documented in NOTICE | Reject copying data wholesale; independently source licensed programme data | High; Phase 2/4 |
-| Tauri/React UI | ui and src-tauri | Desktop shell with roughly 240 commands and global glue | Reject for RigWeave clients | Outside settled stack |
+| Tauri/React UI | ui and src-tauri | Desktop shell with roughly 240 commands and global glue | Reject for ShackCQ clients | Outside settled stack |
 | WSJT-X/vendored modems/DeepCW/SSTV | libtempo, digital-mode crates, vendored resources | Mixed GPL/AGPL/MIT/native/data notices; unrelated to approved near roadmap | Reject/defer unless separately authorised | Out of scope |
 
 ## Integration rules

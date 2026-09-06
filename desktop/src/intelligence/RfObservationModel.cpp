@@ -1,4 +1,4 @@
-#include "rigweave/desktop/RfObservationModel.hpp"
+#include "shackcq/desktop/RfObservationModel.hpp"
 
 #include <QDateTime>
 #include <QVector3D>
@@ -9,7 +9,7 @@
 #define M_PI 3.14159265358979323846
 #endif
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 constexpr double EarthKm = 6371.0088;
 double radians(double v) { return qDegreesToRadians(v); }
@@ -412,4 +412,4 @@ void RfObservationModel::loadDeterministicDemo() {
           {"confirmed", false}});
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

@@ -53,7 +53,7 @@ CATEGORIES = {
 def request_json(url: str) -> Any:
     request = urllib.request.Request(url, headers={
         "Accept": "application/vnd.github+json",
-        "User-Agent": "RigWeave-SDRoxide-Upstream-Watch/1",
+        "User-Agent": "ShackCQ-SDRoxide-Upstream-Watch/1",
         "X-GitHub-Api-Version": "2022-11-28",
     })
     token = os.environ.get("GITHUB_TOKEN", "").strip()

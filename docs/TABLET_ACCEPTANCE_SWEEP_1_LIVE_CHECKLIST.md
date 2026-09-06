@@ -5,7 +5,7 @@ Candidate identity must match the exact pushed fix/tablet-acceptance-sweep-1 SHA
 ## Protected device gate
 
 - [ ] Confirm Lenovo model, serial and Android version.
-- [ ] Confirm app.rigweave.mobile is installed before any state-affecting action.
+- [ ] Confirm app.shackcq.mobile is installed before any state-affecting action.
 - [ ] Record current version, UID, signing/APK information and app-data size.
 - [ ] Create the fresh external protected backup, hash manifest and restoration notes.
 - [ ] Install only with adb install -r; stop on signature or replace failure.

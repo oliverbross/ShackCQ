@@ -24,7 +24,7 @@ API_ROOT = "https://api.github.com/repos/wavelog/wavelog"
 def request_json(url: str) -> Any:
     request = urllib.request.Request(url, headers={
         "Accept": "application/vnd.github+json",
-        "User-Agent": "RigWeave-Wavelog-Upstream-Watch/1",
+        "User-Agent": "ShackCQ-Wavelog-Upstream-Watch/1",
         "X-GitHub-Api-Version": "2022-11-28",
     })
     token = os.environ.get("GITHUB_TOKEN", "").strip()

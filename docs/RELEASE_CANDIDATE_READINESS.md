@@ -66,7 +66,7 @@ These are unsigned/debug host outputs and were not installed or distributed.
 
 ## Sweep 2 delta
 
-Sweep 2 adds the integrated radio profile/platform and rotator runtime. The required release shape is an arm64-only tablet debug APK built with `-PrigweaveAbi=arm64-v8a` (ceiling 130 MB) and a four-ABI release AAB (ceiling 60 MB). Exact artifact sizes, hashes, hosted jobs and protected-tablet install evidence must be refreshed at the final integration SHA; older artifacts above are not evidence for Sweep 2.
+Sweep 2 adds the integrated radio profile/platform and rotator runtime. The required release shape is an arm64-only tablet debug APK built with `-PshackcqAbi=arm64-v8a` (ceiling 130 MB) and a four-ABI release AAB (ceiling 60 MB). Exact artifact sizes, hashes, hosted jobs and protected-tablet install evidence must be refreshed at the final integration SHA; older artifacts above are not evidence for Sweep 2.
 
 Physical QMX, RGO ONE and rotator behavior remains pending and must not be inferred from package or install success.
 

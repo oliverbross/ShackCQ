@@ -14,18 +14,18 @@ import subprocess
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMAS = {"qso": 16, "neural": 5, "contest": 2, "digi": 2, "groups_io": 2, "dx_chaser": 1}
 EXPECTED_NAMES = {
-    "android_apk": "RigWeave-Android-arm64-v0.1.0-rc.1.apk",
-    "android_aab": "RigWeave-Android-four-ABI-v0.1.0-rc.1.aab",
-    "ios_simulator": "RigWeave-iOS-Simulator-v0.1.0-rc.1.zip",
-    "ios_xcarchive": "RigWeave-iOS-unsigned-XCArchive-v0.1.0-rc.1.zip",
-    "windows_zip": "RigWeave-Windows-x64-portable-v0.1.0-rc.1.zip",
-    "windows_setup": "RigWeave-Windows-x64-setup-v0.1.0-rc.1.exe",
-    "macos_zip": "RigWeave-macOS-arm64-unsigned-v0.1.0-rc.1.zip",
-    "linux_tar": "RigWeave-Linux-x86_64-v0.1.0-rc.1.tar.gz",
-    "linux_deb": "RigWeave-Linux-x86_64-v0.1.0-rc.1.deb",
-    "stationd_x64": "RigWeave-stationd-Linux-x86_64-v0.1.0-rc.1.tar.gz",
-    "stationd_arm64": "RigWeave-stationd-Linux-aarch64-v0.1.0-rc.1.tar.gz",
-    "source": "RigWeave-source-v0.1.0-rc.1.tar.gz",
+    "android_apk": "ShackCQ-Android-arm64-v0.1.0-rc.1.apk",
+    "android_aab": "ShackCQ-Android-four-ABI-v0.1.0-rc.1.aab",
+    "ios_simulator": "ShackCQ-iOS-Simulator-v0.1.0-rc.1.zip",
+    "ios_xcarchive": "ShackCQ-iOS-unsigned-XCArchive-v0.1.0-rc.1.zip",
+    "windows_zip": "ShackCQ-Windows-x64-portable-v0.1.0-rc.1.zip",
+    "windows_setup": "ShackCQ-Windows-x64-setup-v0.1.0-rc.1.exe",
+    "macos_zip": "ShackCQ-macOS-arm64-unsigned-v0.1.0-rc.1.zip",
+    "linux_tar": "ShackCQ-Linux-x86_64-v0.1.0-rc.1.tar.gz",
+    "linux_deb": "ShackCQ-Linux-x86_64-v0.1.0-rc.1.deb",
+    "stationd_x64": "ShackCQ-stationd-Linux-x86_64-v0.1.0-rc.1.tar.gz",
+    "stationd_arm64": "ShackCQ-stationd-Linux-aarch64-v0.1.0-rc.1.tar.gz",
+    "source": "ShackCQ-source-v0.1.0-rc.1.tar.gz",
 }
 SIZE_CEILINGS = {
     "android_apk": 130 * 1024 * 1024, "android_aab": 60 * 1024 * 1024,
@@ -65,7 +65,7 @@ def main() -> None:
 
     source_name = EXPECTED_NAMES["source"].format(sha=sha)
     subprocess.check_call(
-        ["git", "archive", "--format=tar.gz", "--prefix=RigWeave-0.1.0-rc.1/", "-o", str(output / source_name), sha],
+        ["git", "archive", "--format=tar.gz", "--prefix=ShackCQ-0.1.0-rc.1/", "-o", str(output / source_name), sha],
         cwd=ROOT,
     )
     if (output / source_name).stat().st_size > SIZE_CEILINGS["source"]:
@@ -76,7 +76,7 @@ def main() -> None:
         blob = subprocess.check_output(["git", "show", f"{sha}:{name}"], cwd=ROOT)
         files.append({"path": name, "sha256": hashlib.sha256(blob).hexdigest(), "bytes": len(blob)})
     manifest = {
-        "contract": "RIGWEAVE_SOURCE_MANIFEST_V1",
+        "contract": "SHACKCQ_SOURCE_MANIFEST_V1",
         "sha": sha,
         "channel": args.channel,
         "build_utc": build_utc,
@@ -86,7 +86,7 @@ def main() -> None:
     (output / "SOURCE_MANIFEST.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
 
     packages = [
-        ("RigWeave", "NOASSERTION"), ("Hamlib", "4.7.2"), ("SDRoxide", "vendored-record"),
+        ("ShackCQ", "NOASSERTION"), ("Hamlib", "4.7.2"), ("SDRoxide", "vendored-record"),
         ("mfsk-core", "vendored"), ("tempo-sstv", "vendored"), ("SGP4", "vendored"),
         ("ITUHFProp", "vendored"), ("CTY", "data-snapshot"), ("BandPlans", "data-snapshot"),
         ("Xiph.Org Opus", "1.5.2-ddbe48383984d56acd9e1ab6a090c54ca6b735a6"),
@@ -96,8 +96,8 @@ def main() -> None:
         "spdxVersion": "SPDX-2.3",
         "dataLicense": "CC0-1.0",
         "SPDXID": "SPDXRef-DOCUMENT",
-        "name": f"RigWeave-{sha}",
-        "documentNamespace": f"https://rigweave.app/spdx/{sha}",
+        "name": f"ShackCQ-{sha}",
+        "documentNamespace": f"https://shackcq.app/spdx/{sha}",
         "creationInfo": {"created": build_utc, "creators": ["Tool: scripts/prepare_rc1_distribution.py"]},
         "packages": [
             {"name": name, "SPDXID": f"SPDXRef-Package-{index}", "versionInfo": version,
@@ -124,7 +124,7 @@ def main() -> None:
         collected[kind] = destination.name
 
     build = {
-        "contract": "RIGWEAVE_RC1_BUILD_MANIFEST_V1", "sha": sha, "channel": args.channel,
+        "contract": "SHACKCQ_RC1_BUILD_MANIFEST_V1", "sha": sha, "channel": args.channel,
         "build_utc": build_utc, "schemas": SCHEMAS,
         "platforms": ["Android", "iPhone/iPad", "Windows", "macOS", "Linux x86_64", "Linux arm64 stationd"],
         "expected_artifacts": {key: value.format(sha=sha) for key, value in EXPECTED_NAMES.items()},
@@ -132,7 +132,7 @@ def main() -> None:
     }
     (output / "BUILD_MANIFEST.json").write_text(json.dumps(build, indent=2, sort_keys=True) + "\n")
     shutil.copy2(ROOT / "NOTICE", output / "THIRD_PARTY_NOTICES.txt")
-    shutil.copy2(ROOT / "docs/release/RIGWEAVE_V0_1_0_RC1.md", output / "RELEASE_NOTES.md")
+    shutil.copy2(ROOT / "docs/release/SHACKCQ_V0_1_0_RC1.md", output / "RELEASE_NOTES.md")
 
     artifacts = sorted(path for path in output.iterdir() if path.is_file() and path.name != "SHA256SUMS.txt")
     sums = "".join(f"{digest(path)}  {path.name}\n" for path in artifacts)

@@ -1,6 +1,6 @@
 {
-  "contract": "RIGWEAVE_RC1_ANCESTRY_V1",
-  "rc_branch": "integration/rigweave-multiplatform-rc1",
+  "contract": "SHACKCQ_RC1_ANCESTRY_V1",
+  "rc_branch": "integration/shackcq-multiplatform-rc1",
   "recorded_rc_head": "5ee25b51d979d319bdc2bc9410c5af3599b87887",
   "immutable_refs": {
     "accepted_ui": "de32c8ac908c7979f39bfdfc41ca050378901e75",

@@ -16,7 +16,7 @@ Exact base: `ce1b99f21161c022fbfc97a78345cbe8a1ae2bd3`. Baseline artifacts are p
 | Navigation | Text-only 226 px list consumed operating width | Recognisable destinations | Native Navigate menus and command palette expose all 19 destinations without permanent global side chrome |
 | Menus | Windows-style QML menu also appeared inside the macOS window | Tablet actions remain local to workspace | One C++ command registry; native macOS global menu; native Win32 File/Edit/View/Radio/Navigate/Tools/Window/Help menu |
 | Commands | Menu, rail, palette and shortcuts duplicated routing | Consistent action meaning | Stable command IDs route every system menu, shortcut and palette action through `Desktop.invokeCommand()` |
-| Platform identity | macOS title said “RigWeave Windows Desktop” | Product identity is simply RigWeave | macOS title/app menu “RigWeave”; Windows title names current destination |
+| Platform identity | macOS title said “ShackCQ Windows Desktop” | Product identity is simply ShackCQ | macOS title/app menu “ShackCQ”; Windows title names current destination |
 | Iconography | No icons and no provenance story | Icons make destination scanning immediate | Original repo-owned 24×24, 1.8 px SVG family; no emoji/font dependency/third-party licence |
 | Responsiveness | 1280 px minimum and always-expanded rail | Tablet composition is constrained but clear | 1180×720 safe minimum, zero-width global rail, compact header below 1360, explicit minimum content pane |
 | Accessibility | Sparse accessible names; colour-heavy status | Status is written and repeated in context | Accessible action names, focus borders, written state plus status dots, shortcut guide |

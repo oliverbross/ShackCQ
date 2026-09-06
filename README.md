@@ -1,6 +1,8 @@
-# RigWeave
+# ShackCQ
 
-RigWeave is a radio-native portable operating cockpit that connects discovery, tuning, operating, logging, synchronisation, and progress without requiring fabricated state or permanent network access.
+ShackCQ is a radio-native portable operating cockpit that connects discovery, tuning, operating, logging, synchronisation, and progress without requiring fabricated state or permanent network access.
+
+**Your station. One app.** Product home: [shackcq.com](https://shackcq.com). Support: [support@shackcq.com](mailto:support@shackcq.com).
 
 The RC1 integration repository contains native SwiftUI iPhone/iPad and Jetpack Compose Android clients over a shared C++17 core, plus one Qt/QML desktop application for macOS, Windows, and Linux and a standalone station service. Source parity and packaging do not imply physical radio, WAN, signing, or store acceptance. Elecraft KX3/KX2 remains the established mobile radio family; desktop Hamlib operation stays explicit and fail-closed.
 
@@ -11,7 +13,7 @@ Candidate integration scope and evidence boundaries are recorded in `docs/ANDROI
 | Layer | Current truth | Main paths |
 |---|---|---|
 | Shared core | KX3/KX2 CAT parsing and safety classes, ADIF, CTY, spot/DX analysis, operator intelligence, panadapter DSP, Wavelog retry policy, and bounded WSJT-X parsing behind a C ABI | core/include, core/portable, core/src |
-| Apple | Adaptive iPhone/iPad SwiftUI app, Objective-C++ bridge, base USBDriverKit KXUSB transport, local SQLite/ADIF, callbook, Wavelog, cluster/DX, physical-I/Q panadapter, and pinned Remote Station client | ios/RigWeave, ios/CP210xDriver |
+| Apple | Adaptive iPhone/iPad SwiftUI app, Objective-C++ bridge, base USBDriverKit KXUSB transport, local SQLite/ADIF, callbook, Wavelog, cluster/DX, physical-I/Q panadapter, and pinned Remote Station client | ios/ShackCQ, ios/CP210xDriver |
 | Android | Compose app, JNI bridge, USB serial, local SQLite/ADIF, callbook, Wavelog, CW and SSB voice macros, hardware-backed KX3 EQ Studio, DX/Neural DX surfaces, MapLibre maps, audio monitoring, and a dedicated KX3 stereo-I/Q panadapter behind one exclusive audio-owner contract | android/app/src/main |
 | Desktop/Linux | Qt/QML app and stationd with singular functional owners, secure Remote Station host/client, system credential vaults, and bounded packages | desktop |
 
@@ -39,10 +41,10 @@ The Android SDK path must be configured through ANDROID_HOME, ANDROID_SDK_ROOT, 
 Apple:
 
 ~~~sh
-xcodebuild -project ios/RigWeave.xcodeproj -list
+xcodebuild -project ios/ShackCQ.xcodeproj -list
 xcodebuild \
-  -project ios/RigWeave.xcodeproj \
-  -scheme RigWeave \
+  -project ios/ShackCQ.xcodeproj \
+  -scheme ShackCQ \
   -configuration Debug \
   -destination 'generic/platform=iOS' \
   -derivedDataPath ios/DerivedDataPhase0 \
@@ -80,7 +82,7 @@ A successful build is not proof of USB enumeration, DriverKit activation, CAT se
 
 ## Licence
 
-RigWeave is licensed under GPL-3.0-only. See [COPYING](COPYING) for the complete licence and [NOTICE](NOTICE) for the notice policy.
+ShackCQ is licensed under GPL-3.0-only. See [COPYING](COPYING) for the complete licence and [NOTICE](NOTICE) for the notice policy.
 
 GPLv3 permits charging for binaries, support, and services; it does not require zero-price distribution. Every distributed covered binary must map to an immutable source commit/tag and be accompanied by, or provide equivalent access to, complete corresponding source, build instructions, dependency manifests/lock data, applicable patches, and notices.
 
@@ -92,7 +94,7 @@ Install the built debug APK on an emulator or connected Android device:
 
 ```sh
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell am start -n app.rigweave.mobile/.MainActivity
+adb shell am start -n app.shackcq.mobile/.MainActivity
 ```
 
 Use the replacement install above for development deployments so app-private station, cluster, Wavelog, QRZ, CAT, audio, and log data remain intact. Never use `adb uninstall`, `pm clear`, or `connectedDebugAndroidTest` on an operator tablet when its saved data must be preserved; the connected-test lifecycle may remove the target package. Run instrumentation on a disposable emulator or dedicated test device instead.
@@ -132,10 +134,10 @@ Public Apple distribution presents an unresolved GPLv3/platform risk. No App Sto
 
 ## Desktop Flightline UI convergence
 
-`feature/desktop-flightline-ui-convergence-v1` established native macOS and Win32 system menus, a canonical command/shortcut palette, responsive/high-DPI galleries and the accepted v1 evidence set. `feature/desktop-ui-ux-deep-convergence-v2` adds the grouped collapsible sidebar, locked official workspace layouts, explicit Edit Layout mode and dedicated Home/Radio/Digi/EQ/Panadapter cockpit hierarchy. Start with [`docs/desktop/DESKTOP_UI_UX_DEEP_CONVERGENCE_V2.md`](docs/desktop/DESKTOP_UI_UX_DEEP_CONVERGENCE_V2.md) and the [`docs/ui`](docs/ui) reports. The 40 SVG icons and packaged `.ico`/`.icns` are original RigWeave work and carry no additional dependency. All existing physical/live/release boundaries remain unchanged.
+`feature/desktop-flightline-ui-convergence-v1` established native macOS and Win32 system menus, a canonical command/shortcut palette, responsive/high-DPI galleries and the accepted v1 evidence set. `feature/desktop-ui-ux-deep-convergence-v2` adds the grouped collapsible sidebar, locked official workspace layouts, explicit Edit Layout mode and dedicated Home/Radio/Digi/EQ/Panadapter cockpit hierarchy. Start with [`docs/desktop/DESKTOP_UI_UX_DEEP_CONVERGENCE_V2.md`](docs/desktop/DESKTOP_UI_UX_DEEP_CONVERGENCE_V2.md) and the [`docs/ui`](docs/ui) reports. The 40 SVG icons and packaged `.ico`/`.icns` are original ShackCQ work and carry no additional dependency. All existing physical/live/release boundaries remain unchanged.
 
 `feature/desktop-functional-parity-closure-v1` supplies production desktop owners for the 17 former foundations while preserving that UI baseline. Start with [`docs/desktop/DESKTOP_FUNCTIONAL_PARITY_MATRIX.md`](docs/desktop/DESKTOP_FUNCTIONAL_PARITY_MATRIX.md), then use the hardware/provider acceptance documents before any live operation. External TX/movement/authentication remains fail-closed.
 
 ## Multiplatform RC1
 
-`integration/rigweave-v0.1.0-rc1-final` converges the accepted Android, iPhone/iPad, macOS, Windows, Linux, and station-service source on one exact-SHA release contract. Start with [`docs/release/RIGWEAVE_V0_1_0_RC1.md`](docs/release/RIGWEAVE_V0_1_0_RC1.md). Whole-repository ancestry, singular owners, schema/configuration safety, source/SBOM distribution and package digests are executable gates. Physical, authenticated, signing and RF acceptance remain separate.
+`integration/shackcq-v0.1.0-rc1-final` converges the accepted Android, iPhone/iPad, macOS, Windows, Linux, and station-service source on one exact-SHA release contract. Start with [`docs/release/SHACKCQ_V0_1_0_RC1.md`](docs/release/SHACKCQ_V0_1_0_RC1.md). Whole-repository ancestry, singular owners, schema/configuration safety, source/SBOM distribution and package digests are executable gates. Physical, authenticated, signing and RF acceptance remain separate.

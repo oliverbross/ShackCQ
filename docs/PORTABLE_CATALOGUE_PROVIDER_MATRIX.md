@@ -1,6 +1,6 @@
 # Portable catalogue provider matrix
 
-| Programme | State/contract | RigWeave behavior |
+| Programme | State/contract | ShackCQ behavior |
 |---|---|---|
 | POTA | Existing reviewed runtime authority | Existing private cache and search |
 | SOTA | Existing reviewed catalogue/cluster authority | Private summit cache, native detail and exact-host secure browser |

@@ -1,4 +1,4 @@
-#include "rigweave/desktop/DesktopRadioController.hpp"
+#include "shackcq/desktop/DesktopRadioController.hpp"
 
 #include <algorithm>
 #include <array>
@@ -8,15 +8,15 @@
 #include <QUrl>
 #include <tuple>
 
-#ifdef RIGWEAVE_HAVE_NATIVE_DIGI
-#include "rigweave_flex.h"
+#ifdef SHACKCQ_HAVE_NATIVE_DIGI
+#include "shackcq_flex.h"
 #endif
 
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
 #include <hamlib/rig.h>
 #endif
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 constexpr int RadioProfilesSchema = 2;
 
@@ -49,7 +49,7 @@ QVariantMap hamlibSnapshot(const QString &model, quint64 frequency,
 }
 } // namespace
 
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
 int collectModel(const struct rig_caps *caps, void *data) {
   if (!caps || !data || caps->rig_model == RIG_MODEL_NONE)
     return 1;
@@ -69,7 +69,7 @@ HamlibModelRegistry::HamlibModelRegistry(QObject *parent)
   load();
 }
 void HamlibModelRegistry::load() {
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   rig_set_debug(RIG_DEBUG_NONE);
   rig_load_all_backends();
   rig_list_foreach(collectModel, &m_all);
@@ -172,7 +172,7 @@ DesktopRadioController::~DesktopRadioController() { disconnectRadio(); }
 bool DesktopRadioController::connectRadio(int modelId, const QString &port,
                                           int baudRate) {
   disconnectRadio();
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   if (port.trimmed().isEmpty()) {
     emit error("An explicit serial or network route is required");
     return false;
@@ -395,7 +395,7 @@ void DesktopRadioController::disconnectRadio() {
     m_nativeTcp.abort();
   m_nativeBuffer.clear();
   m_nativeProfileId.clear();
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   if (m_rig) {
     auto *rig = static_cast<RIG *>(m_rig);
     rig_close(rig);
@@ -529,7 +529,7 @@ bool DesktopRadioController::requestFrequency(qulonglong hz) {
     const QByteArray setter = nativeFrame("setFrequency", hz);
     return !setter.isEmpty() && writeNative(setter);
   }
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   if (!m_rig || hz < 100000 || hz > 10500000000ULL)
     return false;
   const int code = rig_set_freq(static_cast<RIG *>(m_rig), RIG_VFO_CURR,
@@ -554,7 +554,7 @@ bool DesktopRadioController::requestMode(const QString &value) {
     const QByteArray setter = nativeFrame("setMode", value);
     return !setter.isEmpty() && writeNative(setter);
   }
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   if (!m_rig)
     return false;
   const rmode_t parsed = rig_parse_mode(value.toUtf8().constData());
@@ -579,7 +579,7 @@ void DesktopRadioController::poll() {
     pollNative();
     return;
   }
-#ifdef RIGWEAVE_HAVE_HAMLIB
+#ifdef SHACKCQ_HAVE_HAMLIB
   if (!m_rig)
     return;
   freq_t frequency = 0;
@@ -601,16 +601,16 @@ QByteArray DesktopRadioController::nativeFrame(const QString &operation,
                                                const QVariant &value) const {
   const QString op = operation.trimmed().toLower();
   if (m_nativeProfileId == "FLEX") {
-#ifdef RIGWEAVE_HAVE_NATIVE_DIGI
+#ifdef SHACKCQ_HAVE_NATIVE_DIGI
     std::array<char, 256> output{};
     int count = -1;
     if (op == "keepalive")
-      count = rw_flex_keepalive(output.data(), output.size());
+      count = shackcq_flex_keepalive(output.data(), output.size());
     else if (op == "setfrequency")
-      count = rw_flex_frequency(0, value.toULongLong(), output.data(),
+      count = shackcq_flex_frequency(0, value.toULongLong(), output.data(),
                                 output.size());
     else if (op == "setmode")
-      count = rw_flex_mode(0, value.toString().toUtf8().constData(),
+      count = shackcq_flex_mode(0, value.toString().toUtf8().constData(),
                            output.data(), output.size());
     return count > 0 ? QByteArray(output.data(), count) : QByteArray{};
 #else
@@ -812,4 +812,4 @@ void DesktopRadioController::setHamlibSnapshotForTest(quint64 frequency,
   emit snapshotChanged();
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

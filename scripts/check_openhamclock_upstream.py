@@ -60,7 +60,7 @@ class GitHub:
     ) -> Any:
         headers = {
             "Accept": "application/vnd.github+json",
-            "User-Agent": "RigWeave-OpenHamClock-audit",
+            "User-Agent": "ShackCQ-OpenHamClock-audit",
             "X-GitHub-Api-Version": "2022-11-28",
         }
         if self.token:
@@ -96,7 +96,7 @@ class GitHub:
         if not isinstance(url, str) or not url.startswith("https://"):
             raise AuditError(f"{path} at {ref} has no safe download URL")
         request = urllib.request.Request(
-            url, headers={"User-Agent": "RigWeave-OpenHamClock-audit"}
+            url, headers={"User-Agent": "ShackCQ-OpenHamClock-audit"}
         )
         try:
             with urllib.request.urlopen(request, timeout=30) as response:

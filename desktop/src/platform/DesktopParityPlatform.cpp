@@ -1,4 +1,4 @@
-#include "rigweave/desktop/DesktopParityPlatform.hpp"
+#include "shackcq/desktop/DesktopParityPlatform.hpp"
 
 #include <QDateTime>
 #include <QDir>
@@ -13,7 +13,7 @@
 #include <QSqlQuery>
 #include <QUuid>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 
 QVariantMap row(QString key, QString title, QString subtitle, QString state,
@@ -173,10 +173,10 @@ bool DesktopParityPlatform::open(const QString &databaseDirectory, const QString
     const QString token = QUuid::createUuid().toString(QUuid::WithoutBraces);
     m_stores = {
         {"Neural", databaseDirectory + "/neural-dx.sqlite", 5, "neural-" + token, {}},
-        {"Digi", databaseDirectory + "/rigweave-digi.sqlite", 2, "digi-" + token, {}},
-        {"Groups.io", databaseDirectory + "/rigweave-groupsio.sqlite", 2, "groups-" + token, {}},
-        {"Contest", databaseDirectory + "/rigweave-contest.sqlite", 2, "contest-" + token, {}},
-        {"DX Chaser", databaseDirectory + "/rigweave-dxchaser.sqlite", 1, "chaser-" + token, {}}
+        {"Digi", databaseDirectory + "/shackcq-digi.sqlite", 2, "digi-" + token, {}},
+        {"Groups.io", databaseDirectory + "/shackcq-groupsio.sqlite", 2, "groups-" + token, {}},
+        {"Contest", databaseDirectory + "/shackcq-contest.sqlite", 2, "contest-" + token, {}},
+        {"DX Chaser", databaseDirectory + "/shackcq-dxchaser.sqlite", 1, "chaser-" + token, {}}
     };
     for (StoreSpec &store : m_stores) {
         if (!openStore(store, error)) {
@@ -360,7 +360,7 @@ void DesktopParityPlatform::seedDemo() {
         row("demo-qso-2", "W1AW", "15 m CW · 5NN 002", "STAGED", "3 points · multiplier K", "Contest", 3, true, now - 35)
     });
     m_groupsMessages.replace({
-        row("demo-message-1", "Field operations this weekend", "RigWeave Field Group · Casey", "OFFLINE_CACHE", "3 replies · refreshed 4 min ago", "Groups.io", {}, true, now - 240),
+        row("demo-message-1", "Field operations this weekend", "ShackCQ Field Group · Casey", "OFFLINE_CACHE", "3 replies · refreshed 4 min ago", "Groups.io", {}, true, now - 240),
         row("demo-message-2", "QMX portable audio routing", "Digital Operators · Morgan", "CURRENT", "7 replies · one attachment", "Groups.io", {}, true, now - 80)
     });
     m_portableActivity.replace({
@@ -638,4 +638,4 @@ void DesktopParityPlatform::close() {
     m_closed = true;
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

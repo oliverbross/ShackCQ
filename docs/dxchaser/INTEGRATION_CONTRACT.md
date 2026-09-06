@@ -1,7 +1,7 @@
 # DX Chaser integration contract v1
 
 The core exposes immutable, bounded, Compose-independent contracts in
-`app.rigweave.mobile.dxchaser`. Integration must create exactly one `DxChaserController`; this branch does not instantiate it.
+`app.shackcq.mobile.dxchaser`. Integration must create exactly one `DxChaserController`; this branch does not instantiate it.
 
 ## Inputs
 
@@ -32,7 +32,7 @@ Pending intents and engaged state are cleared and are never restored after proce
 
 Task C consumes only `DxChaserReadOnlyPort.snapshot()`. `DxChaserReadOnlySnapshot` v1 contains at most 50 ranked candidates, one
 current target, an engaged call label, 100 cooldowns, 20 cross-band opportunities and a provider-freshness summary. It is immutable
-and already reduced; Band Maps must not call the engine or query `rigweave-dxchaser.sqlite`.
+and already reduced; Band Maps must not call the engine or query `shackcq-dxchaser.sqlite`.
 
 Candidate summaries contain callsign, band/mode/frequency/audio frequency, score/tier/eligibility, need reasons, local age/SNR,
 current and outlook labels, watchlist and cooldown truth. This is sufficient to render `CHASER PRIORITY`, `CHASER TARGET`,

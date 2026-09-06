@@ -6,7 +6,7 @@ Reviewed present paths: every file under `rotator_core/` and `rotator_drivers/`,
 
 Preserved concepts: manager/driver separation, typed state/capabilities, serial and TCP profiles, switching, polling, az/el targets, move/stop/park contracts, configurable limits, per-band use/offsets, bidirectional selection, flip policy, presets, ARCO over compatibility protocols, remote Hamlib, satellite configuration, multiple profiles, and discovery metadata.
 
-Improved: persistent TCP replaces per-command connections; exact protocol framing replaces regex extraction; unknown movement stays unknown; ranges preserve 450 degrees; multiple physical identities are arbitrated; target generation/dwell/deadband is explicit; automation arm is session-only; raw identifiers are hashed; existing RigWeave ports replace UDP/provider listeners.
+Improved: persistent TCP replaces per-command connections; exact protocol framing replaces regex extraction; unknown movement stays unknown; ranges preserve 450 degrees; multiple physical identities are arbitrated; target generation/dwell/deadband is explicit; automation arm is session-only; raw identifiers are hashed; existing ShackCQ ports replace UDP/provider listeners.
 
 Rejected: Flask/HTTP/TypeScript architecture, separate WSJT-X/DX listeners, subprocess-launched `rotctld`, blind command retries, implicit restored automation, plaintext diagnostics, and the earlier 0-359 clamp.
 

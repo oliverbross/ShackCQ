@@ -1,4 +1,4 @@
-#include "rigweave/desktop/DesktopParityPlatform.hpp"
+#include "shackcq/desktop/DesktopParityPlatform.hpp"
 
 #include <QDateTime>
 #include <QTcpServer>
@@ -6,7 +6,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 
 class DesktopFunctionalOwnerTests final : public QObject {
     Q_OBJECT
@@ -137,7 +137,7 @@ void DesktopFunctionalOwnerTests::groupsClientUsesVaultAliasAndReconcilesFakeSer
                 ++requests;
                 QByteArray body;
                 if (request.startsWith("GET /api/v1/getsubs"))
-                    body = R"({"data":[{"group_id":42,"group_name":"RigWeave Test","status":"member"}]})";
+                    body = R"({"data":[{"group_id":42,"group_name":"ShackCQ Test","status":"member"}]})";
                 else if (request.startsWith("POST /api/v1/newdraft"))
                     body = R"({"id":91})";
                 else if (request.startsWith("POST /api/v1/updatedraft"))

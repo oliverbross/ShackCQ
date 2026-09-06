@@ -109,7 +109,7 @@ Only eligible global forecasts persist on 15-minute station/window/band slots. V
 
 - Spectrum publication is at most 10 Hz with 384 bins. The 900-row waterfall
   holds about 90 seconds and 1.32 MiB of float payload, below 4 MiB.
-- Live UI history caps at 3,000 rows. `rigweave-digi.sqlite` defaults to seven
+- Live UI history caps at 3,000 rows. `shackcq-digi.sqlite` defaults to seven
   days/20,000 decodes; completed sessions and drafts prune after 90 days.
 - PSK31 retains at most 120 seconds of 12 kHz mono. Slotted decoding keeps one
   bounded slot plus one replay slot.

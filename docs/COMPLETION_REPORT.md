@@ -8,7 +8,7 @@
 
 ## Repository
 
-- Path: `/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile`
+- Path: `/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile`
 - Branch: `main`
 - Final commit: use `git rev-parse HEAD` in this repository
 - State: clean after the implementation handoff commit
@@ -16,9 +16,9 @@
 ## Apple
 
 - Signed generic iPadOS build: pass
-- App ID/profile: `app.rigweave.mobile` / `RigWeave iPad System Extension Development`
-- Driver ID/profile: `app.rigweave.mobile.CP210xDriver` / `RigWeave CP210x DriverKit Development`
-- Embedded DriverKit extension: signed and present at `RigWeave.app/SystemExtensions/CP210xDriver.dext`
+- App ID/profile: `app.shackcq.mobile` / `ShackCQ iPad System Extension Development`
+- Driver ID/profile: `app.shackcq.mobile.CP210xDriver` / `ShackCQ CP210x DriverKit Development`
+- Embedded DriverKit extension: signed and present at `ShackCQ.app/SystemExtensions/CP210xDriver.dext`
 - Detected device: iPad Pro 11-inch (4th generation), `iPad14,4`, iPadOS 26.6.1
 - Installation and launch: pass on the connected iPad
 - Shared core: linked through the C bridge

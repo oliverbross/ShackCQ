@@ -8,7 +8,7 @@ commit and approved behavioural baseline is `fe3cba8ed9c0502f5dabdb2f64ebd990de9
 error. The upstream licence/permission remains unresolved; the baseline does not establish
 exact parity or permission. See the integration record.
 
-RigWeave implements the project as an Android-native DX workspace inside the
+ShackCQ implements the project as an Android-native DX workspace inside the
 existing Flightline interface. Flask, nginx, browser themes, and local web API
 tokens are deployment mechanics rather than operator features and are replaced
 by in-process controllers, encrypted preferences, SQLite, and Compose UI.
@@ -48,19 +48,19 @@ by in-process controllers, encrypted preferences, SQLite, and Compose UI.
 
 ## Shared behavior
 
-- Reuse RigWeave's single primary-plus-two-fallback cluster connection and
+- Reuse ShackCQ's single primary-plus-two-fallback cluster connection and
   CTY.DAT resolver; never open a competing cluster stream.
 - Keep bounded live state and a durable indexed spot journal. Android provider caches
   validate before atomic commit, survive restarts, and expose source, age, and uniform
   `LIVE`, `CACHED`, `STALE`, or `UNAVAILABLE` state without fabricating values.
-- Schema 4 keeps the spot journal intact and adds compact empirical evidence, prediction, verification and calibration tables. The independently designed RigWeave model copies no Neural-DX-Watcher predictor source, database, weights or assets; unresolved upstream permission still blocks licensed predictor parity.
+- Schema 4 keeps the spot journal intact and adds compact empirical evidence, prediction, verification and calibration tables. The independently designed ShackCQ model copies no Neural-DX-Watcher predictor source, database, weights or assets; unresolved upstream permission still blocks licensed predictor parity.
 - Use the configured local log or selected Wavelog station for worked status.
   A QSO is confirmed only by paper QSL or LoTW, as explicitly required for
-  RigWeave.
+  ShackCQ.
 - Watchlist/New DXCC/6 m alerts use Android notifications plus optional ntfy,
   cooldowns, and foreground-presence suppression.
 - All callsign, spot, current-opportunity, map, and satellite actions remain receive-only
-  until the operator explicitly confirms an existing RigWeave CAT tune or
+  until the operator explicitly confirms an existing ShackCQ CAT tune or
   cluster-post action.
 - Shared cluster observation uses the fixed ADIF-compatible order `160m`, `80m`,
   `60m`, `40m`, `30m`, `20m`, `17m`, `15m`, `12m`, `10m`, `6m`, `4m`, `2m`,

@@ -1,4 +1,4 @@
-# RigWeave roadmap
+# ShackCQ roadmap
 
 This is the normative product order. A phase starts only after separate owner authorisation and the previous gate is reviewed. Dates and effort estimates are intentionally absent.
 
@@ -81,7 +81,7 @@ This is the normative product order. A phase starts only after separate owner au
 ### Phase 5B — Spectrum, waterfall, and meters
 
 - Official TCP/UDP/VITA-49 interfaces.
-- Panadapter/waterfall streams, meters, and RigWeave overlays.
+- Panadapter/waterfall streams, meters, and ShackCQ overlays.
 
 ### Phase 5C — Remote audio and controlled TX
 

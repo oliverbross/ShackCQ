@@ -1,11 +1,11 @@
-#include "rigweave/desktop/RfMapItem.hpp"
-#include "rigweave/desktop/RfObservationModel.hpp"
+#include "shackcq/desktop/RfMapItem.hpp"
+#include "shackcq/desktop/RfObservationModel.hpp"
 
 #include <QDateTime>
 #include <QPainter>
 #include <QtTest>
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 
 class DesktopRfObservationTests final : public QObject {
   Q_OBJECT

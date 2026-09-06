@@ -1,5 +1,5 @@
 {
-  "contract": "rigweave-configuration-wavelog-semantic-v1",
+  "contract": "shackcq-configuration-wavelog-semantic-v1",
   "version": 1,
   "portableSections": [
     "stations",

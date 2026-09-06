@@ -1,4 +1,4 @@
-#include "rigweave/desktop/DesktopParityPlatform.hpp"
+#include "shackcq/desktop/DesktopParityPlatform.hpp"
 
 #include <QDir>
 #include <QFileInfo>
@@ -6,7 +6,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 
 class DesktopParityContractTests final : public QObject {
     Q_OBJECT

@@ -10,7 +10,7 @@ No SCP, IOTA, WWFF, WWBOTA, Castle or Lighthouse directory is packaged. All acce
 
 Sweep 1 adds no embedded provider catalogue, model, binary payload, or P.533 material. POTA/SOTA catalogues remain bounded runtime caches in app-private storage and SOTA cluster rows are transient. The pre-final local debug artifacts remain below the 130 MB APK and 60 MB AAB ceilings; final sizes and SHA-256 values are recorded only after the final source commit is built.
 
-RigWeave remains one coherent product. Neural DX, HamClock, Wavelog, and Groups.io are not separate user-facing applications or dynamic feature modules.
+ShackCQ remains one coherent product. Neural DX, HamClock, Wavelog, and Groups.io are not separate user-facing applications or dynamic feature modules.
 
 Keyer, Contest/N1MM and DX Chaser remain Kotlin/Compose code and small schema-1 private stores in the
 same base module. They add no model/runtime payload, upstream desktop binary, provider database,
@@ -47,7 +47,7 @@ pass the ITU/P.533 payload scan and remain below the existing package ceilings.
 
 ## Sweep 2 package strategy
 
-`rigweaveAbi` is the single-ABI tablet build property. `-PrigweaveAbi=arm64-v8a` narrows Android JNI, Rust and Hamlib outputs together; the default release bundle retains `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. Native compilation enables hidden visibility, section splitting and linker garbage collection. No dynamic feature, asset pack or second Hamlib archive is introduced.
+`shackcqAbi` is the single-ABI tablet build property. `-PshackcqAbi=arm64-v8a` narrows Android JNI, Rust and Hamlib outputs together; the default release bundle retains `arm64-v8a`, `armeabi-v7a`, `x86` and `x86_64`. Native compilation enables hidden visibility, section splitting and linker garbage collection. No dynamic feature, asset pack or second Hamlib archive is introduced.
 
 Sweep 2 gates are: arm64 debug APK at or below 130 MB, four-ABI release AAB at or below 60 MB, no developer tools/test corpora/source archives in either artifact, and no ITU/P.533 payload. Exact current sizes belong in release evidence only after the final SHA build.
 

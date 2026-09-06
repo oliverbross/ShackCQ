@@ -1,8 +1,8 @@
 # Hamlib Android Radio Platform v1
 
-RigWeave vendors Hamlib 4.7.2 as source and builds its radio library and all configured radio backends for Android. The library is statically linked into the existing `librigweave.so`; RigWeave does not package `rigctl`, `rigctld`, rotator tools, amplifier tools, or a second C++ runtime.
+ShackCQ vendors Hamlib 4.7.2 as source and builds its radio library and all configured radio backends for Android. The library is statically linked into the existing `libshackcq.so`; ShackCQ does not package `rigctl`, `rigctld`, rotator tools, amplifier tools, or a second C++ runtime.
 
-The platform owns model discovery, bounded capability projection, a lifecycle-safe native session, external Android USB serial bridging, opt-in network profiles, typed commands, polling, diagnostics, settings documents, and a generic capability-driven Compose surface. It deliberately does not modify or register itself with RigWeave's central radio controller or radio screen in this task.
+The platform owns model discovery, bounded capability projection, a lifecycle-safe native session, external Android USB serial bridging, opt-in network profiles, typed commands, polling, diagnostics, settings documents, and a generic capability-driven Compose surface. It deliberately does not modify or register itself with ShackCQ's central radio controller or radio screen in this task.
 
 ## Truth boundary
 
@@ -13,7 +13,7 @@ The platform owns model discovery, bounded capability projection, a lifecycle-sa
 
 ## Build shape
 
-`android/app/src/main/cpp/hamlib/build_android.sh` cross-compiles a static archive per configured Android ABI with the project NDK. The existing CMake target imports the matching archive and compiles `hamlib_jni.cpp` into `librigweave.so`. Generated `config.h` is ABI-specific.
+`android/app/src/main/cpp/hamlib/build_android.sh` cross-compiles a static archive per configured Android ABI with the project NDK. The existing CMake target imports the matching archive and compiles `hamlib_jni.cpp` into `libshackcq.so`. Generated `config.h` is ABI-specific.
 
 ## Validation record
 
@@ -27,7 +27,7 @@ Validated in the isolated worktree on 2026-08-23 without installing an APK or co
   - x86: 12,224,182 bytes;
   - x86_64: 17,393,554 bytes;
 - every archive exposes 38 radio, 27 rotator, and 4 amplifier backend initializers; the extra non-radio backend dependency closure is required to make the single Hamlib library self-contained, but no rotator/amplifier/tool executable is packaged;
-- JNI arm64 compile passes with `-Wall -Wextra -Werror`; the Gradle/CMake matrix links `librigweave.so` for all four ABIs;
+- JNI arm64 compile passes with `-Wall -Wextra -Werror`; the Gradle/CMake matrix links `libshackcq.so` for all four ABIs;
 - 32 focused Hamlib JVM cases pass; the complete 590-test JVM suite passes with zero failures, errors, or skips; four Android JNI registry instrumentation cases compile but are not executed on a device;
 - host core CMake build passes both CTest modules;
 - debug APK, debug AAB, Android-test source compile, and lint all pass in one Gradle matrix;

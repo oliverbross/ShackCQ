@@ -13,4 +13,4 @@
 | rigctld/flrig/TCI model | Network Hamlib | Explicit LAN endpoint | Read-only by default; endpoint opt-in | Searchable generic capability UI |
 | Unknown/future stored ID | Safe unknown | None | Read-only and disconnected | No connect path |
 
-Native profiles are preferred when RigWeave has reviewed model-specific semantics. QMX via generic Hamlib remains optional and does not gain native QMX I/Q or Digi behavior. RGO ONE does not gain a guessed Hamlib mapping.
+Native profiles are preferred when ShackCQ has reviewed model-specific semantics. QMX via generic Hamlib remains optional and does not gain native QMX I/Q or Digi behavior. RGO ONE does not gain a guessed Hamlib mapping.

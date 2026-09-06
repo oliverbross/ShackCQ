@@ -1,6 +1,6 @@
 # Contest upstream and rule-authority audit
 
-Audit date: 2026-08-22. RigWeave is GPL-3.0-only. Official sponsor rules, not another logger, are scoring authority.
+Audit date: 2026-08-22. ShackCQ is GPL-3.0-only. Official sponsor rules, not another logger, are scoring authority.
 
 ## Immutable comparison baselines
 

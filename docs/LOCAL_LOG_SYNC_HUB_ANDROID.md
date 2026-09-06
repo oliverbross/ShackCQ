@@ -12,7 +12,7 @@ Phase 4A adds direct QSO delivery for operators who use the Android local log as
 
 ## Official interfaces
 
-| Provider | Interface | RigWeave behaviour |
+| Provider | Interface | ShackCQ behaviour |
 | --- | --- | --- |
 | QRZ Logbook | POST https://logbook.qrz.com/api | STATUS is the read-only test; INSERT sends one record; OPTION=REPLACE is never sent; station callsign must match the configured logbook. |
 | Club Log | POST https://clublog.org/realtime.php | Exactly one future QSO at normal operator pace. A 403 blocks all further traffic until credentials change and the operator resumes. |
@@ -21,7 +21,7 @@ Phase 4A adds direct QSO delivery for operators who use the Android local log as
 
 References: [QRZ Logbook API](https://www.qrz.com/docs/logbook/QRZLogbookAPI.html), [Club Log real-time](https://clublog.freshdesk.com/support/solutions/articles/54906-how-to-upload-qsos-in-real-time), [Club Log batch](https://clublog.freshdesk.com/support/solutions/articles/54905-how-to-upload-batches-of-qsos-directly-into-club-log), [Club Log IP bans](https://clublog.freshdesk.com/support/solutions/articles/3000110752-ip-address-bans), and [eQSL real-time interface](https://www.eqsl.cc/qslcard/ImportADIF.txt).
 
-Club Log requires an application password and app API key. RigWeave does not ship or borrow an app key; self-built installations may enter their own. QRZ requires a callsign-specific logbook key and suitable subscription.
+Club Log requires an application password and app API key. ShackCQ does not ship or borrow an app key; self-built installations may enter their own. QRZ requires a callsign-specific logbook key and suitable subscription.
 
 ## Storage and queue behaviour
 

@@ -1,5 +1,5 @@
 {
-  "contract": "rigweave-schema-16-semantic-v1",
+  "contract": "shackcq-schema-16-semantic-v1",
   "schemaVersion": 16,
   "identity": {
     "id": "fixture-qso-001",
@@ -22,7 +22,7 @@
     "POTA_REF": "VKFF-0001",
     "SOTA_REF": "VK1/AC-001",
     "WWFF_REF": "VKFF-0001",
-    "APP_RIGWEAVE_FUTURE": "preserved"
+    "APP_SHACKCQ_FUTURE": "preserved"
   },
   "expectations": {
     "unknownAdifPreserved": true,

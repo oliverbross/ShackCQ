@@ -1,6 +1,6 @@
-#include "rigweave/desktop/AdifService.hpp"
-#include "rigweave/desktop/QsoDatabase.hpp"
-#include "rigweave/desktop/WavelogSync.hpp"
+#include "shackcq/desktop/AdifService.hpp"
+#include "shackcq/desktop/QsoDatabase.hpp"
+#include "shackcq/desktop/WavelogSync.hpp"
 
 #include <QElapsedTimer>
 #include <QFile>
@@ -10,7 +10,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 
 class DesktopDataContractTests final : public QObject {
     Q_OBJECT
@@ -38,7 +38,7 @@ private slots:
         remote.fields["MODE"]="SSB";const auto conflict=WavelogSyncEngine::threeWayMerge(base,local,remote);QCOMPARE(conflict.disposition,QString("CONFLICT"));QVERIFY(conflict.conflicts.contains("MODE"));
     }
     void sharedSchema16GoldenFixtureMatchesDesktopSemantics() {
-        QFile file(QStringLiteral(RIGWEAVE_SHARED_FIXTURES_DIR "/schema16_qso_golden.json"));QVERIFY(file.open(QIODevice::ReadOnly));const auto object=QJsonDocument::fromJson(file.readAll()).object();QCOMPARE(object.value("schemaVersion").toInt(),QsoDatabase::SchemaVersion);const auto adif=object.value("canonicalAdif").toObject();QCOMPARE(adif.value("CALL").toString(),QString("VK9XX"));QCOMPARE(adif.value("APP_RIGWEAVE_FUTURE").toString(),QString("preserved"));const auto expectations=object.value("expectations").toObject();QVERIFY(expectations.value("semanticInteroperabilityOnly").toBool());QVERIFY(!expectations.value("androidWindowsDatabaseBytesInterchangeable").toBool());
+        QFile file(QStringLiteral(SHACKCQ_SHARED_FIXTURES_DIR "/schema16_qso_golden.json"));QVERIFY(file.open(QIODevice::ReadOnly));const auto object=QJsonDocument::fromJson(file.readAll()).object();QCOMPARE(object.value("schemaVersion").toInt(),QsoDatabase::SchemaVersion);const auto adif=object.value("canonicalAdif").toObject();QCOMPARE(adif.value("CALL").toString(),QString("VK9XX"));QCOMPARE(adif.value("APP_SHACKCQ_FUTURE").toString(),QString("preserved"));const auto expectations=object.value("expectations").toObject();QVERIFY(expectations.value("semanticInteroperabilityOnly").toBool());QVERIFY(!expectations.value("androidWindowsDatabaseBytesInterchangeable").toBool());
     }
 };
 QTEST_MAIN(DesktopDataContractTests)

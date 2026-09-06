@@ -9,11 +9,11 @@ if (Test-Path $stage) { Remove-Item -Recurse -Force $stage }
 cmake --install $BuildDirectory --prefix $stage
 Copy-Item (Join-Path $PSScriptRoot '../../../COPYING') (Join-Path $stage 'COPYING.txt')
 Copy-Item (Join-Path $PSScriptRoot '../../../NOTICE') (Join-Path $stage 'NOTICE.txt')
-$portable = Join-Path $OutputDirectory 'RigWeave-Windows-x64-portable-v0.1.0-rc.1.zip'
+$portable = Join-Path $OutputDirectory 'ShackCQ-Windows-x64-portable-v0.1.0-rc.1.zip'
 if (Test-Path $portable) { Remove-Item -Force $portable }
 Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $portable -CompressionLevel Optimal
 cpack --config (Join-Path $BuildDirectory 'CPackConfig.cmake') -G NSIS -B $OutputDirectory
-$installer = Join-Path $OutputDirectory 'RigWeave-Windows-x64-setup-v0.1.0-rc.1.exe'
+$installer = Join-Path $OutputDirectory 'ShackCQ-Windows-x64-setup-v0.1.0-rc.1.exe'
 if (-not (Test-Path $installer)) { throw 'Expected NSIS installer was not produced' }
 $portableHash = (Get-FileHash $portable -Algorithm SHA256).Hash.ToLowerInvariant()
 $installerHash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()

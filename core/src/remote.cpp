@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/remote.h"
+#include "shackcq/remote.h"
 
 #include <algorithm>
 #include <array>
@@ -8,7 +8,7 @@
 #include <limits>
 #include <sstream>
 
-namespace rigweave::remote {
+namespace shackcq::remote {
 namespace {
 constexpr std::array<std::uint8_t, 4> Magic{'R', 'W', 'R', '1'};
 constexpr std::size_t HeaderSize = 36;
@@ -293,7 +293,7 @@ ProtocolReply handleTci(std::string_view raw, const RigState &state,
   const auto colon = command.find(':');
   const std::string op = upper(command.substr(0, colon));
   const std::string value = colon == std::string::npos ? "" : command.substr(colon + 1);
-  if (op == "START" || op == "READY" || op == "PROTOCOL") return readReply(op, "protocol:1.9;device:RigWeave;ready;start;\n");
+  if (op == "START" || op == "READY" || op == "PROTOCOL") return readReply(op, "protocol:1.9;device:ShackCQ;ready;start;\n");
   if (op == "VFO" && value.empty()) return readReply(op, "vfo:0,0," + std::to_string(state.frequencyHz) + ";\n");
   if (op == "MODULATION" && value.empty()) return readReply(op, "modulation:0," + state.mode + ";\n");
   if (op == "TRX" && value.empty()) return readReply(op, std::string("trx:0,") + (state.ptt ? "true" : "false") + ";\n");
@@ -311,4 +311,4 @@ std::string roleName(Role role) {
   return "OBSERVER";
 }
 
-} // namespace rigweave::remote
+} // namespace shackcq::remote

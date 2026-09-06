@@ -38,7 +38,7 @@ Source/unit/build evidence does not prove authenticated services, physical UI/au
 ## Local validation
 
 - Android JVM tests, `bundleDebug`, instrumentation-source compilation, instrumentation APK assembly and `lintDebug`: PASS.
-- The programme's named `assembleArm64Debug` task is not registered by the frozen source. The existing supported single-ABI mechanism, `assembleDebug -PrigweaveAbi=arm64-v8a`, passed and produced the tablet APK.
+- The programme's named `assembleArm64Debug` task is not registered by the frozen source. The existing supported single-ABI mechanism, `assembleDebug -PshackcqAbi=arm64-v8a`, passed and produced the tablet APK.
 - Four-ABI AAB: 53 MB in the pre-delivery local gate, below the 60 MB ceiling. The final exact-SHA artifact hash belongs in delivery evidence rather than a self-referential source commit.
 - Arm64-only APK: 56 MB in the pre-delivery local gate, below the 130 MB ceiling. Its final exact-SHA hash is recorded after the branch identity is frozen.
 - Rust: 97 passed, zero failed, one intentionally ignored. Debug shared core: 2/2 CTest targets passed.

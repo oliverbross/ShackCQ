@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/tci.hpp"
+#include "shackcq/tci.hpp"
 
 #include <algorithm>
 #include <array>
@@ -8,7 +8,7 @@
 #include <cstring>
 #include <limits>
 
-namespace rigweave::tci {
+namespace shackcq::tci {
 namespace {
 
 std::string trim(std::string_view value) {
@@ -354,4 +354,4 @@ std::optional<std::vector<std::uint8_t>> build_tx_audio(
     return build_binary_for_test(DataType::TxAudio, receiver, target_sample_rate, 2U, stereo);
 }
 
-} // namespace rigweave::tci
+} // namespace shackcq::tci

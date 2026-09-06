@@ -10,13 +10,13 @@
 - Audited surfaces: every panel, map plugin, settings tab, layout, theme,
   language, server provider and persistence implementation under `src/` and `server/`.
 
-RigWeave implements the operating surface natively in Jetpack Compose. It does
+ShackCQ implements the operating surface natively in Jetpack Compose. It does
 not embed the upstream React application or run its Node server. The root
-`NOTICE` retains upstream attribution; RigWeave remains GPL-3.0-only.
+`NOTICE` retains upstream attribution; ShackCQ remains GPL-3.0-only.
 
 ## Shared authorities
 
-The integration shares RigWeave's existing operational state:
+The integration shares ShackCQ's existing operational state:
 
 - station identity and recovery: `AppController` and the selected Wavelog station;
 - CAT/radio state: `RadioState` and the existing radio backends;
@@ -29,7 +29,7 @@ The integration shares RigWeave's existing operational state:
 
 No second callsign, grid, radio, log, cluster endpoint, Wavelog credential or
 callbook credential is introduced. HamClock presentation profiles exclude
-secrets by schema and are included in RigWeave recovery data.
+secrets by schema and are included in ShackCQ recovery data.
 
 ## Implemented and functional
 

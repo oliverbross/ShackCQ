@@ -9,7 +9,7 @@ The established architecture is retained: native SwiftUI and Compose clients rem
 | Shell/context/routing | `AppController`, Compose navigation | No | `DesktopApplication`, QML shell, safe config | `WINDOWS_ALPHA_COMPLETE` |
 | Credentials | Android Keystore stores | No | Windows Credential Manager; alias only in SQLite/JSON | `WINDOWS_ALPHA_COMPLETE` |
 | QSO database/projection | `QsoDatabase` schema 16 | ADIF identity helpers | `QsoDatabase`, schema 16 semantic mirror | `WINDOWS_ALPHA_COMPLETE` |
-| ADIF | `QsoDatabase` import/export | `rw_adif_serialize` | bounded streaming import/export; unknown fields | `WINDOWS_ALPHA_COMPLETE` |
+| ADIF | `QsoDatabase` import/export | `shackcq_adif_serialize` | bounded streaming import/export; unknown fields | `WINDOWS_ALPHA_COMPLETE` |
 | Wavelog | API-v2 client/store/engine | retry policy and URL helpers | Qt Network endpoint, binding/outbox/link/conflict/checkpoint | `WINDOWS_ALPHA_COMPLETE`; authenticated proof pending |
 | DX Cluster | `FeatureController` | `kx3::parse_cluster_spot`, feature context | one `ClusterController` and `SpotRepository` | `WINDOWS_ALPHA_COMPLETE`; live endpoint pending |
 | Band Maps | Android Band Maps controller/models | spot/worked analysis | Qt Quick layouts over one repository | `WINDOWS_ALPHA_COMPLETE` |
@@ -17,7 +17,7 @@ The established architecture is retained: native SwiftUI and Compose clients rem
 | Home/HamClock summary | Home/HamClock controllers | propagation/solar APIs | local health and observed summaries | `READ_ONLY_COMPLETE` |
 | Hamlib radio | `RadioPlatformController`, Hamlib JNI | pinned source 4.7.2 | desktop registry/controller | `WINDOWS_ALPHA_COMPLETE`; hardware pending |
 | Rotator | `RotatorPlatformController` | pinned Hamlib | desktop controller, MANUAL/PROMPT | `WINDOWS_ALPHA_COMPLETE`; movement pending |
-| Panadapter | QMX/Android audio controller | full `rw_panadapter_*` ABI | exact-route Qt Multimedia capture | `WINDOWS_ALPHA_COMPLETE`; live audio pending |
+| Panadapter | QMX/Android audio controller | full `shackcq_panadapter_*` ABI | exact-route Qt Multimedia capture | `WINDOWS_ALPHA_COMPLETE`; live audio pending |
 | Digi | `DigiController` | WSJT-X parser | inert companion foundation | `FOUNDATION_COMPLETE` |
 | Contest | contest core/session store | selected domain rules | definitions/session-reader foundation | `FOUNDATION_COMPLETE` |
 | Groups.io | Groups.io feature/store | No | vault/offline-store contract only | `FOUNDATION_COMPLETE` |

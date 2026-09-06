@@ -1,10 +1,10 @@
-#include "rigweave/propagation/p533.hpp"
+#include "shackcq/propagation/p533.hpp"
 
 #include <algorithm>
 #include <chrono>
 #include <cmath>
 
-namespace rigweave::propagation {
+namespace shackcq::propagation {
 
 std::vector<std::string> validate_p533_input(const P533Input& input) {
     std::vector<std::string> errors;
@@ -46,5 +46,5 @@ P533Result evaluate_p533(const P533Input& input) {
     return result;
 }
 
-}  // namespace rigweave::propagation
+}  // namespace shackcq::propagation
 

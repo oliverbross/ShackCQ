@@ -22,4 +22,4 @@
 | Mute/RX audio | `SUPPORTED_VERIFIED` | existing receive path; not reused as TX authority |
 | Reconnect during TX | `EXCLUDED` | never restores/replays TX; forces stop and fresh RX-safe preflight |
 | Native CW keyer | `DIALECT_SPECIFIC` | excluded from baseline; reviewed audio-keyed CW is used |
-| Per-mode TX level | `SUPPORTED_VERIFIED` | RigWeave-owned bounded map, applied exactly once before limiter |
+| Per-mode TX level | `SUPPORTED_VERIFIED` | ShackCQ-owned bounded map, applied exactly once before limiter |

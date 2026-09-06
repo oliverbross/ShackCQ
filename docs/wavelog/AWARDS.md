@@ -7,7 +7,7 @@ the website navigation was not treated as authoritative.
 
 ## Families found upstream
 
-| Family | Pinned source family | RigWeave status |
+| Family | Pinned source family | ShackCQ status |
 |---|---|---|
 | DXCC | `Awards.php`, `Dxcc.php`, `awards/dxcc*` | Implemented from the unified local QSO snapshot; worked/confirmed filters share the Progress engine. |
 | CQ and ITU zones | `Awards.php`, `awards/cq*`, `awards/itu*` | CQ/WAZ implemented; ITU-zone parity pending. |

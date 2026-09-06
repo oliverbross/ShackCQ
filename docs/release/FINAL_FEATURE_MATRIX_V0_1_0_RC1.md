@@ -1,4 +1,4 @@
-# Final Feature Matrix — RigWeave 0.1.0 RC1
+# Final Feature Matrix — ShackCQ 0.1.0 RC1
 
 | Platform/domain | Source status | Build/hosted status | Physical/live boundary |
 |---|---|---|---|

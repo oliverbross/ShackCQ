@@ -7,8 +7,8 @@
 | Field | Value |
 |---|---|
 | Execution time | 2026-08-17T04:24:52Z |
-| Repository | /Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-phase0 |
-| Remote | https://github.com/oliverbross/RigWeave.git |
+| Repository | /Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-phase0 |
+| Remote | https://github.com/oliverbross/ShackCQ.git |
 | Baseline | origin/main at f2bfcb450161c9a8cc6a6d595ccf699fb76af66c |
 | Feature branch | codex/phase-0-repository-truth |
 | Final commit | Recorded by the branch tip/final Codex response; a Git commit cannot contain its own SHA |
@@ -16,7 +16,7 @@
 
 ## Executive summary
 
-The active product, design, agent and surface contracts now agree with source: RigWeave has native iPad-focused Apple and Android clients over a shared C++17 core, with KX3/KX2 as the current radio family. GPL-3.0-only is adopted. Historical device evidence is labeled, current build evidence is separated from physical/service evidence, and future features are not described as shipped.
+The active product, design, agent and surface contracts now agree with source: ShackCQ has native iPad-focused Apple and Android clients over a shared C++17 core, with KX3/KX2 as the current radio family. GPL-3.0-only is adopted. Historical device evidence is labeled, current build evidence is separated from physical/service evidence, and future features are not described as shipped.
 
 Nexus was inspected externally at an immutable clean commit. Candidate components and component-level risks are recorded; no Nexus material was imported.
 

@@ -1,6 +1,6 @@
 # Wavelog-native parity inventory
 
-Status is relative to pinned Wavelog 3.1.0. `Complete` means a real RigWeave-native implementation exists; it does not mean authenticated or physical-device validation occurred.
+Status is relative to pinned Wavelog 3.1.0. `Complete` means a real ShackCQ-native implementation exists; it does not mean authenticated or physical-device validation occurred.
 
 | Surface | Baseline | This programme status | Placement or boundary |
 |---|---|---|---|

@@ -1,6 +1,6 @@
 # QMX/QMX+ parity ledger
 
-Statuses are `NATIVE_QMX`, `DELEGATED_TO_RIGWEAVE`, `PLATFORM_NOT_APPLICABLE`, `EXCLUDED`, and `MISSING`. Unknown hardware evidence remains unknown at runtime even when a contract exists.
+Statuses are `NATIVE_QMX`, `DELEGATED_TO_SHACKCQ`, `PLATFORM_NOT_APPLICABLE`, `EXCLUDED`, and `MISSING`. Unknown hardware evidence remains unknown at runtime even when a contract exists.
 
 | Capability | Status | Result/boundary |
 |---|---|---|
@@ -29,21 +29,21 @@ Statuses are `NATIVE_QMX`, `DELEGATED_TO_RIGWEAVE`, `PLATFORM_NOT_APPLICABLE`, `
 | SWR protection/fault | NATIVE_QMX | Sticky operator-cleared fault and fail-closed outcome. |
 | Antenna tune | NATIVE_QMX | Firmware/readback-gated typed confirmation request; central safety executes later. |
 | Panadapter | NATIVE_QMX | QMX adapter contract, IF axis, mode direction and passband. |
-| Waterfall | DELEGATED_TO_RIGWEAVE | Central Panadapter renders and owns history. |
+| Waterfall | DELEGATED_TO_SHACKCQ | Central Panadapter renders and owns history. |
 | I/Q correction | NATIVE_QMX | Bounded adaptive DC/amplitude/quadrature correction. |
-| Flat-spectrum mode | DELEGATED_TO_RIGWEAVE | QMX setting contract; central DSP applies it. |
+| Flat-spectrum mode | DELEGATED_TO_SHACKCQ | QMX setting contract; central DSP applies it. |
 | Zoom/pan/tap-to-tune | NATIVE_QMX | QMX frequency mapping contract; central surface owns gesture state. |
-| Band-plan strip | DELEGATED_TO_RIGWEAVE | Existing Band Map/Panadapter authority. |
-| Digi FT8/FT4 | DELEGATED_TO_RIGWEAVE | Existing decoder/exchange engine remains authoritative. |
+| Band-plan strip | DELEGATED_TO_SHACKCQ | Existing Band Map/Panadapter authority. |
+| Digi FT8/FT4 | DELEGATED_TO_SHACKCQ | Existing decoder/exchange engine remains authoritative. |
 | Direct CAT-tone transmit | NATIVE_QMX | Optional immutable-plan backend; no sequencing or callsign selection. |
-| QSO logging | DELEGATED_TO_RIGWEAVE | Existing canonical mutation path. |
-| Wavelog delivery | DELEGATED_TO_RIGWEAVE | Existing Wavelog controller/outbox. |
-| Presets/memories | DELEGATED_TO_RIGWEAVE | Safe adapter fields only; no second authority. |
+| QSO logging | DELEGATED_TO_SHACKCQ | Existing canonical mutation path. |
+| Wavelog delivery | DELEGATED_TO_SHACKCQ | Existing Wavelog controller/outbox. |
+| Presets/memories | DELEGATED_TO_SHACKCQ | Safe adapter fields only; no second authority. |
 | Diagnostics | NATIVE_QMX | Sanitized identity-free health metadata. |
 | Configuration | NATIVE_QMX | Package-local safe settings; no runtime TX/arm/session state. |
 | Web UI | PLATFORM_NOT_APPLICABLE | ESP32 web application is not ported. |
 | OTA | PLATFORM_NOT_APPLICABLE | Radio/app firmware update is outside this Android core. |
-| Wi-Fi | PLATFORM_NOT_APPLICABLE | RigWeave owns networking; QMX core adds none. |
+| Wi-Fi | PLATFORM_NOT_APPLICABLE | ShackCQ owns networking; QMX core adds none. |
 | microSD | PLATFORM_NOT_APPLICABLE | No Android QMX microSD authority. |
 
-Counts: **29 NATIVE_QMX**, **7 DELEGATED_TO_RIGWEAVE**, **4 PLATFORM_NOT_APPLICABLE**, **1 EXCLUDED**, **0 MISSING** (41 total).
+Counts: **29 NATIVE_QMX**, **7 DELEGATED_TO_SHACKCQ**, **4 PLATFORM_NOT_APPLICABLE**, **1 EXCLUDED**, **0 MISSING** (41 total).

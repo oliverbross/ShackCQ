@@ -2,14 +2,14 @@
 
 ## Baselines
 
-- RigWeave start: `c45fb567f2c6db6b986f95cf14d35964511ea26b` (`origin/main`, 2026-08-19).
+- ShackCQ start: `c45fb567f2c6db6b986f95cf14d35964511ea26b` (`origin/main`, 2026-08-19).
 - Wavelog stable release: `3.1.0`; annotated tag object `465dad8ab4fd33ec637c043466a2829f51ccc87d`; peeled commit `af3256140bd05403b7c4a421746c2ea653a4f04f`.
-- Wavelog licence: MIT. RigWeave remains GPL-3.0-only.
+- Wavelog licence: MIT. ShackCQ remains GPL-3.0-only.
 - The implementation studies the pinned API and product behaviour. It does not embed PHP, Wavelog pages, its navigation, a web server, or Wavelog source files.
 
 ## Placement
 
-RigWeave remains local-first. `QsoDatabase` is the one Android QSO store and existing ADIF import/export remains the serialization boundary. Schema v11 adds only Advanced Logbook query indexes after schema v10's synchronization metadata. `WavelogSyncStore`, `WavelogApiV2Client`, `WavelogSyncEngine`, and `QsoMutationCoordinator` are separate from downstream QRZ/Club Log/eQSL delivery.
+ShackCQ remains local-first. `QsoDatabase` is the one Android QSO store and existing ADIF import/export remains the serialization boundary. Schema v11 adds only Advanced Logbook query indexes after schema v10's synchronization metadata. `WavelogSyncStore`, `WavelogApiV2Client`, `WavelogSyncEngine`, and `QsoMutationCoordinator` are separate from downstream QRZ/Club Log/eQSL delivery.
 
 One enabled writable Wavelog binding is enforced by a partial unique index. A binding stores a credential alias, never a token. Existing Android Wavelog secrets remain AES-GCM encrypted with an Android Keystore key; existing iOS Wavelog secrets remain in Keychain. A `wl2_` token is never reinterpreted as a legacy API key, and the existing legacy adapter remains available for older installations.
 
@@ -39,7 +39,7 @@ Android and Apple Fast Entry are native workspaces, not embedded Wavelog pages. 
 
 ## API 3.1.0 contract reviewed
 
-The pinned server exposes `/index.php/api/v2`. API v2 accepts only `wl2_` bearer tokens (with `X-API-Key` as a server fallback), returns `{data, meta}` or `{error}`, and applies resource scopes. RigWeave uses Bearer authorization only.
+The pinned server exposes `/index.php/api/v2`. API v2 accepts only `wl2_` bearer tokens (with `X-API-Key` as a server fallback), returns `{data, meta}` or `{error}`, and applies resource scopes. ShackCQ uses Bearer authorization only.
 
 - `GET token`: owner, expiry, and scopes.
 - `GET station`: selectable station ID/UUID/identity; `station:read`.

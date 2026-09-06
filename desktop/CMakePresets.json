@@ -8,7 +8,7 @@
       "binaryDir": "${sourceDir}/../build/desktop/release",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "RIGWEAVE_BUILD_TESTS": "ON"
+        "SHACKCQ_BUILD_TESTS": "ON"
       }
     }
   ],

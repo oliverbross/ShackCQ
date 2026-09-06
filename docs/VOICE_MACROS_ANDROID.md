@@ -2,7 +2,7 @@
 
 Keyer v2 adds logical composite plans that reference the same six private slots. Every clip is validated before PTT, plans are capped at 12 references/45 seconds, and playback uses the existing single `VoiceMacroTransmitController` TX/RX lifecycle. The legacy one-slot API is a one-item adapter. Configuration recovery exports slot references, never WAV bytes or paths. See `docs/keyer/KEYER_HOTKEYS_V2.md`.
 
-RigWeave for Android provides six private, tablet-local voice slots for USB and LSB operation on an Elecraft KX3/KX2. A slot can be recorded with the built-in microphone or imported from an uncompressed PCM WAV, previewed only through the built-in speaker, and sent through an explicitly selected DigiRig USB audio output.
+ShackCQ for Android provides six private, tablet-local voice slots for USB and LSB operation on an Elecraft KX3/KX2. A slot can be recorded with the built-in microphone or imported from an uncompressed PCM WAV, previewed only through the built-in speaker, and sent through an explicitly selected DigiRig USB audio output.
 
 ## Signal and control architecture
 
@@ -11,12 +11,12 @@ The transmit path has one PTT owner:
 ```text
 tablet canonical PCM -> left USB channel -> DigiRig audio -> KX3/KX2 MIC
 tablet digital zero  -> right USB channel
-RigWeave CAT         -> TX; / TQ; / RX; verification
+ShackCQ CAT         -> TX; / TQ; / RX; verification
 ```
 
 V1 deliberately uses Elecraft CAT PTT. It does not use DigiRig RTS, DTR, CM108 GPIO, VOX, a right-channel tone, or an automatic fallback. The selected serial port is opened at 38,400 8N1; supported RTS and DTR lines are immediately driven inactive and checked before CAT is accepted. If their inactive state cannot be established, connection fails closed.
 
-Elecraft defines `TX;` as entering transmit like PTT/XMIT, `RX;` as terminating transmit, and `TQ0;`/`TQ1;` as the compact receive/transmit status response. RigWeave therefore uses a fresh-response sequence:
+Elecraft defines `TX;` as entering transmit like PTT/XMIT, `RX;` as terminating transmit, and `TQ0;`/`TQ1;` as the compact receive/transmit status response. ShackCQ therefore uses a fresh-response sequence:
 
 1. require exact USB or LSB mode, foreground state, CAT, a valid recording, and a unique selected USB output;
 2. acquire the exclusive `VOICE_TX` audio lease, pausing only a running receive monitor through the central coordinator; reject every other owner before PTT;
@@ -27,7 +27,7 @@ Elecraft defines `TX;` as entering transmit like PTT/XMIT, `RX;` as terminating 
 7. add 125 ms trailing silence, flush audio, send `RX;`, and require fresh `TQ0;`;
 8. on Stop, backgrounding, route/focus loss, CAT error, watchdog, or exception, halt non-zero audio, make up to two RX/verification attempts from non-cancellable cleanup, and release the lease exactly once.
 
-If RX still cannot be confirmed, RigWeave shows a persistent warning instructing the operator to use the radio's physical RX/XMIT control or remove PTT.
+If RX still cannot be confirmed, ShackCQ shows a persistent warning instructing the operator to use the radio's physical RX/XMIT control or remove PTT.
 
 ## Supported hardware arrangements
 
@@ -45,7 +45,7 @@ Settings -> Safety lists every supported serial port with driver family, reporte
 - fixed recording input: built-in tablet microphone;
 - fixed preview output: built-in tablet speaker.
 
-RigWeave first uses one exact persisted stable signature, otherwise auto-selects only when exactly one eligible candidate exists. Multiple candidates or duplicate saved identities require an explicit choice. Transient Android device IDs are used only to remember the current attachment/session. Rescanning is event-driven through Android audio-device callbacks, with manual Rescan actions available.
+ShackCQ first uses one exact persisted stable signature, otherwise auto-selects only when exactly one eligible candidate exists. Multiple candidates or duplicate saved identities require an explicit choice. Transient Android device IDs are used only to remember the current attachment/session. Rescanning is event-driven through Android audio-device callbacks, with manual Rescan actions available.
 
 Changing CAT or voice TX selection disconnects/aborts the active operation and clears all transmit arms. A selected route disappearing or becoming ambiguous fails closed.
 
@@ -83,7 +83,7 @@ Voice automatically returns to safe on CAT disconnect/reconnect, USB <-> LSB or 
 
 Settings -> Audio -> Voice macro TX level scales PCM sent to DigiRig and defaults to 20%. It does not change Android system volume, KX3 RF power, MIC gain, compression, or TX EQ.
 
-For first RF acceptance, use a dummy load and minimum safe RF power. Start with a low RigWeave level, then adjust the app level and KX3 MIC gain conservatively. Elecraft's KX3 manual advises keeping audio-data ALC to no more than roughly four or five bars; avoid overdrive.
+For first RF acceptance, use a dummy load and minimum safe RF power. Start with a low ShackCQ level, then adjust the app level and KX3 MIC gain conservatively. Elecraft's KX3 manual advises keeping audio-data ALC to no more than roughly four or five bars; avoid overdrive.
 
 ## Operator-controlled physical acceptance
 
@@ -100,7 +100,7 @@ Do not perform this checklist into an antenna as an unattended software test.
 9. Observe diagnostics and the radio for `TQ0 -> TX -> TQ1 -> speech -> RX -> TQ0`.
 10. Adjust app level and KX3 MIC gain for clean ALC without overdrive.
 11. During a second dummy-load transmission, press Stop; audio must cease and RX must confirm.
-12. During a test, unplug DigiRig USB audio; RigWeave must stop speech, request RX, disarm, and show route loss.
+12. During a test, unplug DigiRig USB audio; ShackCQ must stop speech, request RX, disarm, and show route loss.
 13. Repeat with app backgrounding and a radio-mode change; both must abort, release, and disarm.
 
 Record each item as PASS, FAIL, or NOT RUN. An APK build, route enumeration, or `AudioTrack.write()` is not evidence of RF transmission or confirmed physical RX return.
@@ -109,7 +109,7 @@ Record each item as PASS, FAIL, or NOT RUN. An APK build, route enumeration, or 
 
 - **Selection required:** two candidates share the same role or the saved identity matches zero/multiple devices. Rescan and select the exact current attachment.
 - **RTS/DTR could not be confirmed inactive:** disconnect the adapter and correct its driver/control-line support before CAT use.
-- **Built-in microphone/speaker route refused:** disconnect conflicting audio accessories or correct Android routing; RigWeave will not use an unknown default.
+- **Built-in microphone/speaker route refused:** disconnect conflicting audio accessories or correct Android routing; ShackCQ will not use an unknown default.
 - **Fresh TQ response missing:** verify 38,400 8N1, the selected adapter, cable seating, and KX3/KX2 CAT configuration.
 - **RX unconfirmed:** immediately use physical RX/XMIT or remove PTT, then inspect CAT and cable state before another attempt.
 - **Low/distorted audio:** verify the DigiRig output selection, left/mono path, correct MIC cable, conservative app level, and KX3 MIC/ALC setup.

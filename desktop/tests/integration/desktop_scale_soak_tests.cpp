@@ -1,8 +1,8 @@
-#include "rigweave/desktop/DesktopModels.hpp"
-#include "rigweave/desktop/DesktopPanadapter.hpp"
-#include "rigweave/desktop/DesktopParityPlatform.hpp"
-#include "rigweave/desktop/RfMapItem.hpp"
-#include "rigweave/desktop/RfObservationModel.hpp"
+#include "shackcq/desktop/DesktopModels.hpp"
+#include "shackcq/desktop/DesktopPanadapter.hpp"
+#include "shackcq/desktop/DesktopParityPlatform.hpp"
+#include "shackcq/desktop/RfMapItem.hpp"
+#include "shackcq/desktop/RfObservationModel.hpp"
 
 #include <QElapsedTimer>
 #include <QFile>
@@ -16,7 +16,7 @@
 #include <mach/mach.h>
 #endif
 
-using namespace rigweave::desktop;
+using namespace shackcq::desktop;
 
 class DesktopScaleSoakTests final : public QObject {
   Q_OBJECT
@@ -205,7 +205,7 @@ void DesktopScaleSoakTests::rfObservationHundredThousandFilterAndAggregation() {
 
 void DesktopScaleSoakTests::continuousReplay() {
   bool valid = false;
-  int seconds = qEnvironmentVariableIntValue("RIGWEAVE_REPLAY_SECONDS", &valid);
+  int seconds = qEnvironmentVariableIntValue("SHACKCQ_REPLAY_SECONDS", &valid);
   if (!valid)
     seconds = 2;
   seconds = std::clamp(seconds, 1, 3600);
@@ -268,7 +268,7 @@ void DesktopScaleSoakTests::continuousReplay() {
       {"sampleRates", "48000,96000,192000"},
       {"workerQueueCapacity", health.value("workerQueueCapacity")},
       {"fftOffOwnerThread", health.value("fftExecutedOffOwnerThread")}};
-  const QString reportPath = qEnvironmentVariable("RIGWEAVE_REPLAY_REPORT");
+  const QString reportPath = qEnvironmentVariable("SHACKCQ_REPLAY_REPORT");
   if (!reportPath.isEmpty()) {
     QSaveFile file(reportPath);
     QVERIFY(file.open(QIODevice::WriteOnly));

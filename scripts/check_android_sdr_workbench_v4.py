@@ -25,17 +25,17 @@ def workbench_strip_calls(source: str) -> int:
 
 
 def audit(root: pathlib.Path = ROOT) -> None:
-    domain = (root / "android/app/src/main/java/app/rigweave/mobile/AndroidSdrWorkbenchV4.kt").read_text()
-    screens = (root / "android/app/src/main/java/app/rigweave/mobile/AndroidSdrWorkbenchScreensV4.kt").read_text()
-    tci = (root / "android/app/src/main/java/app/rigweave/mobile/AndroidTciBackend.kt").read_text()
-    integration = (root / "android/app/src/main/java/app/rigweave/mobile/MainActivity.kt").read_text()
-    enhancement = (root / "android/app/src/main/java/app/rigweave/mobile/AndroidSdrEnhancementDomain.kt").read_text()
-    panadapter = (root / "android/app/src/main/java/app/rigweave/mobile/PanadapterScreen.kt").read_text()
+    domain = (root / "android/app/src/main/java/app/shackcq/mobile/AndroidSdrWorkbenchV4.kt").read_text()
+    screens = (root / "android/app/src/main/java/app/shackcq/mobile/AndroidSdrWorkbenchScreensV4.kt").read_text()
+    tci = (root / "android/app/src/main/java/app/shackcq/mobile/AndroidTciBackend.kt").read_text()
+    integration = (root / "android/app/src/main/java/app/shackcq/mobile/MainActivity.kt").read_text()
+    enhancement = (root / "android/app/src/main/java/app/shackcq/mobile/AndroidSdrEnhancementDomain.kt").read_text()
+    panadapter = (root / "android/app/src/main/java/app/shackcq/mobile/PanadapterScreen.kt").read_text()
     kotlin_files = list((root / "android/app/src/main/java").rglob("*.kt"))
     for owner in ("AndroidSdrWorkbenchV4", "IqCaptureRepository", "ReplayIqSource", "SpectrumSurveyRepository", "SignalMeasurementController"):
         count = sum(len(re.findall(rf"\bclass\s+{owner}\b", path.read_text(errors="ignore"))) for path in kotlin_files)
         require(count == 1, f"expected one {owner}, found {count}")
-    for token in ("RIGWEAVE_FLOAT32_IQ_LE", ".f32iq.tmp", "fd.sync()", "maximumFileSeconds", "maximumTotalBytes"):
+    for token in ("SHACKCQ_FLOAT32_IQ_LE", ".f32iq.tmp", "fd.sync()", "maximumFileSeconds", "maximumTotalBytes"):
         require(token in domain, f"production I/Q invariant missing: {token}")
     for token in (".25f", ".5f", "1f", "2f", "audioTruthful", "requestedFrame"):
         require(token in domain, f"offline replay invariant missing: {token}")

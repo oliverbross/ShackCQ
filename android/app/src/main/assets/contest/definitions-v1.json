@@ -14,6 +14,6 @@
     {"id":"cq-160-ssb","adif":"CQ-160-SSB","mode":"SSB","family":"CQ_160"},
     {"id":"oceania-dx-cw","adif":"OCEANIA-DX-CW","mode":"CW","family":"OCEANIA_DX"},
     {"id":"oceania-dx-ssb","adif":"OCEANIA-DX-SSB","mode":"SSB","family":"OCEANIA_DX"},
-    {"id":"general-dx-serial","adif":"RIGWEAVE-GENERAL","mode":"MIXED","family":"GENERAL_SERIAL","nonAward":true}
+    {"id":"general-dx-serial","adif":"SHACKCQ-GENERAL","mode":"MIXED","family":"GENERAL_SERIAL","nonAward":true}
   ]
 }

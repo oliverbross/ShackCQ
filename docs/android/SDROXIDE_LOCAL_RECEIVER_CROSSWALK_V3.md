@@ -1,6 +1,6 @@
 # SDRoxide Local Receiver Crosswalk v3
 
-| Reviewed behavior | RigWeave owner | Implementation | Boundary |
+| Reviewed behavior | ShackCQ owner | Implementation | Boundary |
 |---|---|---|---|
 | Local receiver selection | `LocalReceiverController` | Two stable RX A/B identities | Never a physical TCI receiver. |
 | NCO/passband | `LocalReceiverDsp` | Continuous phase NCO and complex FIR | Out-of-span fails closed. |

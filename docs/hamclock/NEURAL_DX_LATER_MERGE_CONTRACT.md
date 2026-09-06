@@ -5,17 +5,17 @@
 The HamClock finish-line branch was compared to baseline
 `4a692a1b1d5653b55f21552bcc67a35fdc2b0172`. These Neural DX-owned files are untouched:
 
-- `android/app/src/main/java/app/rigweave/mobile/FeatureController.kt`
-- `android/app/src/main/java/app/rigweave/mobile/NeuralDxController.kt`
-- `android/app/src/main/java/app/rigweave/mobile/NeuralDxScreen.kt`
-- `android/app/src/main/java/app/rigweave/mobile/NeuralDxMap.kt`
+- `android/app/src/main/java/app/shackcq/mobile/FeatureController.kt`
+- `android/app/src/main/java/app/shackcq/mobile/NeuralDxController.kt`
+- `android/app/src/main/java/app/shackcq/mobile/NeuralDxScreen.kt`
+- `android/app/src/main/java/app/shackcq/mobile/NeuralDxMap.kt`
 - `core/portable/include/kx3/dx_analysis.hpp`
 - `core/portable/src/dx_analysis.cpp`
 - `core/src/features.cpp`
 - `docs/NEURAL_DX_WATCHER_INTEGRATION.md`
 - `docs/neural-dx-watcher-parity.md`
 
-`android/app/src/main/java/app/rigweave/mobile/MainActivity.kt` is also untouched. No bridge
+`android/app/src/main/java/app/shackcq/mobile/MainActivity.kt` is also untouched. No bridge
 exception was used.
 
 ## Expected overlap and semantic ownership

@@ -10,7 +10,7 @@ The behavior comparison used Wavelog release 3.1.0 at peeled commit `af3256140bd
 - `application/views/simplefle/index.php`
 - `assets/js/sections/simplefle.js`
 
-RigWeave does not copy or adapt those PHP, HTML, or JavaScript sources. It implements the observed product behaviors independently in Kotlin/Compose, Swift/SwiftUI, and the existing SQLite stores. RigWeave remains GPL-3.0-only.
+ShackCQ does not copy or adapt those PHP, HTML, or JavaScript sources. It implements the observed product behaviors independently in Kotlin/Compose, Swift/SwiftUI, and the existing SQLite stores. ShackCQ remains GPL-3.0-only.
 
 ## Native decisions
 

@@ -13,7 +13,7 @@ Android software/device integration is fail-closed. Physical KX3 quadrature-I/Q 
 - Approved source commits: `fb86c523905bb4c1323bc878ab68380a333c90e7`, `b5d73060e8b2fd40c808da1703f39d2f4e4b74aa`, and `563b788c59dccab0b9e83206a21bb0778671a830`.
 - Integration branch: `integration/android-phase1-studio-closure`, branched from approved tip `563b788c59dccab0b9e83206a21bb0778671a830` with merge base `5d512a91e58f4a7746193aec44fbc71f0efdfa96`.
 - Audio-ownership implementation: `d8df0a197aa728ac2dbb1bd417846babdb7e41fa`.
-- The primary checkout's unrelated iOS edits were not included; work occurred in `/Users/oliver/Documents/Projects/RigWeave/rigweave-mobile-phase1-android-closure`.
+- The primary checkout's unrelated iOS edits were not included; work occurred in `/Users/oliver/Documents/Projects/ShackCQ/shackcq-mobile-phase1-android-closure`.
 
 ## Integrated behavior
 
@@ -56,7 +56,7 @@ Retained evidence reports approximately 0.10 dB median mirror rejection, approxi
 - `adb install -r` succeeded. A second stopped-app replacement preserved the observable app-private file count at 12 before and 12 after; no uninstall, storage clear, schema migration, package-ID change, or preference rewrite was used.
 - Cold launch succeeded without app fatal/ANR evidence. Settings showed the saved StarTech RX input. Monitor acquisition ran at 48 kHz; `PAUSE AND USE FOR EQ` paused it for a finite real-input capture, and the central coordinator restored it afterward. The final monitor switch was off after background/resume; a zero-length USB read was reported precisely rather than leaving an owner live.
 - EQ Studio and Voice's six private slots opened. The panadapter opened with `48K` selected, `96K` available, `RF STALE`, and `CAT OFFLINE · RELATIVE OFFSETS ONLY`; START refused until a live KX3 was identified.
-- Evidence captures are under `/Users/oliver/Documents/Projects/RigWeave/artifacts/android-phase1-closure-20260818`.
+- Evidence captures are under `/Users/oliver/Documents/Projects/ShackCQ/artifacts/android-phase1-closure-20260818`.
 
 No RF transmission was performed. CAT was offline during this closure's UI smoke; Arm & Send, `TX;`, TUNE, and dummy-load actions were not invoked.
 

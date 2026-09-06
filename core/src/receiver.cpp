@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-#include "rigweave/receiver.hpp"
+#include "shackcq/receiver.hpp"
 
 #include <algorithm>
 #include <cmath>
 
-namespace rigweave {
+namespace shackcq {
 
 Float32Ring::Float32Ring(std::size_t capacity_values)
     : values_(std::max<std::size_t>(capacity_values, 2U)) {}
@@ -74,4 +74,4 @@ void Float32Ring::clear() {
     size_ = 0U;
 }
 
-} // namespace rigweave
+} // namespace shackcq

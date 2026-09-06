@@ -2,7 +2,7 @@
 
 The integration retains exactly one Hamlib 4.7.2 source at upstream commit `40f63488fe0bd751b147f48d62fd217bf53713a0`. Android, Windows and macOS desktop build from that reviewed source; generated platform configuration may differ. No `rigctl`/`rigctld` executable or duplicate Hamlib tree is added.
 
-RigWeave remains GPL-3.0-only. `NOTICE`, the Wavelog/OpenHamClock/Nexus provenance records, and `core/third_party/iturhfprop/SOURCE_MANIFEST.json` remain the authoritative manifests.
+ShackCQ remains GPL-3.0-only. `NOTICE`, the Wavelog/OpenHamClock/Nexus provenance records, and `core/third_party/iturhfprop/SOURCE_MANIFEST.json` remain the authoritative manifests.
 
 Wavelog behaviour was reviewed at 3.1.0 / `af3256140bd05403b7c4a421746c2ea653a4f04f` under MIT terms. OpenHamClock behaviour was reviewed at stable `d4a50eaaa61d3432a1de5f80cbe61790739930a5`; no upstream implementation was copied in this convergence. Nexus was reviewed at `57d11fd55f098dc9302b6aafed39e6cd4b6db216`, with the later 1.7.6 delta reviewed only for durable mode-visibility lessons.
 
@@ -18,7 +18,7 @@ Sweep 3 exposes a bounded in-product acknowledgement registry derived from `NOTI
 
 The candidate adds Qt/C++/QML source, tests, workflows and documentation only. It introduces no new vendored source, binary, firmware, map geometry, P.533 payload, `rigctl`/`rigctld` executable or duplicate Hamlib runtime. Windows and macOS builds continue from the single pinned Hamlib 4.7.2 source tree. Provider URLs and protocol names are compatibility metadata; live downloads are bounded, disabled by default and are not redistributed in source artifacts.
 
-Functional Parity Closure v1 links the existing in-tree `rust/rigweave-flex` static library for Flex, Digi and SGP4 behavior and reuses the existing core WSJT-X parser. It adds no vendored source or redistributable provider dataset. Qt Multimedia, SerialPort, Network and Widgets are already declared desktop dependencies.
+Functional Parity Closure v1 links the existing in-tree `rust/shackcq-flex` static library for Flex, Digi and SGP4 behavior and reuses the existing core WSJT-X parser. It adds no vendored source or redistributable provider dataset. Qt Multimedia, SerialPort, Network and Widgets are already declared desktop dependencies.
 
 ## Multiplatform RC1 authority
 
@@ -46,7 +46,7 @@ V5 reverified SDRoxide v1.5.3 at the same commit/tree/license digest and audited
 
 ## Secure Remote Station v6
 
-V6 reuses the same immutable SDRoxide and ExpertSDR3 reference audits for behavioral comparison. No upstream code or payload is incorporated. The remote protocol, station service, Android client, TCI/rigctld adapters, mDNS records and deterministic fixtures are original RigWeave code; the detailed classification and watcher boundaries are in `docs/remote/REMOTE_PROVENANCE_V6.md`.
+V6 reuses the same immutable SDRoxide and ExpertSDR3 reference audits for behavioral comparison. No upstream code or payload is incorporated. The remote protocol, station service, Android client, TCI/rigctld adapters, mDNS records and deterministic fixtures are original ShackCQ code; the detailed classification and watcher boundaries are in `docs/remote/REMOTE_PROVENANCE_V6.md`.
 
 ## Final RC codec and Linux credential dependencies
 

@@ -1,4 +1,4 @@
-# RigWeave Intelligent Band Maps v1
+# ShackCQ Intelligent Band Maps v1
 
 ## Sweep 2 renderer amendment
 
@@ -11,7 +11,7 @@ The operator-visible selector is restricted to 160m through 23cm. All four layou
 ## Frozen source and platform boundary
 
 Android Band Maps v1 was developed on `feature/intelligent-bandmaps-v1` in the isolated worktree
-`/Users/oliver/Documents/Projects/RigWeave/rigweave-intelligent-bandmaps-v1` from the immutable integrated commit
+`/Users/oliver/Documents/Projects/ShackCQ/shackcq-intelligent-bandmaps-v1` from the immutable integrated commit
 `98490b6d5234c3f12cc5d00bbea3163c8273c3dc` (`integration/keyer-contest-dxchaser-v1`). At task start,
 `origin/main` was `b4f12e17fa87df16d2094b518ae187553e370be5`; the frozen base did not equal `origin/main`.
 
@@ -24,7 +24,7 @@ Verified integrated ancestry:
 | DX Chaser | `b30ee05ad9231627afc9854e7182555ef229f50c` | `606e343d21dd6c0d58a42c5a3c4f7498702400f0` |
 
 The QSO schema remains version 13 and the indexed QSO projection remains version 2. Contest opportunity contract
-version 1 and DX Chaser read-only contract version 1 (`RigWeave DX Chaser Score v1`) are consumed unchanged. No QSO,
+version 1 and DX Chaser read-only contract version 1 (`ShackCQ DX Chaser Score v1`) are consumed unchanged. No QSO,
 Neural, Digi, Groups.io, Contest or Chaser schema was changed.
 
 This delivery is Android-only. iOS, iPadOS, macOS, Windows and Linux Band Maps remain later phases. No Apple or

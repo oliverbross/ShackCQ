@@ -4,7 +4,7 @@
 
 | Path | Android side | Windows side | Resolution |
 |---|---|---|---|
-| `core/CMakeLists.txt` | ASan/UBSan options, propagation and lifecycle-stress tests | optional standalone core tests and MSVC warning policy | Kept all three test targets behind `RIGWEAVE_CORE_BUILD_TESTS`; retained sanitizers; added MSVC-safe flags to both added tests. |
+| `core/CMakeLists.txt` | ASan/UBSan options, propagation and lifecycle-stress tests | optional standalone core tests and MSVC warning policy | Kept all three test targets behind `SHACKCQ_CORE_BUILD_TESTS`; retained sanitizers; added MSVC-safe flags to both added tests. |
 
 No blanket `ours` or `theirs` resolution was used.
 

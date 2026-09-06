@@ -12,11 +12,11 @@ Every pointer-like JNI value has one Kotlin owner. A checked call holds the owne
 
 | Resource family | Construction | Call owner | Retirement / close | Late-publication rule | Verdict |
 |---|---|---|---|---|---|
-| Base CAT parser `rw_context` | `MainActivity.RigWeaveApp` | `NativeHandleOwner` remembered by the application graph | Compose disposal closes once | Every feed/state call uses the checked lease | Hardened |
-| Feature/DX `rw_feature_context` | `FeatureNativeSession` | `FeatureNativeSession` only | Controller cancels jobs, retires the session, then destroys once | CTY, worked-log, cluster, solar and snapshot work reject retired generation | Hardened; fixes the observed tablet UAF |
-| Flex `rw_flex_context` | `FlexRadioController` | controller-owned `NativeHandleOwner` | socket/read/reconnect jobs cancel before owner close | read-loop publication checks owner generation and closed state | Hardened |
-| Digi `rw_digi_context` | `DigiController` | controller-owned `NativeHandleOwner` | configuration replacement retires old context; stop/close are idempotent | RX, slot, PSK and SSTV completion check current generation | Hardened |
-| Panadapter `rw_panadapter_context` | `PanadapterController` | controller-owned `NativeHandleOwner` | capture/replay stop before owner close | capture, replay, snapshot and route callbacks reject stale generation | Hardened |
+| Base CAT parser `shackcq_context` | `MainActivity.ShackCQApp` | `NativeHandleOwner` remembered by the application graph | Compose disposal closes once | Every feed/state call uses the checked lease | Hardened |
+| Feature/DX `shackcq_feature_context` | `FeatureNativeSession` | `FeatureNativeSession` only | Controller cancels jobs, retires the session, then destroys once | CTY, worked-log, cluster, solar and snapshot work reject retired generation | Hardened; fixes the observed tablet UAF |
+| Flex `shackcq_flex_context` | `FlexRadioController` | controller-owned `NativeHandleOwner` | socket/read/reconnect jobs cancel before owner close | read-loop publication checks owner generation and closed state | Hardened |
+| Digi `shackcq_digi_context` | `DigiController` | controller-owned `NativeHandleOwner` | configuration replacement retires old context; stop/close are idempotent | RX, slot, PSK and SSTV completion check current generation | Hardened |
+| Panadapter `shackcq_panadapter_context` | `PanadapterController` | controller-owned `NativeHandleOwner` | capture/replay stop before owner close | capture, replay, snapshot and route callbacks reject stale generation | Hardened |
 | Embedded Hamlib radio `Session` | `HamlibSession` | private checked owner; transport bridge receives no raw escape | session/controller close bounded and idempotent | poller and bridge jobs cancel before destruction | Hardened |
 | Embedded Hamlib rotator `RotatorSession` | `NativeHamlibRotatorPort` | active session contains checked owner | active entry removed before native close; bridge/poll jobs cancel | no poll/action can lease a retired session | Hardened |
 | Satellite propagation | `NativeSatellite` | stateless calls; no retained native context | no native close required | provider, calculation and selection generations reject stale results | Safe, generation hardened |

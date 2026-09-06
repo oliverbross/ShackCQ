@@ -2,7 +2,7 @@
 
 ## Ownership and scope
 
-DesktopRadioController remains RigWeave's sole desktop radio authority. Its private TciClient supplies a receive-only Qt WebSockets backend; it does not create a second settings, radio, logbook, provider, or transmit owner.
+DesktopRadioController remains ShackCQ's sole desktop radio authority. Its private TciClient supplies a receive-only Qt WebSockets backend; it does not create a second settings, radio, logbook, provider, or transmit owner.
 
 Profiles contain a stable ID, display name, ws:// or normally validated wss:// endpoint, preferred receiver and I/Q sample rate, optional RX-audio route, and an auto-connect preference. Auto-connect defaults off. Profiles are bounded to 32 and restore is rejected when a future schema or excessive profile list is found.
 

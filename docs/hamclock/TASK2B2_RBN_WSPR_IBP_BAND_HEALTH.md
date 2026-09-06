@@ -6,7 +6,7 @@ Date: 2026-08-20
 
 Implementation is confined to `feature/openhamclock-parity-v1`, based on local and remote SHA `5425cfa85c53ca53fccf33eddf0ab42ce37f5a31`. It does not merge, tag, release, deploy, install on a device, change Apple surfaces, or add radio transmit behavior.
 
-Pinned OpenHamClock commit `d4a50eaaa61d3432a1de5f80cbe61790739930a5` was reviewed for the eleven Task 2B2 paths recorded in `upstream.json`. Upstream code was not copied. RigWeave retains GPL-3.0-only licensing and uses the audit only for behavior/provider comparison.
+Pinned OpenHamClock commit `d4a50eaaa61d3432a1de5f80cbe61790739930a5` was reviewed for the eleven Task 2B2 paths recorded in `upstream.json`. Upstream code was not copied. ShackCQ retains GPL-3.0-only licensing and uses the audit only for behavior/provider comparison.
 
 ## Architecture and truth
 

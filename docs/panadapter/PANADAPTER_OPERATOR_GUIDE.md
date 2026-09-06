@@ -2,9 +2,9 @@
 
 ## Before starting
 
-Connect and identify the KX3 through the normal RigWeave CAT path. Connect the KX3 RX I/Q output to a class-compliant external stereo USB ADC through a topology the tablet can actually enumerate. Select that exact input. Use the always-visible **48K** or **96K** control to change capture rate; the live stream is reopened and re-proved. Do not select a mono route.
+Connect and identify the KX3 through the normal ShackCQ CAT path. Connect the KX3 RX I/Q output to a class-compliant external stereo USB ADC through a topology the tablet can actually enumerate. Select that exact input. Use the always-visible **48K** or **96K** control to change capture rate; the live stream is reopened and re-proved. Do not select a mono route.
 
-For the StarTech ICUSBAUDIO2D, the three hardware LEDs document the **playback** sample rate, not microphone-capture truth. The KX3 I/Q lead belongs in its stereo microphone input. Trust the live RigWeave client/device format fields and Android audio diagnostics for capture rate. In the tested Lenovo/StarTech path, direct 48 kHz used nearly the entire nominal span; direct Android-reported 96 kHz exposed only about 48 kHz of useful central response. Use 48 kHz for honest routine viewing until the 96 kHz analogue/input response is independently explained and calibrated.
+For the StarTech ICUSBAUDIO2D, the three hardware LEDs document the **playback** sample rate, not microphone-capture truth. The KX3 I/Q lead belongs in its stereo microphone input. Trust the live ShackCQ client/device format fields and Android audio diagnostics for capture rate. In the tested Lenovo/StarTech path, direct 48 kHz used nearly the entire nominal span; direct Android-reported 96 kHz exposed only about 48 kHz of useful central response. Use 48 kHz for honest routine viewing until the 96 kHz analogue/input response is independently explained and calibrated.
 
 Open **Radio → Panadapter** on a compact device or **Panadapter** in the expanded navigation rail. Grant microphone permission only if you intend to use physical receive I/Q; Android applies that permission to external audio capture too. Press **Start**. Treat the instrument as unavailable until the header reports live operation and Diagnostics shows the requested route equals the actual route, stereo channels, and 48 or 96 kHz.
 
@@ -33,7 +33,7 @@ The record action captures a finite private stereo WAV (10 seconds from the main
 
 Diagnostics exposes requested/actual route, formats, frame/transform/drop counters, FFT/hop/RBW, I/Q RMS/correlation/duplication, clipping, peak/floor, CAT and calibration state. **Export support snapshot** writes a redacted JSON file to private storage; share it only by an explicit operator action.
 
-For periodic lines, open Diagnostics and follow **SPUR DIAGNOSTIC** exactly: capture A with the USB input safely terminated and KX3 disconnected; capture B with KX3 I/Q connected and the antenna path in an operator-approved controlled state; capture C during normal receive. Do not press a capture label unless the physical state matches it. Compare comb spacing/persistence across all three; RigWeave deliberately does not auto-notch the result.
+For periodic lines, open Diagnostics and follow **SPUR DIAGNOSTIC** exactly: capture A with the USB input safely terminated and KX3 disconnected; capture B with KX3 I/Q connected and the antenna path in an operator-approved controlled state; capture C during normal receive. Do not press a capture label unless the physical state matches it. Compare comb spacing/persistence across all three; ShackCQ deliberately does not auto-notch the result.
 
 ## Recovery
 

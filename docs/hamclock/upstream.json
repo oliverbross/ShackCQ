@@ -91,43 +91,43 @@
       "LICENSE"
     ]
   },
-  "rigweave_implementation_owners": {
+  "shackcq_implementation_owners": {
     "home": [
-      "android/app/src/main/java/app/rigweave/mobile/HamClockHomeScreen.kt",
-      "android/app/src/main/java/app/rigweave/mobile/HamClockAnalogClock.kt"
+      "android/app/src/main/java/app/shackcq/mobile/HamClockHomeScreen.kt",
+      "android/app/src/main/java/app/shackcq/mobile/HamClockAnalogClock.kt"
     ],
     "home_map": [
-      "android/app/src/main/java/app/rigweave/mobile/HamClockHomeMap.kt",
-      "android/app/src/main/java/app/rigweave/mobile/NeuralDxMap.kt"
+      "android/app/src/main/java/app/shackcq/mobile/HamClockHomeMap.kt",
+      "android/app/src/main/java/app/shackcq/mobile/NeuralDxMap.kt"
     ],
     "settings": [
-      "android/app/src/main/java/app/rigweave/mobile/hamclock/HamClockRegistries.kt",
-      "android/app/src/main/java/app/rigweave/mobile/hamclock/HamClockSettingsModels.kt",
-      "android/app/src/main/java/app/rigweave/mobile/hamclock/HamClockSettingsCodec.kt",
-      "android/app/src/main/java/app/rigweave/mobile/hamclock/HamClockSettingsStore.kt",
-      "android/app/src/main/java/app/rigweave/mobile/hamclock/HamClockSettingsTruth.kt"
+      "android/app/src/main/java/app/shackcq/mobile/hamclock/HamClockRegistries.kt",
+      "android/app/src/main/java/app/shackcq/mobile/hamclock/HamClockSettingsModels.kt",
+      "android/app/src/main/java/app/shackcq/mobile/hamclock/HamClockSettingsCodec.kt",
+      "android/app/src/main/java/app/shackcq/mobile/hamclock/HamClockSettingsStore.kt",
+      "android/app/src/main/java/app/shackcq/mobile/hamclock/HamClockSettingsTruth.kt"
     ],
     "home_log_projection": [
-      "android/app/src/main/java/app/rigweave/mobile/QsoDatabase.kt",
-      "android/app/src/main/java/app/rigweave/mobile/LogIntelligenceRepository.kt",
-      "android/app/src/main/java/app/rigweave/mobile/ProgressController.kt",
-      "android/app/src/main/java/app/rigweave/mobile/ProgressScreen.kt"
+      "android/app/src/main/java/app/shackcq/mobile/QsoDatabase.kt",
+      "android/app/src/main/java/app/shackcq/mobile/LogIntelligenceRepository.kt",
+      "android/app/src/main/java/app/shackcq/mobile/ProgressController.kt",
+      "android/app/src/main/java/app/shackcq/mobile/ProgressScreen.kt"
     ],
     "public_providers": [
-      "android/app/src/main/java/app/rigweave/mobile/hamclock/HamClockPublicProviders.kt",
-      "android/app/src/main/java/app/rigweave/mobile/hamclock/HamClockProviderSupport.kt",
-      "android/app/src/main/java/app/rigweave/mobile/hamclock/DxNewsPskRepository.kt"
+      "android/app/src/main/java/app/shackcq/mobile/hamclock/HamClockPublicProviders.kt",
+      "android/app/src/main/java/app/shackcq/mobile/hamclock/HamClockProviderSupport.kt",
+      "android/app/src/main/java/app/shackcq/mobile/hamclock/DxNewsPskRepository.kt"
     ],
     "propagation": [
-      "android/app/src/main/java/app/rigweave/mobile/HamClockPropagationRepository.kt"
+      "android/app/src/main/java/app/shackcq/mobile/HamClockPropagationRepository.kt"
     ],
     "portable": [
-      "android/app/src/main/java/app/rigweave/mobile/PortableRepository.kt",
-      "android/app/src/main/java/app/rigweave/mobile/PotaRepository.kt"
+      "android/app/src/main/java/app/shackcq/mobile/PortableRepository.kt",
+      "android/app/src/main/java/app/shackcq/mobile/PotaRepository.kt"
     ],
     "satellite": [
-      "android/app/src/main/java/app/rigweave/mobile/SatelliteOperationsController.kt",
-      "android/app/src/main/java/app/rigweave/mobile/SatelliteProviders.kt"
+      "android/app/src/main/java/app/shackcq/mobile/SatelliteOperationsController.kt",
+      "android/app/src/main/java/app/shackcq/mobile/SatelliteProviders.kt"
     ]
   },
   "provider_contracts": [

@@ -24,8 +24,8 @@ def connect(path: Path) -> sqlite3.Connection:
     return db
 
 
-result = {"profile": "RIGWEAVE_FINAL_RC_SOAK_V1", "timings_ms": {}, "database_bytes": {}, "assertions": []}
-with tempfile.TemporaryDirectory(prefix="rigweave-final-soak-") as temporary:
+result = {"profile": "SHACKCQ_FINAL_RC_SOAK_V1", "timings_ms": {}, "database_bytes": {}, "assertions": []}
+with tempfile.TemporaryDirectory(prefix="shackcq-final-soak-") as temporary:
     root = Path(temporary)
 
     log = connect(root / "logbook.sqlite")
@@ -67,7 +67,7 @@ with tempfile.TemporaryDirectory(prefix="rigweave-final-soak-") as temporary:
     result["assertions"].append("neural_180_day_compaction_scopes_outages")
     neural.close()
 
-    digi = connect(root / "rigweave-digi.sqlite")
+    digi = connect(root / "shackcq-digi.sqlite")
     digi.executescript("""
       CREATE TABLE decode(id INTEGER PRIMARY KEY, session_id INTEGER, mode TEXT, snr INTEGER, body TEXT);
       CREATE TABLE draft(id INTEGER PRIMARY KEY, session_id INTEGER, body TEXT);
@@ -84,7 +84,7 @@ with tempfile.TemporaryDirectory(prefix="rigweave-final-soak-") as temporary:
     result["assertions"].append("digi_20k_retention_restore_has_no_tx_state")
     digi.close()
 
-    groups = connect(root / "rigweave-groupsio.sqlite")
+    groups = connect(root / "shackcq-groupsio.sqlite")
     groups.executescript("""
       CREATE TABLE message(id INTEGER PRIMARY KEY, group_id INTEGER, subject TEXT, body TEXT);
       CREATE VIRTUAL TABLE message_fts USING fts5(subject,body,content='message',content_rowid='id');

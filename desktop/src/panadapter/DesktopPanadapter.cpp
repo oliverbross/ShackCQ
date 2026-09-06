@@ -1,6 +1,6 @@
-#include "rigweave/desktop/DesktopPanadapter.hpp"
+#include "shackcq/desktop/DesktopPanadapter.hpp"
 
-#include "rigweave/core.h"
+#include "shackcq/core.h"
 
 #include <QAudioFormat>
 #include <QColor>
@@ -14,16 +14,16 @@
 #include <cstring>
 #include <vector>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 
 struct DesktopPanadapter::Context {
-  explicit Context() : dsp(rw_panadapter_context_create()) {}
-  ~Context() { rw_panadapter_context_destroy(dsp); }
-  rw_panadapter_context *dsp{};
+  explicit Context() : dsp(shackcq_panadapter_context_create()) {}
+  ~Context() { shackcq_panadapter_context_destroy(dsp); }
+  shackcq_panadapter_context *dsp{};
   QVector<float> trace;
   QVector<float> peak;
   QImage waterfall;
-  rw_panadapter_snapshot snapshot{};
+  shackcq_panadapter_snapshot snapshot{};
   int sampleRate{};
   bool swapIq{};
   quint64 centreFrequencyHz{};
@@ -91,7 +91,7 @@ std::shared_ptr<DesktopPanadapter::Context> DesktopPanadapter::current() const {
 bool DesktopPanadapter::configure(Context &value, int sampleRate, bool swapIq) {
   if (!value.dsp || sampleRate < 8000 || sampleRate > 10000000)
     return false;
-  rw_panadapter_config c{};
+  shackcq_panadapter_config c{};
   c.sample_rate = static_cast<uint32_t>(sampleRate);
   c.fft_size = static_cast<uint32_t>(m_fftSize);
   c.overlap_percent = 50;
@@ -108,7 +108,7 @@ bool DesktopPanadapter::configure(Context &value, int sampleRate, bool swapIq) {
   c.q_trim = 1.0F;
   c.zoom_decimation = 1;
   c.fit_auto_contrast = m_fitAutoContrast ? 1 : 0;
-  if (rw_panadapter_configure(value.dsp, &c) != 1)
+  if (shackcq_panadapter_configure(value.dsp, &c) != 1)
     return false;
   value.sampleRate = sampleRate;
   value.swapIq = swapIq;
@@ -288,7 +288,7 @@ void DesktopPanadapter::consume(const char *data, qint64 length) {
     bool display = false;
     {
       QMutexLocker lock(&value->mutex);
-      if (rw_panadapter_push(value->dsp,
+      if (shackcq_panadapter_push(value->dsp,
                              reinterpret_cast<const uint8_t *>(pcm.constData()),
                              static_cast<size_t>(pcm.size()), 2, 2, 16, 0) == 1)
         display = updateFrame(*value, fftSize, rows, paused, fit, floor, top,
@@ -319,9 +319,9 @@ bool DesktopPanadapter::updateFrame(Context &value, int fftSize,
                                     double manualTopDb,
                                     const QString &colourMap) {
   std::vector<float> trace(fftSize), waterfall(fftSize), peak(fftSize);
-  rw_panadapter_snapshot snapshot{};
+  shackcq_panadapter_snapshot snapshot{};
   const int count =
-      rw_panadapter_copy_frame(value.dsp, &snapshot, trace.data(),
+      shackcq_panadapter_copy_frame(value.dsp, &snapshot, trace.data(),
                                waterfall.data(), peak.data(), trace.size());
   if (count <= 0)
     return false;
@@ -428,7 +428,7 @@ void DesktopPanadapter::pushFloatIq(const QString &id, quint32 sampleRate,
     bool display = false;
     {
       QMutexLocker lock(&value->mutex);
-      if (rw_panadapter_push_float_iq(value->dsp, samples.constData(),
+      if (shackcq_panadapter_push_float_iq(value->dsp, samples.constData(),
                                       static_cast<size_t>(samples.size()),
                                       discontinuity ? 1 : 0) == 1)
         display = updateFrame(*value, fftSize, rows, paused, fit, floor, top,
@@ -447,7 +447,7 @@ bool DesktopPanadapter::processPcmForTest(const QByteArray &pcm,
   m_currentReceiverId = "audio:local";
   QMutexLocker lock(&value->mutex);
   const bool ok =
-      rw_panadapter_push(value->dsp,
+      shackcq_panadapter_push(value->dsp,
                          reinterpret_cast<const uint8_t *>(pcm.constData()),
                          static_cast<size_t>(pcm.size()), 2, 2, 16, 0) == 1;
   updateFrame(*value, m_fftSize, m_waterfallRows, m_paused, m_fitAutoContrast,
@@ -471,7 +471,7 @@ void DesktopPanadapter::clearWaterfall() {
 void DesktopPanadapter::resetPeak() {
   for (auto value : m_contexts) {
     QMutexLocker lock(&value->mutex);
-    rw_panadapter_reset_peak_hold(value->dsp);
+    shackcq_panadapter_reset_peak_hold(value->dsp);
   }
 }
 qulonglong DesktopPanadapter::frequencyAt(double normalizedX, double zoom,
@@ -715,4 +715,4 @@ bool DesktopPanadapter::restoreConfiguration(const QVariantMap &value,
   return true;
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

@@ -15,7 +15,7 @@ EQ Studio is a local, hardware-first calibration workspace for the Elecraft KX3.
 
 1. **Raw mic / reference** — microphone or pre-radio source into the selected Android/USB input. Preview applies the draft as an absolute approximate curve.
 2. **KX3 output / current radio baseline** — headphones, receive audio, or an operator-controlled TX-monitor loopback into the selected USB input. Preview uses `draft - captureBaseline`, so the recorded hardware EQ is not applied twice.
-3. **Second receiver / off-air baseline** — treated like a hardware-baseline clip. RigWeave never operates PTT, DVR, TUNE, or TX for the recording.
+3. **Second receiver / off-air baseline** — treated like a hardware-baseline clip. ShackCQ never operates PTT, DVR, TUNE, or TX for the recording.
 
 Each transient clip records its source, EQ context, exact verified baseline when applicable, input label, actual sample rate/channel, processing state, and timestamp. Clips remain in memory, clear when the EQ session ends, and are not placed in profiles, backup, sync, cloud, analytics, or external storage.
 

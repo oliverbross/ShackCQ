@@ -247,12 +247,12 @@ int HAMLIB_API port_open(hamlib_port_t *p)
     }
 
     /*
-     * RigWeave Android integration: the application owns USB serial and passes
+     * ShackCQ Android integration: the application owns USB serial and passes
      * Hamlib one end of a socketpair.  Adopt a duplicate here so Hamlib never
      * opens the Android USB device or relies on a PTY.  The prefix is private
      * to the embedded build and is documented in TRANSPORT_BRIDGE.md.
      */
-    if (strncmp(p->pathname, "rigweave-fd:", 12) == 0)
+    if (strncmp(p->pathname, "shackcq-fd:", 12) == 0)
     {
         char *end = NULL;
         long external_fd = strtol(p->pathname + 12, &end, 10);
@@ -418,7 +418,7 @@ int HAMLIB_API port_close(hamlib_port_t *p, rig_port_t port_type)
 
     if (p->fd != -1)
     {
-        if (strncmp(p->pathname, "rigweave-fd:", 12) == 0)
+        if (strncmp(p->pathname, "shackcq-fd:", 12) == 0)
         {
             ret = close(p->fd);
         }

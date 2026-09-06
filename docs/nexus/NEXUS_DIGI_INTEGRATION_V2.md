@@ -2,11 +2,11 @@
 
 ## Scope and provenance
 
-This Android-only programme was implemented from frozen RigWeave main SHA
+This Android-only programme was implemented from frozen ShackCQ main SHA
 `ebabe98967bfe24e53e16f33f839d711ec237f03` on
 `feature/nexus-digi-integration-v2`. The current Nexus review is pinned in
 `UPSTREAM.json`; no current Nexus source was copied. Historical imports remain
-attributed in `rust/rigweave-flex/UPSTREAM.md`.
+attributed in `rust/shackcq-flex/UPSTREAM.md`.
 
 Excluded: desktop/Tauri/React architecture, Hamlib, WebView, TempoFast/Deep,
 QPSK31, APRS, Fox/Hound, contest workspaces, Nexus chat/presence/HARQ/Roam,
@@ -21,7 +21,7 @@ serial FSK and new mode families.
 | CAT/PTT/RX confirmation | existing transport/Flex controllers |
 | canonical QSO writes | `QsoMutationCoordinator` |
 | Wavelog delivery | existing Wavelog outbox |
-| CTY/worked/confirmed/Needs/watchlist | existing RigWeave repositories |
+| CTY/worked/confirmed/Needs/watchlist | existing ShackCQ repositories |
 | satellite pass prediction | existing satellite operations controller |
 
 ## Implemented contract
@@ -30,7 +30,7 @@ serial FSK and new mode families.
   shared decoder cursor. Waterfall: LIVE/PAUSED/snap-to-live, 900 rows.
 - Typed audio health covers route/source, format, levels, clipping, frames,
   route loss and owner. Exact USB route loss stops RX and clears TX.
-- Separate `rigweave-digi.sqlite` holds bounded sessions, decodes, drafts,
+- Separate `shackcq-digi.sqlite` holds bounded sessions, decodes, drafts,
   gallery metadata and meta schema. SSTV pixels and raw audio are files only.
 - FT8/FT4 provide Classic/Roster views, filters, enrichment, CQ/answer
   sequencing, base-call lock, bystander rejection, explicit TX enable and
@@ -126,7 +126,7 @@ product/mode domain remain absent.
 
 Added `DigiDomain.kt`, `DigiSessionStore.kt`, `DigiRawRecorder.kt`,
 `DigiWsjtInterop.kt`, the native spectrum/tuning ABI, one upstream watcher and
-its weekly workflow. `rigweave-digi.sqlite` schema v2:
+its weekly workflow. `shackcq-digi.sqlite` schema v2:
 `decode_event`, `digi_session`, `qso_draft`, `sstv_gallery`,
 `digi_meta`. Bounds: 3,000 live rows; seven days/20,000 durable decodes;
 90-day completed sessions/drafts; gallery 100 MB default/250 MB maximum.
@@ -174,7 +174,7 @@ AAB:
 `android/app/build/outputs/bundle/debug/app-debug.aab`, 51,797,260 bytes,
 SHA-256 `fbb02d4b7ae9cae68217a3bff828c38c7a14574097da763e4c73c275d7ad9940`.
 
-Final parity counts: NATIVE 10, DELEGATED_TO_RIGWEAVE 3, PARTIAL 3,
+Final parity counts: NATIVE 10, DELEGATED_TO_SHACKCQ 3, PARTIAL 3,
 DESKTOP_NOT_APPLICABLE 1, EXCLUDED_MODE 1, MISSING 0.
 
 Physical USB/audio/RF/PTT/TUNE, live Flex, SSTV safe-load transmit,

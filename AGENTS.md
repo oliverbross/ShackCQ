@@ -1,4 +1,4 @@
-# RigWeave working rules
+# ShackCQ working rules
 
 - Read the task scope and nearest instructions before editing. Preserve unrelated owner work and use a feature branch or isolated worktree.
 - Apple and Android are active first-class clients. SwiftUI and Compose remain native UIs; a platform-specific task does not require unrelated edits to the other client.

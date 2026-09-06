@@ -10,7 +10,7 @@
       "cacheVariables": {
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-        "RIGWEAVE_BUILD_TESTS": "ON"
+        "SHACKCQ_BUILD_TESTS": "ON"
       }
     },
     {
@@ -23,7 +23,7 @@
       "inherits": "desktop-common",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
-        "RIGWEAVE_REQUIRE_HAMLIB": "ON"
+        "SHACKCQ_REQUIRE_HAMLIB": "ON"
       }
     }
   ],

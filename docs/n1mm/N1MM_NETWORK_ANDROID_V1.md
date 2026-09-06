@@ -31,7 +31,7 @@ Defaults: 32 peers/links, 600 frames/minute/peer, 4,096 characters/field, 128 fi
 
 Diagnostics retain command/category/safe reason and a truncated peer hash. They contain no raw QSO, callsign, comment/exchange body, packet dump or IP address. XML DTDs/external entities are rejected.
 
-RigWeave does not bind N1MM-adjacent WSJT/JTDX ports because Digi owns them. Port 12080 control/CW, 13064 radio/spectrum, 12040/13010 rotor, 13065 SDR and raw CAT remain codec-only/existing-owner/blocked as shown in the coverage matrix.
+ShackCQ does not bind N1MM-adjacent WSJT/JTDX ports because Digi owns them. Port 12080 control/CW, 13064 radio/spectrum, 12040/13010 rotor, 13065 SDR and raw CAT remain codec-only/existing-owner/blocked as shown in the coverage matrix.
 
 This is a **MULTI-OP NETWORK FOUNDATION**: peer/status/talk/claim/score/rate/QSO/serial groundwork, not proven Multi-Multi orchestration, hardware interlock or band-change-rule enforcement.
 

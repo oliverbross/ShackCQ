@@ -8,7 +8,7 @@ Reproduction sequence:
 
 1. fetch the immutable SHA and verify the lineage contract;
 2. run `scripts/check_rc1_convergence.py`;
-3. run normal, ASan and UBSan C++ suites plus locked release-critical Rust suites (`mfsk-core --lib --all-features` activates its complete vendored protocol catalogue; RigWeave FFI/public-recording goldens run in `rigweave-flex`; `tempo-sstv --lib` is the bounded hosted gate);
+3. run normal, ASan and UBSan C++ suites plus locked release-critical Rust suites (`mfsk-core --lib --all-features` activates its complete vendored protocol catalogue; ShackCQ FFI/public-recording goldens run in `shackcq-flex`; `tempo-sstv --lib` is the bounded hosted gate);
 4. build Android JVM/lint/instrumentation-source/APK/AAB gates;
 5. build generic Apple device and simulator targets;
 6. build and test Windows/macOS desktop with deterministic galleries;

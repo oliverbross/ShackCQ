@@ -1,0 +1,15 @@
+[package]
+name = "shackcq-flex"
+version = "0.1.0"
+edition = "2021"
+license = "GPL-3.0-only"
+publish = false
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+socket2 = "0.6"
+microfft = "0.6"
+tempo-sstv = { path = "../tempo-sstv" }
+mfsk-core = { path = "../../third_party/mfsk-core", default-features = false, features = ["std", "fft-rustfft", "ft8", "ft4", "fst4", "wspr", "jt65", "q65", "msk144", "internal-testing"] }

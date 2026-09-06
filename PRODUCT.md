@@ -1,12 +1,12 @@
-# RigWeave product contract
+# ShackCQ product contract
 
 ## Positioning
 
 The 0.1.0 RC1 integration provides hardened Android, adaptive native SwiftUI iPhone/iPad, and one local-first Qt/QML desktop application for macOS, Windows, and Linux. Source parity is fail-closed and does not imply physical, authenticated-WAN, RF, signing, or store acceptance.
 
-> RigWeave is a radio-native portable operating cockpit that connects discovery, tuning, operating, logging, synchronisation, and progress without requiring fabricated state or permanent network access.
+> ShackCQ is a radio-native portable operating cockpit that connects discovery, tuning, operating, logging, synchronisation, and progress without requiring fabricated state or permanent network access.
 
-RigWeave is local-first. Radio control and local logging must remain useful without a cloud service. Online enrichment may improve the operating loop but must degrade independently and honestly.
+ShackCQ is local-first. Radio control and local logging must remain useful without a cloud service. Online enrichment may improve the operating loop but must degrade independently and honestly.
 
 ## Current product
 
@@ -62,9 +62,9 @@ See [docs/ROADMAP.md](docs/ROADMAP.md). Roadmap items are not current capabiliti
 
 ## Licence and reuse
 
-RigWeave is GPL-3.0-only. Distributed covered binaries require complete corresponding source and retained notices; charging for distribution or services remains permitted.
+ShackCQ is GPL-3.0-only. Distributed covered binaries require complete corresponding source and retained notices; charging for distribution or services remains permitted.
 
-Future third-party reuse must record the source URL, immutable upstream commit, original path, licence, copyright/provenance, RigWeave modifications, applicable notice entries, dependencies, and corresponding-source obligations.
+Future third-party reuse must record the source URL, immutable upstream commit, original path, licence, copyright/provenance, ShackCQ modifications, applicable notice entries, dependencies, and corresponding-source obligations.
 
 Nexus is an evaluated external upstream. The Android Digi implementation incorporates only the component-audited CW/RTTY DSP and the MIT `tempo-sstv` crate at immutable commit `6ec4a7925f1550cc364c7fd95967ce38c696ad3f`, with notices retained in-tree. Its name or licence does not imply endorsement or make every remaining vendored/dependency component automatically reusable.
 
@@ -112,6 +112,6 @@ Android adds an acceptance-gated TCI transmit authority for existing Digi/SSTV, 
 
 ## Secure Remote Station v6
 
-RigWeave Desktop and the standalone `rigweave-stationd` expose a versioned TLS 1.3 Remote Station service for Windows, macOS and Linux. The Android app discovers or manually pairs with a pinned station, then reuses its existing Radio, Panadapter, Digi, Keyer, Voice and Rotator owners through explicit observer/operator/admin roles and exclusive writer/TX/rotator leases. Global Stop and local pre-emption remain authoritative; debug media is labelled `DEMO · NO RADIO`, and source/build evidence is not public-internet, audio, motion or RF acceptance.
+ShackCQ Desktop and the standalone `shackcq-stationd` expose a versioned TLS 1.3 Remote Station service for Windows, macOS and Linux. The Android app discovers or manually pairs with a pinned station, then reuses its existing Radio, Panadapter, Digi, Keyer, Voice and Rotator owners through explicit observer/operator/admin roles and exclusive writer/TX/rotator leases. Global Stop and local pre-emption remain authoritative; debug media is labelled `DEMO · NO RADIO`, and source/build evidence is not public-internet, audio, motion or RF acceptance.
 
 The RC1 closes client parity with native SwiftUI and Qt clients, adaptive Opus RX with PCM16 fallback, and optional host-disabled one-client raw I/Q. Device identities live in Android Keystore, Apple Keychain, Windows Credential Manager, macOS Keychain, or Linux Secret Service. Remote PTT, TUNE and movement remain unavailable without explicit policy and physical acceptance.

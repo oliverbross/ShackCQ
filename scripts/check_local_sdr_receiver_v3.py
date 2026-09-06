@@ -17,11 +17,11 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> int:
-    kotlin = (ROOT / "android/app/src/main/java/app/rigweave/mobile/LocalSdrReceiverV3.kt").read_text()
+    kotlin = (ROOT / "android/app/src/main/java/app/shackcq/mobile/LocalSdrReceiverV3.kt").read_text()
     native = (ROOT / "core/src/local_receiver.cpp").read_text()
     cmake = (ROOT / "core/CMakeLists.txt").read_text()
-    screens = (ROOT / "android/app/src/main/java/app/rigweave/mobile/LocalSdrReceiverScreens.kt").read_text()
-    lab = (ROOT / "android/app/src/main/java/app/rigweave/mobile/AndroidSdrEnhancementDomain.kt").read_text()
+    screens = (ROOT / "android/app/src/main/java/app/shackcq/mobile/LocalSdrReceiverScreens.kt").read_text()
+    lab = (ROOT / "android/app/src/main/java/app/shackcq/mobile/AndroidSdrEnhancementDomain.kt").read_text()
     owners = list((ROOT / "android/app/src/main/java").rglob("*.kt"))
     owner_count = sum(len(re.findall(r"\bclass\s+LocalReceiverController\b", path.read_text(errors="ignore"))) for path in owners)
     require(owner_count == 1, f"expected one LocalReceiverController, found {owner_count}")
@@ -40,7 +40,7 @@ def main() -> int:
     for token in ("CTCSS", "DCS", "RDS", "SAM", "WFM"):
         require(token in screens + kotlin, f"operator-visible state missing: {token}")
     require("BuildConfig.DEBUG" in lab and "DEMO · NO RADIO" in lab, "debug lab must be debug-only and labelled")
-    require("rigweave_local_receiver_tests" in cmake, "native local-receiver test registration missing")
+    require("shackcq_local_receiver_tests" in cmake, "native local-receiver test registration missing")
     required_docs = (
         "ANDROID_LOCAL_SDR_RECEIVER_V3.md", "SDROXIDE_LOCAL_RECEIVER_AUDIT_V3.md",
         "SDROXIDE_LOCAL_RECEIVER_CROSSWALK_V3.md", "SDROXIDE_LOCAL_RECEIVER_PROVENANCE_V3.md",

@@ -1,4 +1,4 @@
-#include "rigweave/desktop/RemoteStationClient.hpp"
+#include "shackcq/desktop/RemoteStationClient.hpp"
 
 #include <QAudioDevice>
 #include <QCryptographicHash>
@@ -19,7 +19,7 @@
 #include <openssl/ec.h>
 #include <cstring>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 namespace {
 constexpr qsizetype MaxControlBytes = 64 * 1024;
 constexpr qsizetype MaxMediaBytes = 256 * 1024 + 36;
@@ -124,7 +124,7 @@ bool RemoteStationClient::importPairingOffer(const QString &json,
   if (m_deviceId.isEmpty()) {
     m_deviceId = QUuid::createUuid().toString(QUuid::WithoutBraces);
     QString error;
-    if (!m_vault || !m_vault->write("remote-client-device-id", "RigWeave Remote device ID", m_deviceId, &error)) {
+    if (!m_vault || !m_vault->write("remote-client-device-id", "ShackCQ Remote device ID", m_deviceId, &error)) {
       setState("Failed", "System credential vault is unavailable"); return false;
     }
   }
@@ -137,7 +137,7 @@ bool RemoteStationClient::importPairingOffer(const QString &json,
                       {"role", requestedRole.toUpper()}, {"publicKeyPem", publicKey}};
   m_pairingNonce = offer.value("nonce").toString();
   m_expectedFingerprint = fingerprint; m_pairing = true; m_certificatePinned = false;
-  QNetworkRequest request(endpoint); request.setRawHeader("Sec-WebSocket-Protocol", "rigweave.remote.v1");
+  QNetworkRequest request(endpoint); request.setRawHeader("Sec-WebSocket-Protocol", "shackcq.remote.v1");
   setState("Connecting", "Submitting signed pairing request"); m_socket.open(request); return true;
 }
 
@@ -147,7 +147,7 @@ void RemoteStationClient::connectSelected() {
   m_expectedFingerprint = row.value("certificateSha256").toString().toLower();
   m_deviceId = row.value("deviceId").toString(); m_certificatePinned = false; m_pairing = false;
   const QUrl url(QString("wss://%1:%2").arg(row.value("host").toString()).arg(row.value("port", 7443).toInt()));
-  QNetworkRequest request(url); request.setRawHeader("Sec-WebSocket-Protocol", "rigweave.remote.v1");
+  QNetworkRequest request(url); request.setRawHeader("Sec-WebSocket-Protocol", "shackcq.remote.v1");
   setState("Connecting", "Connecting to pinned Remote Station"); m_socket.open(request);
 }
 
@@ -323,7 +323,7 @@ bool RemoteStationClient::ensureIdentity(QString *publicKeyPem) {
     }
     EVP_PKEY_CTX_free(ctx); BIO *bio = BIO_new(BIO_s_mem()); PEM_write_bio_PrivateKey(bio, key, nullptr, nullptr, 0, nullptr, nullptr);
     BUF_MEM *memory{}; BIO_get_mem_ptr(bio, &memory); privatePem = QString::fromUtf8(memory->data, static_cast<int>(memory->length)); BIO_free(bio);
-    QString error; if (!m_vault->write(alias, "RigWeave Remote P-256 identity", privatePem, &error)) { EVP_PKEY_free(key); return false; }
+    QString error; if (!m_vault->write(alias, "ShackCQ Remote P-256 identity", privatePem, &error)) { EVP_PKEY_free(key); return false; }
   }
   if (publicKeyPem) { BIO *bio = BIO_new(BIO_s_mem()); PEM_write_bio_PUBKEY(bio, key); BUF_MEM *memory{}; BIO_get_mem_ptr(bio, &memory); *publicKeyPem = QString::fromUtf8(memory->data, static_cast<int>(memory->length)); BIO_free(bio); }
   EVP_PKEY_free(key); return true;
@@ -359,4 +359,4 @@ void RemoteStationClient::stopTransport() { m_heartbeat->stop(); if (m_socket.st
 void RemoteStationClient::setState(const QString &state, const QString &status) { m_state = state; m_status = status.left(240); emit stateChanged(); }
 QVariantMap RemoteStationClient::health() const { return {{"state", m_state}, {"status", m_status}, {"certificatePinned", m_certificatePinned}, {"role", m_role}, {"generation", QString::number(m_generation)}, {"writerLease", m_writerLease}, {"frequencyHz", QString::number(m_frequencyHz)}, {"mode", m_mode}, {"mediaFrames", QString::number(m_mediaFrames)}, {"droppedFrames", QString::number(m_droppedFrames)}, {"tx", "Unavailable pending policy and physical acceptance"}, {"rotatorMovement", "Unavailable pending policy and physical acceptance"}}; }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

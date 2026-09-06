@@ -10,7 +10,7 @@
 
 ## External recovery capture
 
-The complete external source capture is in the RigWeave container at `evidence/tablet-hardening-source-capture-20260821`.
+The complete external source capture is in the ShackCQ container at `evidence/tablet-hardening-source-capture-20260821`.
 
 - `unstaged.patch`: binary-safe, 395,480 bytes.
 - `staged.patch`: empty, matching the original absence of staged changes.
@@ -33,65 +33,65 @@ The complete external source capture is in the RigWeave container at `evidence/t
 ### PRODUCTION_SOURCE
 
 - `android/app/src/main/AndroidManifest.xml`
-- `android/app/src/main/java/app/rigweave/mobile/AppController.kt`
-- `android/app/src/main/java/app/rigweave/mobile/BoundedIo.kt`
-- `android/app/src/main/java/app/rigweave/mobile/CtyController.kt`
-- `android/app/src/main/java/app/rigweave/mobile/EqAudioController.kt`
-- `android/app/src/main/java/app/rigweave/mobile/FeatureController.kt`
-- `android/app/src/main/java/app/rigweave/mobile/HamClockHomeMap.kt`
-- `android/app/src/main/java/app/rigweave/mobile/HamClockHomeScreen.kt`
-- `android/app/src/main/java/app/rigweave/mobile/HamClockPropagationRepository.kt`
-- `android/app/src/main/java/app/rigweave/mobile/InAppBrowser.kt`
-- `android/app/src/main/java/app/rigweave/mobile/LogIntelligenceRepository.kt`
-- `android/app/src/main/java/app/rigweave/mobile/LogbookController.kt`
-- `android/app/src/main/java/app/rigweave/mobile/LogbookFilters.kt`
-- `android/app/src/main/java/app/rigweave/mobile/MainActivity.kt`
-- `android/app/src/main/java/app/rigweave/mobile/NeuralDxController.kt`
-- `android/app/src/main/java/app/rigweave/mobile/NeuralDxScreen.kt`
-- `android/app/src/main/java/app/rigweave/mobile/OperationsScreen.kt`
-- `android/app/src/main/java/app/rigweave/mobile/PortableChaseScreen.kt`
-- `android/app/src/main/java/app/rigweave/mobile/PortableRepository.kt`
-- `android/app/src/main/java/app/rigweave/mobile/PortableWorkspaceScreen.kt`
-- `android/app/src/main/java/app/rigweave/mobile/PotaActivateScreen.kt`
-- `android/app/src/main/java/app/rigweave/mobile/PotaChaseScreen.kt`
-- `android/app/src/main/java/app/rigweave/mobile/ProgressController.kt`
-- `android/app/src/main/java/app/rigweave/mobile/ProgressModels.kt`
-- `android/app/src/main/java/app/rigweave/mobile/ProgressScreen.kt`
-- `android/app/src/main/java/app/rigweave/mobile/QsoDatabase.kt`
-- `android/app/src/main/java/app/rigweave/mobile/SatelliteOperationsScreen.kt`
-- `android/app/src/main/java/app/rigweave/mobile/SatelliteProviders.kt`
-- `android/app/src/main/java/app/rigweave/mobile/SmartLink.kt`
-- `android/app/src/main/java/app/rigweave/mobile/SpotFilters.kt`
-- `android/app/src/main/java/app/rigweave/mobile/SyncHubScreen.kt`
-- `android/app/src/main/java/app/rigweave/mobile/VoiceMacroAudioController.kt`
-- `android/app/src/main/java/app/rigweave/mobile/groupsio/GroupsIoFeature.kt`
-- `android/app/src/main/java/app/rigweave/mobile/groupsio/GroupsIoPhase2.kt`
-- `android/app/src/main/java/app/rigweave/mobile/groupsio/GroupsIoPhase2Ui.kt`
-- `android/app/src/main/java/app/rigweave/mobile/hamclock/HamClockProviderSupport.kt`
-- `android/app/src/main/java/app/rigweave/mobile/hamclock/HamClockRegistries.kt`
-- `android/app/src/main/java/app/rigweave/mobile/hamclock/HamClockRfEvidence.kt`
-- `android/app/src/main/java/app/rigweave/mobile/hamclock/finishline/HamClockSolarImageRepository.kt`
-- `ios/RigWeave.xcodeproj/project.pbxproj`
-- `ios/RigWeave/ContentView.swift`
+- `android/app/src/main/java/app/shackcq/mobile/AppController.kt`
+- `android/app/src/main/java/app/shackcq/mobile/BoundedIo.kt`
+- `android/app/src/main/java/app/shackcq/mobile/CtyController.kt`
+- `android/app/src/main/java/app/shackcq/mobile/EqAudioController.kt`
+- `android/app/src/main/java/app/shackcq/mobile/FeatureController.kt`
+- `android/app/src/main/java/app/shackcq/mobile/HamClockHomeMap.kt`
+- `android/app/src/main/java/app/shackcq/mobile/HamClockHomeScreen.kt`
+- `android/app/src/main/java/app/shackcq/mobile/HamClockPropagationRepository.kt`
+- `android/app/src/main/java/app/shackcq/mobile/InAppBrowser.kt`
+- `android/app/src/main/java/app/shackcq/mobile/LogIntelligenceRepository.kt`
+- `android/app/src/main/java/app/shackcq/mobile/LogbookController.kt`
+- `android/app/src/main/java/app/shackcq/mobile/LogbookFilters.kt`
+- `android/app/src/main/java/app/shackcq/mobile/MainActivity.kt`
+- `android/app/src/main/java/app/shackcq/mobile/NeuralDxController.kt`
+- `android/app/src/main/java/app/shackcq/mobile/NeuralDxScreen.kt`
+- `android/app/src/main/java/app/shackcq/mobile/OperationsScreen.kt`
+- `android/app/src/main/java/app/shackcq/mobile/PortableChaseScreen.kt`
+- `android/app/src/main/java/app/shackcq/mobile/PortableRepository.kt`
+- `android/app/src/main/java/app/shackcq/mobile/PortableWorkspaceScreen.kt`
+- `android/app/src/main/java/app/shackcq/mobile/PotaActivateScreen.kt`
+- `android/app/src/main/java/app/shackcq/mobile/PotaChaseScreen.kt`
+- `android/app/src/main/java/app/shackcq/mobile/ProgressController.kt`
+- `android/app/src/main/java/app/shackcq/mobile/ProgressModels.kt`
+- `android/app/src/main/java/app/shackcq/mobile/ProgressScreen.kt`
+- `android/app/src/main/java/app/shackcq/mobile/QsoDatabase.kt`
+- `android/app/src/main/java/app/shackcq/mobile/SatelliteOperationsScreen.kt`
+- `android/app/src/main/java/app/shackcq/mobile/SatelliteProviders.kt`
+- `android/app/src/main/java/app/shackcq/mobile/SmartLink.kt`
+- `android/app/src/main/java/app/shackcq/mobile/SpotFilters.kt`
+- `android/app/src/main/java/app/shackcq/mobile/SyncHubScreen.kt`
+- `android/app/src/main/java/app/shackcq/mobile/VoiceMacroAudioController.kt`
+- `android/app/src/main/java/app/shackcq/mobile/groupsio/GroupsIoFeature.kt`
+- `android/app/src/main/java/app/shackcq/mobile/groupsio/GroupsIoPhase2.kt`
+- `android/app/src/main/java/app/shackcq/mobile/groupsio/GroupsIoPhase2Ui.kt`
+- `android/app/src/main/java/app/shackcq/mobile/hamclock/HamClockProviderSupport.kt`
+- `android/app/src/main/java/app/shackcq/mobile/hamclock/HamClockRegistries.kt`
+- `android/app/src/main/java/app/shackcq/mobile/hamclock/HamClockRfEvidence.kt`
+- `android/app/src/main/java/app/shackcq/mobile/hamclock/finishline/HamClockSolarImageRepository.kt`
+- `ios/ShackCQ.xcodeproj/project.pbxproj`
+- `ios/ShackCQ/ContentView.swift`
 
 ### TEST
 
-- `android/app/src/androidTest/java/app/rigweave/mobile/NeuralDxStoreInstrumentedTest.kt`
-- `android/app/src/androidTest/java/app/rigweave/mobile/groupsio/GroupsIoDatabaseInstrumentedTest.kt`
-- `android/app/src/test/java/app/rigweave/mobile/BoundedIoTest.kt`
-- `android/app/src/test/java/app/rigweave/mobile/HamClockHomeFoundationTest.kt`
-- `android/app/src/test/java/app/rigweave/mobile/InAppBrowserTest.kt`
-- `android/app/src/test/java/app/rigweave/mobile/OvernightScaleSatelliteTest.kt`
-- `android/app/src/test/java/app/rigweave/mobile/ProgressChartDataTest.kt`
-- `android/app/src/test/java/app/rigweave/mobile/ProgressModelsTest.kt`
-- `android/app/src/test/java/app/rigweave/mobile/SpotFiltersTest.kt`
-- `android/app/src/test/java/app/rigweave/mobile/UnifiedConsolidationTest.kt`
-- `android/app/src/test/java/app/rigweave/mobile/groupsio/GroupsIoContractTest.kt`
+- `android/app/src/androidTest/java/app/shackcq/mobile/NeuralDxStoreInstrumentedTest.kt`
+- `android/app/src/androidTest/java/app/shackcq/mobile/groupsio/GroupsIoDatabaseInstrumentedTest.kt`
+- `android/app/src/test/java/app/shackcq/mobile/BoundedIoTest.kt`
+- `android/app/src/test/java/app/shackcq/mobile/HamClockHomeFoundationTest.kt`
+- `android/app/src/test/java/app/shackcq/mobile/InAppBrowserTest.kt`
+- `android/app/src/test/java/app/shackcq/mobile/OvernightScaleSatelliteTest.kt`
+- `android/app/src/test/java/app/shackcq/mobile/ProgressChartDataTest.kt`
+- `android/app/src/test/java/app/shackcq/mobile/ProgressModelsTest.kt`
+- `android/app/src/test/java/app/shackcq/mobile/SpotFiltersTest.kt`
+- `android/app/src/test/java/app/shackcq/mobile/UnifiedConsolidationTest.kt`
+- `android/app/src/test/java/app/shackcq/mobile/groupsio/GroupsIoContractTest.kt`
 
 ### RESOURCE
 
-- `android/app/src/main/res/drawable-nodpi/rigweave_logo_mark.png`
-- `android/app/src/main/res/drawable/rigweave_icon_background.xml`
+- `android/app/src/main/res/drawable-nodpi/shackcq_logo_mark.png`
+- `android/app/src/main/res/drawable/shackcq_icon_background.xml`
 - `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher.xml`
 - `android/app/src/main/res/mipmap-anydpi-v26/ic_launcher_round.xml`
 - `android/app/src/main/res/mipmap-hdpi/ic_launcher.png`
@@ -104,28 +104,28 @@ The complete external source capture is in the RigWeave container at `evidence/t
 - `android/app/src/main/res/mipmap-xxhdpi/ic_launcher_round.png`
 - `android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png`
 - `android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png`
-- `assets/branding/rigweave-app-icon-1024.png`
-- `assets/branding/rigweave-mark-1024.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-20.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-20x2.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-20x3.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-29.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-29x2.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-29x3.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-40.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-40x2.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-40x3.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-60x2.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-60x3.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-76.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-76x2.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/AppIcon-83_5x2.png`
-- `ios/RigWeave/Assets.xcassets/AppIcon.appiconset/Contents.json`
-- `ios/RigWeave/Assets.xcassets/RigWeaveLogo.imageset/Contents.json`
-- `ios/RigWeave/Assets.xcassets/RigWeaveLogo.imageset/RigWeaveLogo-1x.png`
-- `ios/RigWeave/Assets.xcassets/RigWeaveLogo.imageset/RigWeaveLogo-2x.png`
-- `ios/RigWeave/Assets.xcassets/RigWeaveLogo.imageset/RigWeaveLogo-3x.png`
+- `assets/branding/shackcq-app-icon-1024.png`
+- `assets/branding/shackcq-mark-1024.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-20.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-20x2.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-20x3.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-29.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-29x2.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-29x3.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-40.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-40x2.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-40x3.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-60x2.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-60x3.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-76.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-76x2.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/AppIcon-83_5x2.png`
+- `ios/ShackCQ/Assets.xcassets/AppIcon.appiconset/Contents.json`
+- `ios/ShackCQ/Assets.xcassets/ShackCQLogo.imageset/Contents.json`
+- `ios/ShackCQ/Assets.xcassets/ShackCQLogo.imageset/ShackCQLogo-1x.png`
+- `ios/ShackCQ/Assets.xcassets/ShackCQLogo.imageset/ShackCQLogo-2x.png`
+- `ios/ShackCQ/Assets.xcassets/ShackCQLogo.imageset/ShackCQLogo-3x.png`
 
 ### DOCUMENTATION
 
@@ -144,7 +144,7 @@ Excluded from Git:
 Excluded from Git:
 
 - `evidence/tablet-ui-20260821/screenshots-fixed`: 153 inherited physical-candidate files.
-- Original installed candidate `rigweave-mobile-tablet-hardening/android/app/build/outputs/apk/debug/app-debug.apk`: 115,219,109 bytes, SHA-256 `74ea3108a786d42058a8dc379edfaaf6b005f9f63f671bc7b14e0cbcb6cee211`.
+- Original installed candidate `shackcq-mobile-tablet-hardening/android/app/build/outputs/apk/debug/app-debug.apk`: 115,219,109 bytes, SHA-256 `74ea3108a786d42058a8dc379edfaaf6b005f9f63f671bc7b14e0cbcb6cee211`.
 
 ### PRIVATE_OR_RUNTIME_DATA
 
@@ -186,7 +186,7 @@ Historical search uses the existing `neural-dx.sqlite` spot journal and `spot_ca
 
 ### Groups.io, Portable, Operations, Satellite, HamClock, DX
 
-Tablet layouts and corrections were integrated without moving Groups.io data from `rigweave-groupsio.sqlite`, and without creating duplicate portable, Operations, satellite, Neural DX, or HamClock provider/controller authorities. Stable provider truth, RF Evidence, Band Health, P.533 `LICENSE_BLOCKED`, and the prohibition on WSPR.live requests remain intact.
+Tablet layouts and corrections were integrated without moving Groups.io data from `shackcq-groupsio.sqlite`, and without creating duplicate portable, Operations, satellite, Neural DX, or HamClock provider/controller authorities. Stable provider truth, RF Evidence, Band Health, P.533 `LICENSE_BLOCKED`, and the prohibition on WSPR.live requests remain intact.
 
 ### Android compatibility, permissions, streams, and queries
 

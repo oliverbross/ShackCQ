@@ -4,11 +4,11 @@
 
 ## Signal contract
 
-RigWeave consumes real stereo I/Q PCM. Left is I and right is Q. Mono input must not be duplicated into a misleading symmetric display. Spectrum reversal is an explicit operator setting for interfaces whose I/Q polarity is reversed.
+ShackCQ consumes real stereo I/Q PCM. Left is I and right is Q. Mono input must not be duplicated into a misleading symmetric display. Spectrum reversal is an explicit operator setting for interfaces whose I/Q polarity is reversed.
 
-The shared implementation is in core/portable/include/kx3/panadapter_dsp.hpp and core/portable/src/panadapter_dsp.cpp, exposed through core/include/rigweave/core.h. It performs DC removal, windowing, complex FFT/magnitude processing, smoothing, bin copying, and I/Q metrics.
+The shared implementation is in core/portable/include/kx3/panadapter_dsp.hpp and core/portable/src/panadapter_dsp.cpp, exposed through core/include/shackcq/core.h. It performs DC removal, windowing, complex FFT/magnitude processing, smoothing, bin copying, and I/Q metrics.
 
-Apple feeds the core from AVAudioSession in ios/RigWeave/FeatureModel.swift and renders the spectrum/waterfall in ios/RigWeave/ContentView.swift. Android uses a dedicated native context, `NativePanadapter`, and `PanadapterController`; its verified stereo `UNPROCESSED` capture is explicitly separate from `AudioMonitorController` playback/voice processing.
+Apple feeds the core from AVAudioSession in ios/ShackCQ/FeatureModel.swift and renders the spectrum/waterfall in ios/ShackCQ/ContentView.swift. Android uses a dedicated native context, `NativePanadapter`, and `PanadapterController`; its verified stereo `UNPROCESSED` capture is explicitly separate from `AudioMonitorController` playback/voice processing.
 
 ## Display contract
 

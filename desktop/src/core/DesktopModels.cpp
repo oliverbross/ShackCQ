@@ -1,9 +1,9 @@
-#include "rigweave/desktop/DesktopModels.hpp"
+#include "shackcq/desktop/DesktopModels.hpp"
 
 #include <QRegularExpression>
 #include <algorithm>
 
-namespace rigweave::desktop {
+namespace shackcq::desktop {
 
 QString normalizedCallsign(const QString &value) {
     return value.trimmed().toUpper().remove(QRegularExpression(QStringLiteral("[^A-Z0-9/]+")));
@@ -118,4 +118,4 @@ QVariantMap SpotRepository::exact(int row) const {
             {"worked", spot.worked}, {"confirmed", spot.confirmed}};
 }
 
-} // namespace rigweave::desktop
+} // namespace shackcq::desktop

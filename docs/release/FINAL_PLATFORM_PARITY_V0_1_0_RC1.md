@@ -1,4 +1,4 @@
-# Final Platform Parity — RigWeave 0.1.0 RC1
+# Final Platform Parity — ShackCQ 0.1.0 RC1
 
 Android, iPhone/iPad, macOS, Windows, and Linux expose the accepted receive, radio, log, sync, intelligence, operations, safety, and remote-station capabilities through native Compose, SwiftUI, or Qt/QML surfaces. Platform adapters preserve a shared protocol and safety contract without pretending that identical operating-system APIs exist.
 

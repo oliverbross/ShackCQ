@@ -12,10 +12,10 @@ Portable → Portable Chase is the Android hunter cockpit for POTA, SOTA, and WW
 
 - POTA spots: `https://api.pota.app/spot/activator`; foreground On Air refresh at most once per 60 seconds. The explicit offline park catalogue remains `https://pota.app/all_parks_ext.csv`.
 - SOTA summits: `https://www.sotadata.org.uk/summitslist.csv`; explicit operator download into a staged app-private SQLite database, with header-by-name streaming import, validation, sampled reopen, SHA-256/HTTP metadata, and previous-database retention.
-- SOTA live: unavailable in this build. On 18 August 2026 the formerly proposed API2 endpoint returned a deprecation record. Its replacement terms require an approved designated contact and prior approval for AI-generated clients. RigWeave therefore shows `SOTA UNAVAILABLE — API APPROVAL REQUIRED` and makes no live request to either endpoint.
+- SOTA live: unavailable in this build. On 18 August 2026 the formerly proposed API2 endpoint returned a deprecation record. Its replacement terms require an approved designated contact and prior approval for AI-generated clients. ShackCQ therefore shows `SOTA UNAVAILABLE — API APPROVAL REQUIRED` and makes no live request to either endpoint.
 - WWFF spots/agendas: `https://spots.wwff.co/static/spots.json` and `https://spots.wwff.co/static/agendas_active.json`; one foreground refresh per 60 seconds. Agendas only enrich matching current spot rows and never create frequency-less activity.
 
-Each provider owns its status and bounded snapshot cache. A failed refresh retains the last valid normalized snapshot as cached/stale; malformed, empty, HTML, QRT, TEST, expired, or materially future activity is not ranked as live. Requests identify RigWeave, use bounded timeouts, at most one retry, conditional headers where available, and no overlapping provider refresh.
+Each provider owns its status and bounded snapshot cache. A failed refresh retains the last valid normalized snapshot as cached/stale; malformed, empty, HTML, QRT, TEST, expired, or materially future activity is not ranked as live. Requests identify ShackCQ, use bounded timeouts, at most one retry, conditional headers where available, and no overlapping provider refresh.
 
 ## Operator workflow
 
@@ -29,7 +29,7 @@ Tune and Tune & Log are operator-confirmed receive-only actions. Selection never
 
 POTA Parks retains its existing offline download/search/Nearby experience. SOTA Summits supports explicit staged download, reference/name/association/region search, Nearby, validity, altitude, points, source freshness, and official browser handoff. WWFF Places searches only bounded recently seen Spotline data and links to the official Directory. The full WWFF Directory is not downloaded, bundled, cached, scraped, or reproduced without programme permission.
 
-RigWeave is independent of POTA, SOTA, and WWFF and uses no programme logos.
+ShackCQ is independent of POTA, SOTA, and WWFF and uses no programme logos.
 
 ## Validation and current limitation
 

@@ -40,7 +40,7 @@ PIN = {
 
 
 def fetch(url: str, *, github: bool = False) -> bytes:
-    headers = {"User-Agent": "RigWeave-Rotator-Upstream-Watch/1"}
+    headers = {"User-Agent": "ShackCQ-Rotator-Upstream-Watch/1"}
     token = os.environ.get("ROTATOR_UPSTREAM_TOKEN") or os.environ.get("GH_TOKEN")
     if github and token:
         headers["Authorization"] = f"Bearer {token}"

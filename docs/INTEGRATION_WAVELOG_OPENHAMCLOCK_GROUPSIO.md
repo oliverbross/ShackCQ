@@ -11,7 +11,7 @@
 - The published branch SHA is reported in the final handoff because the documentation commit cannot contain its own SHA.
 
 Both parent histories are retained. The integration branch was created in the isolated
-`rigweave-mobile-integration-v1` worktree; `main` and the existing feature worktrees were not modified.
+`shackcq-mobile-integration-v1` worktree; `main` and the existing feature worktrees were not modified.
 
 ## Commits created
 
@@ -44,11 +44,11 @@ Wavelog controller/native controller, HamClock settings/public providers, Featur
 Neural DX controller, Progress controller, Operations controller, Portable controller, and Groups.io controller.
 Satellite operations are owned by the single Operations controller hierarchy.
 
-The canonical QSO database remains `rigweave.sqlite`, database version 13. All upgrade paths are
+The canonical QSO database remains `shackcq.sqlite`, database version 13. All upgrade paths are
 monotonic through versions 2–13. Projection contract version 2 retains transactional dual writes,
 backfill, verification, and repair without a destructive fallback. Main-only worked/history scope is retained.
 
-Groups.io remains outside QSO storage in `rigweave-groupsio.sqlite`, with its own cache, credentials
+Groups.io remains outside QSO storage in `shackcq-groupsio.sqlite`, with its own cache, credentials
 preferences, attachment files, backup/data-extraction exclusions, controller, tests, and Apple source.
 
 ## Integration corrections

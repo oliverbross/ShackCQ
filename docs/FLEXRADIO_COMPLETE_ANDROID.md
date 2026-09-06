@@ -4,7 +4,7 @@
 
 Phase 5 source implementation is complete on branch `feature/android-flexradio-complete-client`. Host tests, Android unit tests, all four Android Rust ABIs, JNI/C++ linkage, debug APK assembly, installation and launch on a Lenovo TB373FU pass.
 
-Acceptance remains **STOPPED**, but the real-radio boundary has advanced. On 2026-08-18 the tablet connected through OpenVPN to a manually configured private IPv4 address on Flex TCP port 4992. The real radio returned protocol version `1.4.0.0` and nonzero client handles; RigWeave's name/program/GUI/station registration completed, and the command channel remained available. Live testing fixed main-thread socket writes, the missing GUI-registration sequence, real `client_id` GUI-state parsing and the source-backed `display pan create` command. The radio then rejected new owned panadapter creation with `0x50000009` (`No foundation receiver available`), so VITA panadapter/waterfall, meters and RX audio could not be accepted in this session. SmartLink remains unavailable because its live broker directory is empty. No RF/TX command was sent.
+Acceptance remains **STOPPED**, but the real-radio boundary has advanced. On 2026-08-18 the tablet connected through OpenVPN to a manually configured private IPv4 address on Flex TCP port 4992. The real radio returned protocol version `1.4.0.0` and nonzero client handles; ShackCQ's name/program/GUI/station registration completed, and the command channel remained available. Live testing fixed main-thread socket writes, the missing GUI-registration sequence, real `client_id` GUI-state parsing and the source-backed `display pan create` command. The radio then rejected new owned panadapter creation with `0x50000009` (`No foundation receiver available`), so VITA panadapter/waterfall, meters and RX audio could not be accepted in this session. SmartLink remains unavailable because its live broker directory is empty. No RF/TX command was sent.
 
 ## Developer configuration
 
@@ -30,7 +30,7 @@ The current developer build uses the StationPilot/AetherSDR registration after e
 - `wan validate` remains the first direct WAN command.
 - A nonzero client handle is required before normal subscriptions or UDP registration.
 - LAN sends `client udpport <port>` once.
-- After a nonzero handle, RigWeave sends the source-backed `name`, `client program`, `client gui <session UUID>` and `client station` sequence on an I/O dispatcher before subscriptions. A nonempty real `client_id` status identifies the registered GUI even when the radio omits a synthetic `gui=1` field.
+- After a nonzero handle, ShackCQ sends the source-backed `name`, `client program`, `client gui <session UUID>` and `client station` sequence on an I/O dispatcher before subscriptions. A nonempty real `client_id` status identifies the registered GUI even when the radio omits a synthetic `gui=1` field.
 - SmartLink uses an unconnected UDP socket and sends `client udp_register handle=0x...` every 50 ms until the first structurally valid Flex-OUI VITA packet or a 30-second timeout. It then sends `client ping handle=...` every five seconds.
 
 ## VITA stream core
@@ -56,7 +56,7 @@ The Compose renderer uses one Canvas per spectrum/waterfall instrument. It creat
 The cockpit has two deliberate modes:
 
 - **ATTACH** observes and controls an explicitly selected compatible GUI station/slice without claiming ownership.
-- **RIGWEAVE CLIENT** requests a radio-created panafall and initial slice, records returned IDs, and may remove only those recorded IDs.
+- **SHACKCQ CLIENT** requests a radio-created panafall and initial slice, records returned IDs, and may remove only those recorded IDs.
 
 Panadapter, waterfall, slice and stream removal builders fail closed for foreign IDs. Ownership state is cleared on disconnect and raw IDs are not reused across sessions. Slice limits come from radio capability status. TX-slice assignment requires a separate confirmation and is rejected during active TX.
 
@@ -64,7 +64,7 @@ Panadapter, waterfall, slice and stream removal builders fail closed for foreign
 
 Implemented controls include frequency, mode, filter, slice audio gain/pan/mute, AGC mode/threshold, RIT, XIT, RX antenna, lock, explicit TX-slice assignment, profiles, panafall geometry/FPS/dBm range and PC audio.
 
-PC audio requests `remote_audio_rx compression=opus`, acquires `FLEX_RX_AUDIO` from RigWeave's exclusive audio coordinator and plays 24 kHz stereo through `AudioTrack`. Float/reduced-bandwidth paths remain supported. The jitter buffer is bounded; sequence discontinuities are counted; the fallback concealment path is bounded and never invents meter or spectrum state.
+PC audio requests `remote_audio_rx compression=opus`, acquires `FLEX_RX_AUDIO` from ShackCQ's exclusive audio coordinator and plays 24 kHz stereo through `AudioTrack`. Float/reduced-bandwidth paths remain supported. The jitter buffer is bounded; sequence discontinuities are counted; the fallback concealment path is bounded and never invents meter or spectrum state.
 
 ## Controlled transmit
 
@@ -93,7 +93,7 @@ The audited production TX command surface is limited to TX-slice assignment, MOX
 Verified on 2026-08-18:
 
 ~~~sh
-cd rust/rigweave-flex
+cd rust/shackcq-flex
 cargo fmt -- --check
 cargo test
 
@@ -121,7 +121,7 @@ Results:
 - Real LAN command channel: passed; version, nonzero handle and GUI/station registration were observed.
 - Owned panafall: stopped by the radio's real `0x50000009` foundation-receiver capacity response. No foreign display or slice was removed.
 - VITA, meters and RX audio: not validated because an owned display/stream could not be allocated.
-- TX: not safely run; RigWeave remained `TX · DISABLED` and sent no MOX, TUNE, CWX, microphone or voice-macro command.
+- TX: not safely run; ShackCQ remained `TX · DISABLED` and sent no MOX, TUNE, CWX, microphone or voice-macro command.
 
 ## Physical validation still required
 
@@ -138,4 +138,4 @@ Until those steps exist as evidence, current SmartLink operation is **not tested
 
 ## Provenance
 
-Nexus and AetherSDR commits, file-level adaptations, licence, exclusions and endorsement disclaimers are recorded in [`rust/rigweave-flex/UPSTREAM.md`](../rust/rigweave-flex/UPSTREAM.md). RigWeave is GPL-3.0-only. No Nexus DAX orchestration, Qt UI, assets or unconditional `transmit set dax=1` path were imported.
+Nexus and AetherSDR commits, file-level adaptations, licence, exclusions and endorsement disclaimers are recorded in [`rust/shackcq-flex/UPSTREAM.md`](../rust/shackcq-flex/UPSTREAM.md). ShackCQ is GPL-3.0-only. No Nexus DAX orchestration, Qt UI, assets or unconditional `transmit set dax=1` path were imported.

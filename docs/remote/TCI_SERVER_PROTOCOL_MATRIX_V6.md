@@ -4,7 +4,7 @@ Reference: official ExpertSDR3 TCI repository, https://github.com/ExpertSDR3/TCI
 
 | Command | Classification | Notes |
 |---|---|---|
-| `protocol`, `start`, `ready` | SUPPORTED_READ | RigWeave/TCI 1.9-compatible greeting subset |
+| `protocol`, `start`, `ready` | SUPPORTED_READ | ShackCQ/TCI 1.9-compatible greeting subset |
 | `vfo;` | SUPPORTED_READ | active receiver frequency |
 | `modulation;` | SUPPORTED_READ | canonical mode |
 | `trx;` | SUPPORTED_READ | authoritative observed PTT state |

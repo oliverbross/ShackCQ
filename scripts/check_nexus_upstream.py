@@ -22,7 +22,7 @@ API_ROOT = "https://api.github.com/repos/kd9taw/Nexus"
 def request_json(url: str) -> Any:
     request = urllib.request.Request(url, headers={
         "Accept": "application/vnd.github+json",
-        "User-Agent": "RigWeave-Nexus-Upstream-Watch/1",
+        "User-Agent": "ShackCQ-Nexus-Upstream-Watch/1",
         "X-GitHub-Api-Version": "2022-11-28",
     })
     token = os.environ.get("GITHUB_TOKEN", "").strip()
