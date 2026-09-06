@@ -169,7 +169,7 @@ jobs:
           Copy-Item "$env:OPENSSL_ROOT_DIR/bin/libssl-3-x64.dll" $stage
           Copy-Item COPYING "$stage/COPYING.txt"
           Copy-Item NOTICE "$stage/NOTICE.txt"
-          windeployqt --release --no-translations --no-system-d3d-compiler --dir $stage "$stage/shackcq-stationd.exe"
+          windeployqt --release --no-translations --no-system-d3d-compiler --dir $stage "$stage/ShackCQAgent.exe"
           if (Get-ChildItem $stage -Recurse -File | Where-Object Name -Match '(?i)(private|identity|\.pem$|rigctld)') { throw 'Forbidden Agent package content' }
           Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/windows/ShackCQAgent-Windows-x64-${{ github.sha }}.zip" -CompressionLevel Optimal
       - name: Enforce measured size ceilings
