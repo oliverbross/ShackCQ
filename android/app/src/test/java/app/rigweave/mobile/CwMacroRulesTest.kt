@@ -29,4 +29,16 @@ class CwMacroRulesTest {
         assertEquals(1, CQ_REPEAT_MIN_SECONDS)
         assertEquals(5, CQ_REPEAT_MAX_SECONDS)
     }
+
+    @Test fun resolvesLoggingFieldsAndN1mmStyleHisCallAlias() {
+        val result = resolveCwMacroTemplate("<his call> TU {RST_SENT} BK", CwMacroContext(call = "9J2FI", rstSent = "599"))
+        assertNull(result.error)
+        assertEquals("9J2FI TU 599 BK", result.text)
+    }
+
+    @Test fun preservesTemplatesAndRejectsMissingRequiredFields() {
+        assertEquals("{CALL} TU {NAME?}", sanitizeCwMacroTemplate("{call} tu {name?}"))
+        assertTrue(resolveCwMacroTemplate("{CALL} TU", CwMacroContext()).error?.contains("empty") == true)
+        assertEquals("TU", resolveCwMacroTemplate("{CALL?} TU", CwMacroContext()).text)
+    }
 }

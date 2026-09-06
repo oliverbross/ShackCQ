@@ -12,6 +12,21 @@ class LogbookRepository(private val database: QsoDatabase) {
     }
     fun health(): ProjectionHealth = database.projectionHealth()
 
+    fun count(filter: LogbookFilter, stationId: String?, signal: CancellationSignal? = null): Int {
+        val query = buildProjectionQuery(filter, stationId)
+        val filterHash = (31 * filter.hashCode() + stationId.hashCode()).toUInt().toString(16)
+        return synchronized(countCache) {
+            val key = CountKey(filter, stationId, database.changeToken())
+            countCache[key] ?: StabilityDiagnostics.timedQuery("LOGBOOK_COUNT", filterHash, query.planLabel, { 1 }) {
+                database.readableDatabase.rawQuery(
+                    "SELECT COUNT(*) FROM qso_projection p WHERE ${query.where}",
+                    query.args.toTypedArray(),
+                    signal,
+                ).use { if (it.moveToFirst()) it.getInt(0) else 0 }
+            }.also { countCache[key] = it }
+        }
+    }
+
     fun page(filter: LogbookFilter, stationId: String?, pageSize: Int = 50, cursor: LogbookCursor? = null,
         offsetPage: Int = 0, exactCount: Boolean = false, signal: CancellationSignal? = null): LogbookQueryPage {
         val health = database.projectionHealth()
@@ -33,13 +48,7 @@ class LogbookRepository(private val database: QsoDatabase) {
             }
         }
         val visible = ids.take(size); val rows = database.qsos(visible.map(Pair<String,Long>::first))
-        val total = if (!exactCount) null else synchronized(countCache) {
-            val key = CountKey(filter,stationId,database.changeToken())
-            countCache[key] ?: StabilityDiagnostics.timedQuery("LOGBOOK_COUNT", filterHash, query.planLabel, { 1 }) {
-                database.readableDatabase.rawQuery("SELECT COUNT(*) FROM qso_projection p WHERE ${query.where}",query.args.toTypedArray(),signal)
-                    .use { if (it.moveToFirst()) it.getInt(0) else 0 }
-            }.also { countCache[key]=it }
-        }
+        val total = if (exactCount) count(filter, stationId, signal) else null
         val last = visible.lastOrNull()
         return LogbookQueryPage(rows,total,ids.size>size,last?.let { LogbookCursor(it.second,it.first) },query.planLabel)
     }

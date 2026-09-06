@@ -43,6 +43,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableFloatStateOf
@@ -57,6 +58,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.contentDescription
@@ -65,6 +68,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import org.maplibre.android.geometry.LatLng
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
@@ -80,6 +86,7 @@ private val SdrAmber = Color(0xFFE9A72B)
 private val SdrHold = Color(0xFFF4C94E)
 private val SdrHealthy = Color(0xFF42C77B)
 private val SdrDanger = Color(0xFFE4544D)
+private val MapGridForRf = Color(0xFF35515B).copy(alpha = .58f)
 
 private enum class TciCockpitPage { RECEIVERS, TRANSMIT, PANADAPTER, SCANNER, CALIBRATION }
 
@@ -746,8 +753,17 @@ fun RfIntelligenceWorkspace(controller: RfObservationController, workbench: Andr
     var page by remember { mutableStateOf("INTELLIGENCE") }
     Column(Modifier.fillMaxSize().background(SdrChassis)) {
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            listOf("INTELLIGENCE", "SPECTRUM", "RF MAP", "RF GLOBE").forEach { value -> FilterChip(page == value, { page = value }, { Text(value) }) }
+            listOf("INTELLIGENCE", "SPECTRUM ANALYSIS", "RF PATH MAP", "RF GLOBE").forEach { label ->
+                val value = when (label) { "SPECTRUM ANALYSIS" -> "SPECTRUM"; "RF PATH MAP" -> "RF MAP"; else -> label }
+                FilterChip(page == value, { page = value }, { Text(label) })
+            }
         }
+        Text(when (page) {
+            "SPECTRUM" -> "SIGNAL ANALYSIS · frequency × UTC occupancy and all-band comparison · no geographic paths"
+            "RF MAP" -> "FLAT GEOGRAPHIC PATH MAP · drag to pan · pinch to zoom"
+            "RF GLOBE" -> "ORTHOGRAPHIC GLOBE · front hemisphere only · drag to rotate · pinch to zoom"
+            else -> "INTELLIGENCE · operational evidence and decisions"
+        }, color = SdrMuted, fontSize = 10.sp, modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp))
         Box(Modifier.weight(1f)) {
             when (page) {
                 "RF MAP" -> RfMapGlobeScreen(controller, globe = false)
@@ -761,13 +777,27 @@ fun RfIntelligenceWorkspace(controller: RfObservationController, workbench: Andr
 
 @Composable
 fun DigiRfPathWrapper(controller: RfObservationController, existing: @Composable () -> Unit) {
+    var expandedMap by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) { existing() }
-        Card(Modifier.fillMaxWidth().height(112.dp).padding(horizontal = 8.dp, vertical = 5.dp), colors = CardDefaults.cardColors(containerColor = SdrPanel)) {
+        Card(Modifier.fillMaxWidth().height(142.dp).padding(horizontal = 8.dp, vertical = 5.dp), colors = CardDefaults.cardColors(containerColor = SdrPanel)) {
             Column(Modifier.fillMaxSize().padding(6.dp)) {
-                Text("DIGI / WSPR SELECTED PATH · sequence visualisation is not RF proof", color = SdrAmber, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Text("DIGI / WSPR SELECTED PATH · sequence visualisation is not RF proof", color = SdrAmber, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    OutlinedButton({ expandedMap = true }, modifier = Modifier.heightIn(min = 44.dp)) { Text("EXPAND MAP") }
+                }
                 RfCanvas(controller.filtered.take(32), globe = false, centerLat = 0.0, centerLon = 0.0,
                     zoom = 1f, longPath = false, Modifier.weight(1f).fillMaxWidth())
+            }
+        }
+    }
+    if (expandedMap) Dialog(onDismissRequest = { expandedMap = false }, properties = DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(Modifier.fillMaxWidth(.94f).fillMaxHeight(.90f), color = SdrChassis, shape = RoundedCornerShape(14.dp)) {
+            Column(Modifier.fillMaxSize()) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.End) {
+                    OutlinedButton({ expandedMap = false }) { Text("CLOSE MAP") }
+                }
+                Box(Modifier.weight(1f)) { RfMapGlobeScreen(controller, globe = false) }
             }
         }
     }
@@ -776,25 +806,44 @@ fun DigiRfPathWrapper(controller: RfObservationController, existing: @Composable
 @Composable
 fun RfMapGlobeScreen(controller: RfObservationController, globe: Boolean) {
     var filtersOpen by remember { mutableStateOf(false) }
-    var centerLat by remember { mutableDoubleStateOf(-12.0) }
-    var centerLon by remember { mutableDoubleStateOf(130.0) }
+    val receiverAnchor = controller.filtered.firstOrNull()
+    var centerLat by remember { mutableDoubleStateOf(receiverAnchor?.receiverLatitude ?: 0.0) }
+    var centerLon by remember { mutableDoubleStateOf(receiverAnchor?.receiverLongitude ?: 0.0) }
     var zoom by remember { mutableFloatStateOf(1f) }
+    var globeAdjusted by remember { mutableStateOf(false) }
+    LaunchedEffect(globe, receiverAnchor?.receiverLatitude, receiverAnchor?.receiverLongitude) {
+        if (globe && !globeAdjusted && receiverAnchor != null) {
+            centerLat = receiverAnchor.receiverLatitude
+            centerLon = receiverAnchor.receiverLongitude
+        }
+    }
     Column(Modifier.fillMaxSize().background(SdrChassis).padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column { Text(if (globe) "INTERACTIVE ORTHOGRAPHIC RF GLOBE" else "RF EVIDENCE MAP", color = SdrAmber, fontWeight = FontWeight.Black)
+            Column { Text(if (globe) "INTERACTIVE ORTHOGRAPHIC RF GLOBE" else "FLAT RF EVIDENCE PATH MAP", color = SdrAmber, fontWeight = FontWeight.Black)
                 Text("${controller.filtered.size}/${controller.observations.size} bounded observations · filter ${controller.filterMillis} ms", color = SdrMuted) }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                if (globe && receiverAnchor != null) OutlinedButton({
+                    centerLat = receiverAnchor.receiverLatitude
+                    centerLon = receiverAnchor.receiverLongitude
+                    zoom = 1f
+                    globeAdjusted = false
+                }) { Text("CENTER RX") }
                 OutlinedButton({ filtersOpen = true }) { Text("FILTERS") }
                 OutlinedButton(controller::resetFilters) { Text("RESET FILTERS") }
             }
         }
-        Box(Modifier.weight(1f).fillMaxWidth().pointerInput(globe) {
-            detectTransformGestures { _, pan, gestureZoom, _ ->
-                centerLon = normalizeUiLongitude(centerLon - pan.x / size.width * 180 / zoom)
-                centerLat = (centerLat + pan.y / size.height * 90 / zoom).coerceIn(-90.0, 90.0)
-                zoom = (zoom * gestureZoom).coerceIn(.7f, 6f)
-            }
-        }) { RfCanvas(controller.filtered, globe, centerLat, centerLon, zoom, controller.filters.longPath, Modifier.fillMaxSize()) }
+        if (globe) {
+            Box(Modifier.weight(1f).fillMaxWidth().pointerInput(Unit) {
+                detectTransformGestures { _, pan, gestureZoom, _ ->
+                    globeAdjusted = true
+                    centerLon = normalizeUiLongitude(centerLon - pan.x / size.width * 180 / zoom)
+                    centerLat = (centerLat + pan.y / size.height * 90 / zoom).coerceIn(-90.0, 90.0)
+                    zoom = (zoom * gestureZoom).coerceIn(.7f, 3.5f)
+                }
+            }) { RfCanvas(controller.filtered, true, centerLat, centerLon, zoom, controller.filters.longPath, Modifier.fillMaxSize()) }
+        } else {
+            RfPathMap(controller.filtered, controller.filters.longPath, Modifier.weight(1f).fillMaxWidth())
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
             Text("OBSERVED", color = SdrHealthy); Text("HISTORICAL", color = SdrMuted); Text("EMPIRICAL OUTLOOK", color = SdrHold)
             Text("COARSE locations are hollow · selection never tunes", color = SdrMuted)
@@ -804,11 +853,80 @@ fun RfMapGlobeScreen(controller: RfObservationController, globe: Boolean) {
 }
 
 @Composable
+private fun RfPathMap(rows: List<RfObservation>, longPath: Boolean, modifier: Modifier) {
+    val visible = rows.takeLast(80)
+    val paths = remember(visible, longPath) {
+        visible.flatMap { row ->
+            val color = when (row.evidence) {
+                RfEvidenceClass.OBSERVED -> SdrHealthy
+                RfEvidenceClass.HISTORICAL -> SdrMuted
+                RfEvidenceClass.OUTLOOK -> SdrHold
+            }
+            val points = greatCircle(
+                row.transmitterLatitude, row.transmitterLongitude,
+                row.receiverLatitude, row.receiverLongitude, longPath, 48,
+            ).map { LatLng(it.latitude, it.longitude) }
+            splitAtDateline(points).map { segment -> MapPath(segment, color.copy(alpha = .72f).toArgb(), 1.6f) }
+        }
+    }
+    val markers = remember(visible) {
+        buildList {
+            visible.asReversed().distinctBy { Pair(it.transmitterLatitude, it.transmitterLongitude) }.take(100).forEach { row ->
+                val color = when (row.evidence) {
+                    RfEvidenceClass.OBSERVED -> SdrHealthy
+                    RfEvidenceClass.HISTORICAL -> SdrMuted
+                    RfEvidenceClass.OUTLOOK -> SdrHold
+                }
+                add(MapMarker(
+                    row.transmitterLatitude, row.transmitterLongitude, row.callsign,
+                    "${row.band} ${row.mode} · ${row.source} · ${row.evidence.name.lowercase(Locale.US)}",
+                    color.toArgb(), if (row.precision == RfPrecision.COARSE) 10 else 12,
+                    ring = row.precision == RfPrecision.COARSE,
+                ))
+            }
+            visible.lastOrNull()?.let { row ->
+                add(MapMarker(row.receiverLatitude, row.receiverLongitude, "RECEIVER",
+                    row.receiverRegion.ifBlank { "Selected receive location" }, SdrAmber.toArgb(), 15, ring = true))
+            }
+        }
+    }
+    NativeNeuralMap(
+        markers, paths, emptyList(), LatLng(18.0, 10.0), 1.15, NeuralBasemap.DARK,
+        "RF PATHS", "Interactive geographic map with ${visible.size} bounded RF evidence paths",
+        modifier, "GREEN OBSERVED · GREY HISTORICAL · AMBER OUTLOOK · HOLLOW COARSE",
+    )
+}
+
+@Composable
 private fun RfCanvas(rows: List<RfObservation>, globe: Boolean, centerLat: Double, centerLon: Double, zoom: Float,
     longPath: Boolean, modifier: Modifier) {
     Canvas(modifier.semantics { contentDescription = if (globe) "Interactive RF globe with paths, control points, grayline and filters" else "Interactive flat RF map with paths, control points, grayline and filters" }) {
         drawRect(Color(0xFF071014))
-        if (globe) drawCircle(Color(0xFF102C35), radius = minOf(size.width, size.height) * .46f * zoom.coerceAtMost(1.15f), center = center)
+        if (globe) {
+            val globeRadius = minOf(size.width, size.height) * .46f * zoom
+            drawCircle(Color(0xFF102C35), radius = globeRadius, center = center)
+            drawRfLand(centerLat, centerLon, zoom)
+            for (latitude in -60..60 step 30) {
+                var previous: Offset? = null
+                for (longitude in -180..180 step 4) {
+                    val point = projectRf(latitude.toDouble(), longitude.toDouble(), true, centerLat, centerLon, zoom, size.width, size.height)
+                    if (point != null && previous != null) drawLine(MapGridForRf, previous, point, 1.dp.toPx())
+                    previous = point
+                }
+            }
+            for (longitude in -180..150 step 30) {
+                var previous: Offset? = null
+                for (latitude in -90..90 step 3) {
+                    val point = projectRf(latitude.toDouble(), longitude.toDouble(), true, centerLat, centerLon, zoom, size.width, size.height)
+                    if (point != null && previous != null) drawLine(MapGridForRf, previous, point, 1.dp.toPx())
+                    previous = point
+                }
+            }
+            drawCircle(SdrAmber.copy(alpha = .55f), radius = globeRadius, center = center, style = Stroke(2.dp.toPx()))
+        } else {
+            for (step in 1 until 12) drawLine(MapGridForRf, Offset(size.width * step / 12f, 0f), Offset(size.width * step / 12f, size.height), 1.dp.toPx())
+            for (step in 1 until 6) drawLine(MapGridForRf, Offset(0f, size.height * step / 6f), Offset(size.width, size.height * step / 6f), 1.dp.toPx())
+        }
         val visible = rows.takeLast(4_096)
         visible.forEach { row ->
             val color = when (row.evidence) { RfEvidenceClass.OBSERVED -> SdrHealthy; RfEvidenceClass.HISTORICAL -> SdrMuted; RfEvidenceClass.OUTLOOK -> SdrHold }
@@ -834,7 +952,40 @@ private fun RfCanvas(rows: List<RfObservation>, globe: Boolean, centerLat: Doubl
         val stationRow = rows.lastOrNull()
         val station = stationRow?.let { projectRf(it.receiverLatitude, it.receiverLongitude, globe, centerLat, centerLon, zoom, size.width, size.height) }
         if (station != null) drawCircle(SdrAmber, 6.dp.toPx(), station)
-        drawLine(SdrHold.copy(alpha = .3f), Offset(0f, size.height * .45f), Offset(size.width, size.height * .62f), 18.dp.toPx())
+    }
+}
+
+private fun DrawScope.drawRfLand(centerLat: Double, centerLon: Double, zoom: Float) {
+    val fill = Color(0xFF2B5149)
+    val outline = Color(0xFF84B49B)
+    rfWorldLandContours.forEach { contour ->
+        val projected = contour.map { point ->
+            projectRf(point.latitude, point.longitude, true, centerLat, centerLon, zoom, size.width, size.height)
+        }
+        if (projected.all { it != null }) {
+            val path = Path()
+            projected.filterNotNull().forEachIndexed { index, point ->
+                if (index == 0) path.moveTo(point.x, point.y) else path.lineTo(point.x, point.y)
+            }
+            path.close()
+            drawPath(path, fill)
+            drawPath(path, outline.copy(alpha = .82f), style = Stroke(1.1.dp.toPx()))
+        } else {
+            var path = Path()
+            var pointsInPath = 0
+            fun flush() {
+                if (pointsInPath >= 2) drawPath(path, outline.copy(alpha = .78f), style = Stroke(1.05.dp.toPx()))
+                path = Path(); pointsInPath = 0
+            }
+            projected.forEach { point ->
+                if (point == null) flush()
+                else {
+                    if (pointsInPath == 0) path.moveTo(point.x, point.y) else path.lineTo(point.x, point.y)
+                    pointsInPath++
+                }
+            }
+            flush()
+        }
     }
 }
 

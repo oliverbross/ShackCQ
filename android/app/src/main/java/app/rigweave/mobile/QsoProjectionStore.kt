@@ -20,7 +20,7 @@ data class ProjectionHealth(
 }
 
 internal object QsoProjectionStore {
-    const val VERSION = 5
+    const val VERSION = 6
     private const val META_VERSION = "version"
     private const val META_STATE = "state"
     private const val META_CURSOR_TIME = "cursor_time"
@@ -40,7 +40,8 @@ internal object QsoProjectionStore {
             band_norm TEXT NOT NULL DEFAULT '', band_rx_norm TEXT NOT NULL DEFAULT '', mode_norm TEXT NOT NULL DEFAULT '',
             submode_norm TEXT NOT NULL DEFAULT '', mode_family TEXT NOT NULL DEFAULT '', station_profile_id TEXT NOT NULL DEFAULT '',
             station_callsign_norm TEXT NOT NULL DEFAULT '', operator_norm TEXT NOT NULL DEFAULT '', my_grid_norm TEXT NOT NULL DEFAULT '', name_norm TEXT NOT NULL DEFAULT '',
-            qth_norm TEXT NOT NULL DEFAULT '', email_norm TEXT NOT NULL DEFAULT '', country_norm TEXT NOT NULL DEFAULT '', grid_norm TEXT NOT NULL DEFAULT '',
+            qth_norm TEXT NOT NULL DEFAULT '', email_norm TEXT NOT NULL DEFAULT '', country_norm TEXT NOT NULL DEFAULT '',
+            country_display TEXT NOT NULL DEFAULT '', grid_norm TEXT NOT NULL DEFAULT '',
             dxcc TEXT NOT NULL DEFAULT '', continent TEXT NOT NULL DEFAULT '', cq_zone TEXT NOT NULL DEFAULT '', itu_zone TEXT NOT NULL DEFAULT '',
             state_norm TEXT NOT NULL DEFAULT '', region_norm TEXT NOT NULL DEFAULT '', county_norm TEXT NOT NULL DEFAULT '', dok_norm TEXT NOT NULL DEFAULT '', iota_norm TEXT NOT NULL DEFAULT '',
             sota_ref_norm TEXT NOT NULL DEFAULT '', wwff_ref_norm TEXT NOT NULL DEFAULT '', pota_ref_norm TEXT NOT NULL DEFAULT '',
@@ -101,6 +102,21 @@ internal object QsoProjectionStore {
         putMeta(db, META_VERSION, VERSION.toString())
     }
 
+    fun migrateV6(db: SQLiteDatabase) {
+        val columns = buildSet {
+            db.rawQuery("PRAGMA table_info(qso_projection)", null).use { cursor ->
+                while (cursor.moveToNext()) add(cursor.getString(1))
+            }
+        }
+        if ("country_display" !in columns) {
+            db.execSQL("ALTER TABLE qso_projection ADD COLUMN country_display TEXT NOT NULL DEFAULT ''")
+            db.execSQL("""UPDATE qso_projection SET country_display=COALESCE(
+                (SELECT q.country FROM qso q WHERE q.id=qso_projection.qso_id),'')""".trimIndent())
+        }
+        createIndexes(db)
+        putMeta(db, META_VERSION, VERSION.toString())
+    }
+
     private fun createIndexes(db: SQLiteDatabase) {
         listOf(
             "CREATE INDEX IF NOT EXISTS qso_projection_time_idx ON qso_projection(created_at DESC,qso_id)",
@@ -109,6 +125,7 @@ internal object QsoProjectionStore {
             "CREATE INDEX IF NOT EXISTS qso_projection_band_time_idx ON qso_projection(band_norm,created_at DESC)",
             "CREATE INDEX IF NOT EXISTS qso_projection_mode_time_idx ON qso_projection(mode_family,submode_norm,created_at DESC)",
             "CREATE INDEX IF NOT EXISTS qso_projection_station_time_idx ON qso_projection(station_profile_id,created_at DESC)",
+            "CREATE INDEX IF NOT EXISTS qso_projection_station_callsign_idx ON qso_projection(station_profile_id,callsign_norm)",
             "CREATE INDEX IF NOT EXISTS qso_projection_station_call_idx ON qso_projection(station_callsign_norm,created_at DESC)",
             "CREATE INDEX IF NOT EXISTS qso_projection_operator_idx ON qso_projection(operator_norm,created_at DESC)",
             "CREATE INDEX IF NOT EXISTS qso_projection_dxcc_bm_idx ON qso_projection(dxcc,band_norm,mode_family,created_at DESC)",
@@ -137,7 +154,8 @@ internal object QsoProjectionStore {
             put("band_norm", norm(qso.band.ifBlank { bandForFrequency(qso.frequencyHz) })); put("band_rx_norm", norm(qso.bandRx))
             put("mode_norm", norm(qso.mode)); put("submode_norm", norm(qso.submode)); put("mode_family", modeFamily(qso))
             put("station_profile_id", qso.stationProfileId); put("station_callsign_norm", norm(qso.stationCallsign)); put("operator_norm", norm(qso.operatorCallsign)); put("my_grid_norm", norm(qso.myGrid))
-            put("name_norm", norm(qso.name)); put("qth_norm", norm(qso.qth)); put("email_norm", norm(qso.email)); put("country_norm", norm(qso.country)); put("grid_norm", norm(qso.grid))
+            put("name_norm", norm(qso.name)); put("qth_norm", norm(qso.qth)); put("email_norm", norm(qso.email))
+            put("country_norm", norm(qso.country)); put("country_display", qso.country); put("grid_norm", norm(qso.grid))
             put("dxcc", normalizeDxcc(qso.dxcc)); put("continent", normalizeContinent(qso.continent)); put("cq_zone", qso.cqZone.trim()); put("itu_zone", qso.ituZone.trim())
             put("state_norm", norm(qso.state)); put("region_norm", norm(qso.region)); put("county_norm", norm(qso.county)); put("dok_norm", norm(qso.dok)); put("iota_norm", norm(qso.iota))
             put("sota_ref_norm", norm(qso.sotaRef)); put("wwff_ref_norm", norm(qso.wwffRef)); put("pota_ref_norm", norm(qso.potaRef))

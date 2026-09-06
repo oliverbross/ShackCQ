@@ -329,10 +329,11 @@ internal fun PortableChaseScreen(
     }
 }
 
-@Composable private fun PortableCataloguePlaces(registry: PortableCatalogueRegistry, modifier: Modifier) {
+@Composable private fun PortableCataloguePlaces(registry: PortableCatalogueRegistry, modifier: Modifier,
+    initialProgramme: PortableCatalogueProgram = PortableCatalogueProgram.IOTA, showProgrammeTabs: Boolean = true) {
     val context = LocalContext.current
     val inAppBrowser = LocalInAppBrowserState.current
-    var programme by rememberSaveable { mutableStateOf(PortableCatalogueProgram.IOTA) }
+    var programme by rememberSaveable(initialProgramme) { mutableStateOf(initialProgramme) }
     var query by rememberSaveable { mutableStateOf("") }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri ?: return@rememberLauncherForActivityResult
@@ -345,7 +346,7 @@ internal fun PortableChaseScreen(
     }
     LaunchedEffect(programme, query, registry.statuses) { registry.search(programme, query) }
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (showProgrammeTabs) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             PortableCatalogueProgram.entries.forEach { item -> FilterChip(programme == item, { programme = item }, { Text(item.label) }) }
         }
         val status = registry.statuses.getValue(programme)
@@ -358,12 +359,15 @@ internal fun PortableChaseScreen(
                         Text(status.reason, color = PortableMuted)
                         Text(status.source, color = PortableBlue, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
-                    if (programme == PortableCatalogueProgram.IOTA) Button(registry::refreshIota, enabled = !status.busy) { Text(if (status.rowCount > 0) "UPDATE" else "DOWNLOAD") }
-                    else OutlinedButton({ importer.launch(arrayOf("text/csv", "text/comma-separated-values", "application/octet-stream")) }) { Text("IMPORT") }
+                    when (programme) {
+                        PortableCatalogueProgram.IOTA -> Button(registry::refreshIota, enabled = !status.busy) { Text(if (status.rowCount > 0) "UPDATE" else "DOWNLOAD") }
+                        PortableCatalogueProgram.WWFF -> Button(registry::refreshWwff, enabled = !status.busy) { Text(if (status.rowCount > 0) "UPDATE" else "DOWNLOAD") }
+                        else -> OutlinedButton({ importer.launch(arrayOf("text/csv", "text/comma-separated-values", "application/octet-stream")) }) { Text("IMPORT") }
+                    }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedButton({ inAppBrowser?.open(status.source) }) { Icon(Icons.Outlined.OpenInNew, null); Spacer(Modifier.width(5.dp)); Text("OFFICIAL SOURCE") }
-                    Text("No scraping · no bundled directory · private last-good only", color = PortableMuted, fontSize = 11.sp,
+                    Text("Official download where available · no scraping · private last-good only", color = PortableMuted, fontSize = 11.sp,
                         modifier = Modifier.align(Alignment.CenterVertically))
                 }
             }
@@ -380,7 +384,8 @@ internal fun PortableChaseScreen(
                         place.members.takeIf { it.isNotEmpty() }?.let { "${it.size} listed islands" }).filterNotNull().filter(String::isNotBlank).joinToString(" · "), color = PortableMuted)
                     Text(if (place.latitudeMin != null && place.latitudeMax != null && place.longitudeMin != null && place.longitudeMax != null)
                         "Official bounds available · no fabricated centroid" else "No valid provider geometry · not mapped", color = PortableMuted, fontSize = 11.sp)
-                    if (place.officialUrl.isNotBlank()) TextButton({ inAppBrowser?.open(place.officialUrl) }) { Text("OFFICIAL DETAIL") }
+                    if (place.officialUrl.isNotBlank()) OutlinedButton({ inAppBrowser?.open(place.officialUrl) },
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = PortableAmber)) { Icon(Icons.Outlined.OpenInNew, null); Spacer(Modifier.width(5.dp)); Text("OFFICIAL DIRECTORY") }
                 } }
             }
         }
@@ -391,22 +396,59 @@ internal fun PortableChaseScreen(
     val context = LocalContext.current; val inAppBrowser = LocalInAppBrowserState.current; var query by rememberSaveable { mutableStateOf("") }; var association by rememberSaveable { mutableStateOf("") }; var region by rememberSaveable { mutableStateOf("") }; var grid by rememberSaveable { mutableStateOf(stationGrid) }; var nearby by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(query, association, region, grid, nearby, catalogue.metadata.ready) { delay(180); catalogue.search(query, association, region, grid, nearby) }
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) { Surface(color = PortablePanel, shape = RoundedCornerShape(10.dp), border = androidx.compose.foundation.BorderStroke(1.dp, PortableRaised)) { Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) { Column { Text(if (catalogue.metadata.ready) "SOTA SUMMIT DATABASE ${if (catalogue.metadata.stale) "STALE" else "READY"}" else "DOWNLOAD OFFICIAL SOTA SUMMITS", color = PortableAmber, fontWeight = FontWeight.Black); Text(if (catalogue.metadata.ready) "${catalogue.metadata.rowCount} summits · offline search available" else "Explicit, staged app-private import from SOTA", color = PortableMuted) }; if (catalogue.busy) OutlinedButton(catalogue::cancelUpdate) { Text("Cancel") } else Button(catalogue::update) { Text(if (catalogue.metadata.ready) "Update now" else "Download") } }; if (catalogue.busy) LinearProgressIndicator({ catalogue.progress / 100f }, Modifier.fillMaxWidth()); if (catalogue.metadata.failure.isNotBlank()) Text(catalogue.metadata.failure, color = PortableAmber); Text("Summit data © Summits on the Air. RigWeave is independent.", color = PortableMuted, fontSize = 11.sp) } }
-        if (catalogue.metadata.ready) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) { OutlinedTextField(query, { query = it.uppercase() }, label = { Text("Reference or summit") }, modifier = Modifier.weight(2f), singleLine = true); OutlinedTextField(association, { association = it }, label = { Text("Association") }, modifier = Modifier.weight(1f), singleLine = true); OutlinedTextField(region, { region = it }, label = { Text("Region") }, modifier = Modifier.weight(1f), singleLine = true); OutlinedTextField(grid, { grid = it.uppercase().take(8) }, label = { Text("Station / manual grid") }, modifier = Modifier.width(160.dp), singleLine = true); FilterChip(nearby, { nearby = !nearby }, { Text("Nearby") }, leadingIcon = { Icon(Icons.Outlined.NearMe, null) }) }; LazyVerticalGrid(columns = GridCells.Adaptive(360.dp), modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) { gridItems(catalogue.results, key = SotaSummit::code) { summit -> Row(Modifier.fillMaxWidth().background(PortablePanel, RoundedCornerShape(8.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("${summit.code} · ${summit.name}", color = PortableInk, fontWeight = FontWeight.Bold); Text(listOf(summit.association, summit.region, summit.altitudeM?.let { "$it m" }, summit.points?.let { "$it points" }, summit.distanceKm?.let { "%.1f km · %03d°".format(it, summit.bearingDegrees ?: 0) }, if (summit.active) "VALID" else "RETIRED").filterNotNull().filter(String::isNotBlank).joinToString(" · "), color = PortableMuted) }; IconButton({ inAppBrowser?.open("https://www.sotadata.org.uk/en/summit/${summit.code}") }) { Icon(Icons.Outlined.OpenInNew, "Open official SOTA summit page") } } } } }
+        if (catalogue.metadata.ready) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) { OutlinedTextField(query, { query = it.uppercase() }, label = { Text("Reference or summit") }, modifier = Modifier.weight(2f), singleLine = true); OutlinedTextField(association, { association = it }, label = { Text("Association") }, modifier = Modifier.weight(1f), singleLine = true); OutlinedTextField(region, { region = it }, label = { Text("Region") }, modifier = Modifier.weight(1f), singleLine = true); OutlinedTextField(grid, { grid = it.uppercase().take(8) }, label = { Text("Station / manual grid") }, modifier = Modifier.width(160.dp), singleLine = true); FilterChip(nearby, { nearby = !nearby }, { Text("Nearby") }, leadingIcon = { Icon(Icons.Outlined.NearMe, null) }) }; LazyVerticalGrid(columns = GridCells.Adaptive(360.dp), modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) { gridItems(catalogue.results, key = SotaSummit::code) { summit -> Row(Modifier.fillMaxWidth().background(PortablePanel, RoundedCornerShape(8.dp)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("${summit.code} · ${summit.name}", color = PortableInk, fontWeight = FontWeight.Bold); Text(listOf(summit.association, summit.region, summit.altitudeM?.let { "$it m" }, summit.points?.let { "$it points" }, summit.distanceKm?.let { "%.1f km · %03d°".format(it, summit.bearingDegrees ?: 0) }, if (summit.active) "VALID" else "RETIRED").filterNotNull().filter(String::isNotBlank).joinToString(" · "), color = PortableMuted) }; IconButton({ inAppBrowser?.open("https://www.sotadata.org.uk/en/summit/${summit.code}") }, colors = IconButtonDefaults.iconButtonColors(containerColor = PortableAmber, contentColor = Color(0xFF201708))) { Icon(Icons.Outlined.OpenInNew, "Open official SOTA summit page") } } } } }
     }
 }
 
 @Composable private fun WwffPlaces(controller: PortableController, modifier: Modifier) {
     val inAppBrowser = LocalInAppBrowserState.current
-    val catalogue = controller.catalogues.statuses.getValue(PortableCatalogueProgram.WWFF)
+    val status = controller.catalogues.statuses.getValue(PortableCatalogueProgram.WWFF)
+    val now = Instant.now().epochSecond
+    val live = remember(controller.rankedOpportunities, now / 15) {
+        controller.rankedOpportunities.filter { row ->
+            PortableProgram.WWFF in row.spot.programs && row.spot.activeAt(now)
+        }
+    }
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Surface(color = PortablePanel, shape = RoundedCornerShape(10.dp), border = androidx.compose.foundation.BorderStroke(1.dp, PortableRaised)) {
-            Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                Text("WWFF CATALOGUE · ${catalogue.state.name.replace('_', ' ')}", color = if (catalogue.rowCount > 0) PortableHealthy else PortableDanger, fontWeight = FontWeight.Black)
-                Text("${catalogue.rowCount} catalogue references · ${catalogue.digest.take(12).ifBlank { "no digest" }}", color = PortableMuted)
-                Text(if (catalogue.rowCount > 0) "Authorised user-selected app-private directory is available in More catalogues."
-                    else "The official directory is not downloaded or scraped. Oliver Bross OM0RX may select his authorised CSV in More catalogues; live Spotline remains separate.", color = PortableMuted)
-                Text("Live provider: ${controller.wwffStatus.kind.name} · ${controller.wwffStatus.count} active · source attribution WWFF Spotline/agendas", color = PortableMuted, fontSize = 11.sp)
-                Button({ inAppBrowser?.open("https://wwff.co/directory/") }) { Icon(Icons.Outlined.OpenInNew, null); Spacer(Modifier.width(6.dp)); Text("Open official WWFF Directory") }
+            Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("LIVE WWFF REFERENCES · ${controller.wwffStatus.kind.name} · ${live.size} visible",
+                        color = PortableAmber, fontWeight = FontWeight.Black)
+                    Text(if (status.rowCount > 0) "${status.rowCount} authorised offline catalogue rows available"
+                        else "Full directory requires authorised import · More catalogues → WWFF",
+                        color = PortableMuted)
+                }
+                OutlinedButton({ inAppBrowser?.open(status.source) },
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = PortableAmber)) {
+                    Icon(Icons.Outlined.OpenInNew, null); Spacer(Modifier.width(5.dp)); Text("OFFICIAL DIRECTORY")
+                }
+            }
+        }
+        if (status.rowCount > 0) {
+            PortableCataloguePlaces(controller.catalogues, Modifier.weight(1f), PortableCatalogueProgram.WWFF, showProgrammeTabs = false)
+        } else if (live.isEmpty()) {
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+                Text("No active WWFF references in the current public feeds.", color = PortableMuted)
+            }
+        } else {
+            LazyVerticalGrid(columns = GridCells.Adaptive(360.dp), modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                gridItems(live, key = { it.spot.id }) { row ->
+                    val spot = row.spot
+                    val references = spot.references.filter { it.program == PortableProgram.WWFF }
+                    Column(Modifier.fillMaxWidth().background(PortablePanel, RoundedCornerShape(8.dp)).padding(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(references.joinToString(" · ") { ref -> "${ref.code} · ${ref.name.ifBlank { "Name unavailable" }}" },
+                            color = PortableInk, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text("${spot.callsign} · ${portableMHz(spot.frequencyHz)} MHz · ${spot.mode.ifBlank { "mode unspecified" }}",
+                            color = PortableAmber, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                        Text((references.flatMap { listOf(it.association, it.region) } + portableAge(spot.spottedAt) + "via ${spot.source}")
+                            .filter(String::isNotBlank).distinct().joinToString(" · "), color = PortableMuted,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         }
     }

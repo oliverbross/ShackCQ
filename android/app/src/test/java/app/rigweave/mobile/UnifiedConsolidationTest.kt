@@ -83,7 +83,7 @@ class UnifiedConsolidationTest {
         val qso = source("java/app/rigweave/mobile/QsoDatabase.kt")
         val main = source("java/app/rigweave/mobile/MainActivity.kt")
         val groups = source("java/app/rigweave/mobile/groupsio/GroupsIoFeature.kt")
-        assertTrue(qso.contains("SQLiteOpenHelper(context, databaseName, null, 16)"))
+        assertTrue(qso.contains("SQLiteOpenHelper(context, databaseName, null, 17)"))
         assertTrue(qso.contains("fun shared(context:Context):QsoDatabase"))
         assertTrue(main.contains("QsoDatabase.shared(context)"))
         assertFalse(main.contains("database.close()"))

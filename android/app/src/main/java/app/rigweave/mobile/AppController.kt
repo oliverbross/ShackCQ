@@ -136,7 +136,7 @@ class AppController(private val context: Context) {
             ?: defaultCwMacroLabel(index))) }
     }
     val macroTexts = mutableStateListOf<String>().apply {
-        repeat(CW_MACRO_COUNT) { index -> add(sanitizeCwMacroText(prefs.getString("macro_text_$index", "") ?: "")) }
+        repeat(CW_MACRO_COUNT) { index -> add(sanitizeCwMacroTemplate(prefs.getString("macro_text_$index", "") ?: "")) }
     }
     val voiceMacroLabels = mutableStateListOf<String>().apply {
         repeat(VOICE_MACRO_COUNT) { index ->
@@ -342,7 +342,7 @@ class AppController(private val context: Context) {
         cqRepeatSeconds = repeat.coerceIn(CQ_REPEAT_MIN_SECONDS, CQ_REPEAT_MAX_SECONDS)
         repeat(CW_MACRO_COUNT) { index ->
             macroLabels[index] = sanitizeCwMacroLabel(labels.getOrNull(index).orEmpty())
-            macroTexts[index] = sanitizeCwMacroText(texts.getOrNull(index).orEmpty())
+            macroTexts[index] = sanitizeCwMacroTemplate(texts.getOrNull(index).orEmpty())
         }
         val editor = prefs.edit().putString("station_call", stationCallsign).putString("station_name", stationName)
             .putString("station_grid", stationGrid).putInt("cq_repeat", cqRepeatSeconds)

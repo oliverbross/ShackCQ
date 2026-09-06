@@ -8,6 +8,8 @@ plugins {
 
 val supportedAbis = listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
 val requestedAbi = providers.gradleProperty("rigweaveAbi").orNull?.trim()?.takeIf(String::isNotEmpty)
+val requestedVersionCode = providers.gradleProperty("rigweaveVersionCode").orNull?.toIntOrNull()
+val requestedVersionName = providers.gradleProperty("rigweaveVersionName").orNull?.trim()?.takeIf(String::isNotEmpty)
 require(requestedAbi == null || requestedAbi in supportedAbis) {
     "rigweaveAbi must be one of ${supportedAbis.joinToString()}"
 }
@@ -21,8 +23,8 @@ android {
         applicationId = "app.rigweave.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 39
-        versionName = "0.1.0-rc.1"
+        versionCode = requestedVersionCode ?: 39
+        versionName = requestedVersionName ?: "0.1.0-rc.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild { cmake { cppFlags += "-std=c++17 -Wall -Wextra -Wpedantic" } }
         if (requestedAbi != null) ndk { abiFilters += requestedAbi }

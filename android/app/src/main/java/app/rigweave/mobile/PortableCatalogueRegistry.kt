@@ -53,11 +53,16 @@ internal data class PortableCataloguePlace(
 )
 
 internal class PortableCatalogueRegistry(context: Context) : AutoCloseable {
+    private data class LastGood(
+        val rows: Map<PortableCatalogueProgram, List<PortableCataloguePlace>>,
+        val statuses: Map<PortableCatalogueProgram, PortableCatalogueStatus>,
+    )
     private val appContext = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val prefs = appContext.getSharedPreferences("portable-catalogues-v1", Context.MODE_PRIVATE)
     private val root = File(appContext.filesDir, "portable-catalogues").apply { mkdirs() }
     private val iotaFile = AtomicFile(File(root, "iota-fulllist.json"))
+    private val wwffFile = AtomicFile(File(root, "wwff-directory.csv"))
     private val importFiles = PortableCatalogueProgram.entries.associateWith { AtomicFile(File(root, "${it.name.lowercase()}.csv")) }
     private var rows = emptyMap<PortableCatalogueProgram, List<PortableCataloguePlace>>()
     var statuses by mutableStateOf(defaultStatuses())
@@ -66,7 +71,18 @@ internal class PortableCatalogueRegistry(context: Context) : AutoCloseable {
         private set
 
     init {
-        loadLastGood()
+        statuses = statuses.mapValues { (programme, status) ->
+            if (programme in setOf(PortableCatalogueProgram.IOTA, PortableCatalogueProgram.WWFF))
+                status.copy(busy = true, reason = "Loading app-private catalogue…")
+            else status
+        }
+        scope.launch {
+            val restored = withContext(Dispatchers.IO) { loadLastGood() }
+            rows = restored.rows
+            statuses = restored.statuses
+            if (restored.rows[PortableCatalogueProgram.IOTA].isNullOrEmpty()) refreshIota()
+            if (restored.rows[PortableCatalogueProgram.WWFF].isNullOrEmpty()) refreshWwff()
+        }
     }
 
     fun refreshIota() {
@@ -89,11 +105,35 @@ internal class PortableCatalogueRegistry(context: Context) : AutoCloseable {
         }
     }
 
+    fun refreshWwff() {
+        if (statuses.getValue(PortableCatalogueProgram.WWFF).busy) return
+        updateStatus(PortableCatalogueProgram.WWFF) { it.copy(busy = true, reason = "Downloading official nightly WWFF CSV") }
+        scope.launch {
+            runCatching { withContext(Dispatchers.IO) { downloadWwff() } }
+                .onSuccess { parsed ->
+                    rows = rows + (PortableCatalogueProgram.WWFF to parsed)
+                    val bytes = wwffFile.readFully()
+                    updateStatus(PortableCatalogueProgram.WWFF) { current -> current.copy(
+                        state = PortableCatalogueState.AVAILABLE, updatedAt = prefs.getLong("WWFF_updated", Instant.now().epochSecond),
+                        rowCount = parsed.size, digest = sha256(bytes),
+                        reason = "Official nightly CSV · app-private last-good ready", busy = false,
+                    ) }
+                }
+                .onFailure { error ->
+                    updateStatus(PortableCatalogueProgram.WWFF) { current -> current.copy(
+                        state = if (current.rowCount > 0) PortableCatalogueState.OFFLINE_CACHE else PortableCatalogueState.UNAVAILABLE,
+                        reason = "WWFF refresh failed; ${if (current.rowCount > 0) "last-good retained" else "no cache"}: ${error.message.orEmpty().take(100)}",
+                        busy = false,
+                    ) }
+                }
+        }
+    }
+
     fun importAuthorised(programme: PortableCatalogueProgram, data: ByteArray, displayName: String) {
         require(programme != PortableCatalogueProgram.IOTA) { "IOTA uses its official download" }
         require(data.size in 1..32_000_000) { "Import must be between 1 byte and 32 MB" }
         scope.launch {
-            runCatching { withContext(Dispatchers.Default) { parseCsv(programme, data.toString(Charsets.UTF_8)) } }
+            runCatching { withContext(Dispatchers.Default) { parsePortableCatalogueCsv(programme, data.toString(Charsets.UTF_8)) } }
                 .onSuccess { parsed ->
                     withContext(Dispatchers.IO) { writeAtomic(importFiles.getValue(programme), data) }
                     rows = rows + (programme to parsed)
@@ -114,6 +154,8 @@ internal class PortableCatalogueRegistry(context: Context) : AutoCloseable {
         }.take(500).toList()
     }
 
+    fun all(programme: PortableCatalogueProgram): List<PortableCataloguePlace> = rows[programme].orEmpty()
+
     override fun close() = scope.cancel()
 
     private fun defaultStatuses() = mapOf(
@@ -121,32 +163,44 @@ internal class PortableCatalogueRegistry(context: Context) : AutoCloseable {
             source = IOTA_DEVELOPERS, reason = "Official catalogue not downloaded"),
         PortableCatalogueProgram.WWBOTA to PortableCatalogueStatus(PortableCatalogueProgram.WWBOTA, PortableCatalogueState.PROVIDER_BLOCKED,
             source = "https://wwbota.org/", reason = "Automated cache and redistribution terms not established; lawful user import only"),
-        PortableCatalogueProgram.WWFF to PortableCatalogueStatus(PortableCatalogueProgram.WWFF, PortableCatalogueState.LICENCE_BLOCKED,
-            source = "https://wwff.co/directory/", reason = "Official directory requires permission; authorised user-selected CSV import only"),
+        PortableCatalogueProgram.WWFF to PortableCatalogueStatus(PortableCatalogueProgram.WWFF, PortableCatalogueState.UNAVAILABLE,
+            source = WWFF_DIRECTORY, reason = "Official nightly CSV not downloaded"),
         PortableCatalogueProgram.CASTLES to PortableCatalogueStatus(PortableCatalogueProgram.CASTLES, PortableCatalogueState.PROVIDER_BLOCKED,
             source = "https://wcagroup.org/", reason = "No reviewed stable licensed coordinate download contract"),
         PortableCatalogueProgram.LIGHTHOUSES to PortableCatalogueStatus(PortableCatalogueProgram.LIGHTHOUSES, PortableCatalogueState.PROVIDER_BLOCKED,
             source = "https://arlhs.com/", reason = "No reviewed stable licensed bulk API/download contract"),
     )
 
-    private fun loadLastGood() {
+    private fun loadLastGood(): LastGood {
         val loaded = mutableMapOf<PortableCatalogueProgram, List<PortableCataloguePlace>>()
+        var restoredStatuses = defaultStatuses()
+        fun restore(programme: PortableCatalogueProgram, transform: (PortableCatalogueStatus) -> PortableCatalogueStatus) {
+            restoredStatuses = restoredStatuses + (programme to transform(restoredStatuses.getValue(programme)))
+        }
         if (iotaFile.baseFile.exists()) runCatching { iotaFile.readFully() }.mapCatching(::parseIota).onSuccess { parsed ->
             loaded[PortableCatalogueProgram.IOTA] = parsed
-            updateStatus(PortableCatalogueProgram.IOTA) { it.copy(state = PortableCatalogueState.OFFLINE_CACHE,
+            restore(PortableCatalogueProgram.IOTA) { it.copy(state = PortableCatalogueState.OFFLINE_CACHE,
                 updatedAt = prefs.getLong("IOTA_updated", iotaFile.baseFile.lastModified() / 1000), rowCount = parsed.size,
                 digest = sha256(iotaFile.readFully()), reason = "Official IOTA app-private last-good") }
         }
+        if (wwffFile.baseFile.exists()) runCatching { wwffFile.readFully() }
+            .mapCatching { parsePortableCatalogueCsv(PortableCatalogueProgram.WWFF, it.toString(Charsets.UTF_8)) }
+            .onSuccess { parsed ->
+                loaded[PortableCatalogueProgram.WWFF] = parsed
+                restore(PortableCatalogueProgram.WWFF) { it.copy(state = PortableCatalogueState.OFFLINE_CACHE,
+                    updatedAt = prefs.getLong("WWFF_updated", wwffFile.baseFile.lastModified() / 1000), rowCount = parsed.size,
+                    digest = sha256(wwffFile.readFully()), reason = "Official WWFF app-private last-good") }
+            }
         PortableCatalogueProgram.entries.filter { it != PortableCatalogueProgram.IOTA }.forEach { programme ->
             val file = importFiles.getValue(programme)
-            if (file.baseFile.exists()) runCatching { file.readFully() }.mapCatching { parseCsv(programme, it.toString(Charsets.UTF_8)) }.onSuccess { parsed ->
+            if (file.baseFile.exists() && programme !in loaded) runCatching { file.readFully() }.mapCatching { parsePortableCatalogueCsv(programme, it.toString(Charsets.UTF_8)) }.onSuccess { parsed ->
                 loaded[programme] = parsed
-                updateStatus(programme) { it.copy(state = PortableCatalogueState.USER_IMPORT,
+                restore(programme) { it.copy(state = PortableCatalogueState.USER_IMPORT,
                     updatedAt = prefs.getLong("${programme.name}_updated", file.baseFile.lastModified() / 1000), rowCount = parsed.size,
                     digest = sha256(file.readFully()), reason = "User-selected authorised file · app-private last-good") }
             }
         }
-        rows = loaded
+        return LastGood(loaded, restoredStatuses)
     }
 
     private fun downloadIota(): List<PortableCataloguePlace> {
@@ -171,6 +225,31 @@ internal class PortableCatalogueRegistry(context: Context) : AutoCloseable {
         } finally { connection.disconnect() }
     }
 
+    private fun downloadWwff(): List<PortableCataloguePlace> {
+        val uri = URI(WWFF_DIRECTORY)
+        require(uri.scheme == "https" && uri.host == "wwff.co" && uri.path == "/wwff-data/wwff_directory.csv")
+        val connection = URL(WWFF_DIRECTORY).openConnection() as HttpURLConnection
+        connection.connectTimeout = 10_000; connection.readTimeout = 60_000; connection.instanceFollowRedirects = false
+        connection.setRequestProperty("Accept", "text/csv,text/plain")
+        connection.setRequestProperty("User-Agent", "RigWeave/1 portable-catalogue OM0RX")
+        prefs.getString("WWFF_etag", "")?.takeIf(String::isNotBlank)?.let { connection.setRequestProperty("If-None-Match", it) }
+        prefs.getString("WWFF_modified", "")?.takeIf(String::isNotBlank)?.let { connection.setRequestProperty("If-Modified-Since", it) }
+        try {
+            if (connection.responseCode == HttpURLConnection.HTTP_NOT_MODIFIED && wwffFile.baseFile.exists()) {
+                return parsePortableCatalogueCsv(PortableCatalogueProgram.WWFF, wwffFile.readFully().toString(Charsets.UTF_8))
+            }
+            require(connection.responseCode in 200..299) { "HTTP ${connection.responseCode}" }
+            val bytes = connection.inputStream.use { boundedRead(it, 32_000_000) }
+            val parsed = parsePortableCatalogueCsv(PortableCatalogueProgram.WWFF, bytes.toString(Charsets.UTF_8))
+            require(parsed.size in 30_000..150_000) { "WWFF directory row count is invalid" }
+            writeAtomic(wwffFile, bytes)
+            val now = Instant.now().epochSecond
+            prefs.edit().putLong("WWFF_updated", now).putString("WWFF_etag", connection.getHeaderField("ETag").orEmpty())
+                .putString("WWFF_modified", connection.getHeaderField("Last-Modified").orEmpty()).apply()
+            return parsed
+        } finally { connection.disconnect() }
+    }
+
     private fun parseIota(bytes: ByteArray): List<PortableCataloguePlace> {
         require(bytes.size in 2..8_000_000) { "IOTA payload size is invalid" }
         val array = JSONArray(bytes.toString(Charsets.UTF_8)); require(array.length() in 100..5_000) { "IOTA group count is invalid" }
@@ -188,42 +267,8 @@ internal class PortableCatalogueRegistry(context: Context) : AutoCloseable {
                 region = row.optString("grp_region"), latitudeMin = coordinate("latitude_min")?.takeIf { it in -90.0..90.0 },
                 latitudeMax = coordinate("latitude_max")?.takeIf { it in -90.0..90.0 }, longitudeMin = coordinate("longitude_min"),
                 longitudeMax = coordinate("longitude_max"), members = islands,
-                officialUrl = "https://www.iota-world.org/iota-directory/summary/${reference.lowercase(Locale.US)}")
+                officialUrl = "https://www.iota-world.org/islands-on-the-air/iota-groups-islands.html")
         }
-    }
-
-    private fun parseCsv(programme: PortableCatalogueProgram, text: String): List<PortableCataloguePlace> {
-        val lines = text.lineSequence().filter(String::isNotBlank).take(250_002).toList()
-        require(lines.size in 2..250_001) { "CSV row count is invalid" }
-        val header = csvLine(lines.first()).map { normalized(it).replace(" ", "_") }
-        fun index(vararg names: String) = names.firstNotNullOfOrNull { name -> header.indexOf(name).takeIf { it >= 0 } }
-        val referenceIndex = index("reference", "ref", "code") ?: error("CSV needs a reference/ref/code column")
-        val nameIndex = index("name", "title") ?: error("CSV needs a name/title column")
-        val countryIndex = index("country", "dxcc", "entity")
-        val latitudeIndex = index("lat", "latitude")
-        val longitudeIndex = index("lon", "long", "longitude")
-        return lines.drop(1).mapNotNull { line ->
-            val values = csvLine(line); val reference = values.getOrNull(referenceIndex)?.trim().orEmpty().uppercase(Locale.US)
-            val name = values.getOrNull(nameIndex)?.trim().orEmpty()
-            if (reference.isBlank() || name.isBlank()) null else PortableCataloguePlace(programme, reference.take(80), name.take(240),
-                entity = countryIndex?.let(values::getOrNull).orEmpty().take(120),
-                latitudeMin = latitudeIndex?.let(values::getOrNull)?.toDoubleOrNull()?.takeIf { it in -90.0..90.0 },
-                latitudeMax = latitudeIndex?.let(values::getOrNull)?.toDoubleOrNull()?.takeIf { it in -90.0..90.0 },
-                longitudeMin = longitudeIndex?.let(values::getOrNull)?.toDoubleOrNull()?.takeIf { it in -180.0..180.0 },
-                longitudeMax = longitudeIndex?.let(values::getOrNull)?.toDoubleOrNull()?.takeIf { it in -180.0..180.0 })
-        }.also { require(it.isNotEmpty()) { "CSV contains no valid catalogue rows" } }
-    }
-
-    private fun csvLine(line: String): List<String> {
-        val result = mutableListOf<String>(); val field = StringBuilder(); var quoted = false; var index = 0
-        while (index < line.length) { val char = line[index]
-            when { char == '"' && quoted && line.getOrNull(index + 1) == '"' -> { field.append('"'); index++ }
-                char == '"' -> quoted = !quoted
-                char == ',' && !quoted -> { result += field.toString(); field.clear() }
-                else -> field.append(char) }
-            index++
-        }
-        result += field.toString(); return result
     }
 
     private fun updateStatus(programme: PortableCatalogueProgram, transform: (PortableCatalogueStatus) -> PortableCatalogueStatus) {
@@ -249,5 +294,57 @@ internal class PortableCatalogueRegistry(context: Context) : AutoCloseable {
     companion object {
         const val IOTA_DEVELOPERS = "https://www.iota-world.org/iota-directory/developers?format=html"
         const val IOTA_FULL_LIST = "https://www.iota-world.org/islands-on-the-air/downloads/download-file.html?path=fulllist.json"
+        const val WWFF_DIRECTORY = "https://wwff.co/wwff-data/wwff_directory.csv"
     }
 }
+
+internal fun parsePortableCatalogueCsv(programme: PortableCatalogueProgram, text: String): List<PortableCataloguePlace> {
+    val lines = text.lineSequence().filter(String::isNotBlank).iterator()
+    require(lines.hasNext()) { "CSV is empty" }
+    val header = portableCsvLine(lines.next()).map { normalizedPortableCatalogue(it).replace(" ", "_").lowercase(Locale.US) }
+    fun index(vararg names: String) = names.firstNotNullOfOrNull { name -> header.indexOf(name).takeIf { it >= 0 } }
+    val referenceIndex = index("reference", "ref", "code") ?: error("CSV needs a reference/ref/code column")
+    val nameIndex = index("name", "title") ?: error("CSV needs a name/title column")
+    val entityIndex = index("country", "entity")
+    val dxccIndex = index("dxccenum", "dxcc_enum", "dxcc")
+    val regionIndex = index("region", "state", "county")
+    val latitudeIndex = index("lat", "latitude")
+    val longitudeIndex = index("lon", "long", "longitude")
+    val websiteIndex = index("website", "url")
+    val result = ArrayList<PortableCataloguePlace>()
+    while (lines.hasNext()) {
+        require(result.size < 250_000) { "CSV row count is invalid" }
+        val values = portableCsvLine(lines.next())
+        val reference = values.getOrNull(referenceIndex)?.trim().orEmpty().uppercase(Locale.US)
+        val name = values.getOrNull(nameIndex)?.trim().orEmpty()
+        if (reference.isBlank() || name.isBlank()) continue
+        val latitude = latitudeIndex?.let(values::getOrNull)?.toDoubleOrNull()?.takeIf { it in -90.0..90.0 }
+        val longitude = longitudeIndex?.let(values::getOrNull)?.toDoubleOrNull()?.takeIf { it in -180.0..180.0 }
+        val providerUrl = websiteIndex?.let(values::getOrNull).orEmpty().trim().takeIf { it.startsWith("https://") }.orEmpty()
+        result += PortableCataloguePlace(
+            programme, reference.take(80), name.take(240),
+            dxcc = dxccIndex?.let(values::getOrNull).orEmpty().take(40),
+            entity = entityIndex?.let(values::getOrNull).orEmpty().take(120),
+            region = regionIndex?.let(values::getOrNull).orEmpty().take(120),
+            latitudeMin = latitude, latitudeMax = latitude, longitudeMin = longitude, longitudeMax = longitude,
+            officialUrl = providerUrl.ifBlank { if (programme == PortableCatalogueProgram.WWFF) "https://wwff.co/directory/" else "" },
+        )
+    }
+    require(result.isNotEmpty()) { "CSV contains no valid catalogue rows" }
+    return result
+}
+
+private fun portableCsvLine(line: String): List<String> {
+    val result = mutableListOf<String>(); val field = StringBuilder(); var quoted = false; var index = 0
+    while (index < line.length) { val char = line[index]
+        when { char == '"' && quoted && line.getOrNull(index + 1) == '"' -> { field.append('"'); index++ }
+            char == '"' -> quoted = !quoted
+            char == ',' && !quoted -> { result += field.toString(); field.clear() }
+            else -> field.append(char) }
+        index++
+    }
+    result += field.toString(); return result
+}
+
+private fun normalizedPortableCatalogue(value: String) = java.text.Normalizer.normalize(value, java.text.Normalizer.Form.NFD)
+    .replace(Regex("\\p{M}+"), "").uppercase(Locale.US).replace(Regex("[^A-Z0-9]+"), " ").trim()

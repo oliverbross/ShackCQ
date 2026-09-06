@@ -490,8 +490,43 @@ internal object BandMapLayoutEngine {
         return result
     }
 
-    fun resolveVerticalLabels(placements: List<BandMapPlacedSpot>, heightPx: Float, labelHeightPx: Float, topPx: Float): Map<String, Float> {
-        val bottomPx = (heightPx - labelHeightPx).coerceAtLeast(topPx)
+    fun fitVerticalLabels(
+        placements: List<BandMapPlacedSpot>,
+        heightPx: Float,
+        labelHeightPx: Float,
+        topPx: Float,
+        bottomInsetPx: Float,
+    ): List<BandMapPlacedSpot> {
+        if (placements.isEmpty()) return emptyList()
+        val bottomPx = (heightPx - bottomInsetPx - labelHeightPx).coerceAtLeast(topPx)
+        val capacity = (((bottomPx - topPx) / labelHeightPx.coerceAtLeast(1f)).toInt() + 1).coerceAtLeast(1)
+        val ordered = placements.sortedWith(compareBy<BandMapPlacedSpot>(BandMapPlacedSpot::primary).thenBy(BandMapPlacedSpot::id))
+        if (ordered.size <= capacity) return ordered
+        val available = (bottomPx - topPx).coerceAtLeast(1f)
+        val bins = List(capacity) { mutableListOf<BandMapPlacedSpot>() }
+        ordered.forEach { placed ->
+            val desired = (placed.primary * heightPx).coerceIn(topPx, bottomPx)
+            val bin = (((desired - topPx) / available) * capacity).toInt().coerceIn(0, capacity - 1)
+            bins[bin] += placed
+        }
+        return bins.filter(MutableList<BandMapPlacedSpot>::isNotEmpty).map { group ->
+            val representative = group.first()
+            representative.copy(
+                primary = group.map(BandMapPlacedSpot::primary).average().toFloat(),
+                lane = 0,
+                memberIds = group.flatMap(BandMapPlacedSpot::memberIds).distinct().take(40),
+            )
+        }
+    }
+
+    fun resolveVerticalLabels(
+        placements: List<BandMapPlacedSpot>,
+        heightPx: Float,
+        labelHeightPx: Float,
+        topPx: Float,
+        bottomInsetPx: Float = 0f,
+    ): Map<String, Float> {
+        val bottomPx = (heightPx - bottomInsetPx - labelHeightPx).coerceAtLeast(topPx)
         val positions = mutableMapOf<String, Float>()
         var nextY = topPx
         placements.sortedBy(BandMapPlacedSpot::primary).forEach { placed ->

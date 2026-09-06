@@ -63,7 +63,7 @@ internal fun buildSystemHealthSnapshot(
     val projection = qso?.projection
     val cards = listOf(
         SystemHealthCard("storage", "Storage", if (projection?.state == ProjectionState.READY) HealthState.HEALTHY else HealthState.ATTENTION,
-            "QSO schema 16 · projection contract 5 · Neural 5 · Digi 2 · Groups.io 2",
+            "QSO schema 17 · projection contract 6 · Neural 5 · Digi 2 · Groups.io 2",
             mapOf("qso_canonical" to (projection?.canonicalRows?.toLong() ?: 0), "qso_projected" to (projection?.projectionRows?.toLong() ?: 0)),
             safeActions = listOf("verify projection", "repair/rebuild projection")),
         SystemHealthCard("wavelog", "Wavelog", if (wavelogPending + syncAttention == 0) HealthState.HEALTHY else HealthState.ATTENTION,

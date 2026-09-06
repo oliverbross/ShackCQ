@@ -97,7 +97,8 @@ internal class PortableController(context: Context, private val qsoDatabase: Qso
 
     fun close() { stopSotaCluster(); scope.cancel(); pota.close(); sotaCatalogue.close(); catalogues.close() }
     fun refreshAll() { pota.refreshSpots(); refreshWwff(); ensureSotaCluster(); resolveSotaSpots();
-        if (catalogues.statuses.getValue(PortableCatalogueProgram.IOTA).rowCount == 0) catalogues.refreshIota() }
+        if (catalogues.statuses.getValue(PortableCatalogueProgram.IOTA).rowCount == 0) catalogues.refreshIota()
+        if (catalogues.statuses.getValue(PortableCatalogueProgram.WWFF).rowCount == 0) catalogues.refreshWwff() }
     fun refreshWwff() { scope.launch { refreshWwffNow() } }
     fun notifyQsoChanged() { lastQsoRevision=qsoDatabase.changeToken();opportunityKey=null;pota.notifyQsoChanged() }
 

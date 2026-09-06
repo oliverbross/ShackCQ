@@ -75,12 +75,12 @@ private val MapPurple = ComposeColor(0xFFB783F5)
 // Eighty keeps the map useful while the keyed diff below preserves the newest paths.
 private const val MaxVisibleDxPaths = 80
 
-private enum class NeuralBasemap(val label: String, val styleJson: String) {
+internal enum class NeuralBasemap(val label: String, val styleJson: String) {
     SATELLITE("ESRI SATELLITE", satelliteStyleJson()),
     DARK("OPENFREEMAP LIBERTY", ""),
 }
 
-private data class MapMarker(
+internal data class MapMarker(
     val latitude: Double,
     val longitude: Double,
     val title: String,
@@ -90,7 +90,7 @@ private data class MapMarker(
     val ring: Boolean = false,
 )
 
-private data class MapPath(val points: List<LatLng>, val color: Int, val widthDp: Float = 1.5f)
+internal data class MapPath(val points: List<LatLng>, val color: Int, val widthDp: Float = 1.5f)
 internal data class MapArea(val points: List<LatLng>, val fill: Int, val stroke: Int)
 private class RenderedMapAnnotations {
     var markers: Map<MapMarker, Annotation> = emptyMap()
@@ -100,7 +100,7 @@ private class RenderedMapAnnotations {
 }
 
 @Composable
-private fun NativeNeuralMap(
+internal fun NativeNeuralMap(
     markers: List<MapMarker>,
     paths: List<MapPath>,
     areas: List<MapArea>,

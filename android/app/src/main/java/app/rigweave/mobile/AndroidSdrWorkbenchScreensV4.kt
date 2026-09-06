@@ -219,7 +219,7 @@ fun SpectrumSurveyPanel(workbench: AndroidSdrWorkbenchV4) {
     var selectedReceiver by remember { mutableStateOf<Int?>(null) }
     LaunchedEffect(selectedBand, selectedSource, selectedReceiver) { workbench.refreshSurvey(selectedBand, selectedSource, selectedReceiver) }
     val rows = workbench.surveyRows
-    Column(Modifier.fillMaxSize().background(WorkbenchPanel).padding(10.dp).verticalScroll(rememberScrollState()),
+    Column(Modifier.fillMaxSize().background(WorkbenchPanel).padding(10.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text("SPECTRUM SURVEY · DERIVED AGGREGATES ONLY", color = WorkbenchAmber, fontWeight = FontWeight.Bold, fontSize = 18.sp)
         Text("Frequency × UTC occupancy heatmap · ${rows.size} displayed / ${workbench.survey.stats.rows} stored · ${workbench.survey.stats.bytes / 1024} KiB · ${workbench.survey.retentionDays} days",
@@ -230,12 +230,23 @@ fun SpectrumSurveyPanel(workbench: AndroidSdrWorkbenchV4) {
             listOf<Int?>(null, 0, 1).forEach { receiver -> FilterChip(selectedReceiver == receiver, { selectedReceiver = receiver }, { Text(receiver?.let { "RX ${it + 1}" } ?: "ALL RX") }) }
             FilterChip(false, {}, { Text("DATE · RETENTION") }); FilterChip(false, {}, { Text("HOUR · ALL") }); FilterChip(false, {}, { Text("SCAN BANK · ALL") })
         }
-        OccupancyHeatmap(rows, Modifier.fillMaxWidth().height(280.dp))
+        SpectrumMatrix(rows, Modifier.fillMaxWidth().weight(1f).heightIn(min = 360.dp))
         val byBand = rows.groupBy(SpectrumAggregate::band).mapValues { (_, values) -> values.map(SpectrumAggregate::occupancyPercent).average() }
-        Text("BAND COMPARISON", color = WorkbenchAmber, fontWeight = FontWeight.Bold)
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            byBand.toList().sortedByDescending { it.second }.forEach { (band, occupancy) -> Text("$band · ${"%.1f".format(occupancy)}%", color = WorkbenchInk) }
-            if (byBand.isEmpty()) Text("No aggregate evidence yet", color = WorkbenchMuted)
+        Text("BAND COMPARISON · ALL VISIBLE WITHOUT HORIZONTAL SCROLL", color = WorkbenchAmber, fontWeight = FontWeight.Bold)
+        val comparisonRows = byBand.toList().sortedByDescending { it.second }
+        if (comparisonRows.isEmpty()) Text("No aggregate evidence yet", color = WorkbenchMuted)
+        else Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            comparisonRows.chunked(6).forEach { comparisonRow ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+                    comparisonRow.forEach { (band, occupancy) -> Card(Modifier.weight(1f), colors = CardDefaults.cardColors(containerColor = WorkbenchRaised)) {
+                        Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 7.dp)) {
+                            Text(band, color = WorkbenchAmber, fontWeight = FontWeight.Bold)
+                            Text("${"%.1f".format(occupancy)}% occupancy", color = WorkbenchInk)
+                        }
+                    } }
+                    repeat(6 - comparisonRow.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
         }
         Text("DAILY TIMELINE · ${rows.groupBy { it.bucketEpoch / 86_400L }.size} days · SCANNER ACTIVITY ${rows.sumOf { it.scannerHitCount }} hits · SIGNALS ${rows.sumOf { it.signalCount }}",
             color = WorkbenchInk)
@@ -244,19 +255,51 @@ fun SpectrumSurveyPanel(workbench: AndroidSdrWorkbenchV4) {
 }
 
 @Composable
-private fun OccupancyHeatmap(rows: List<SpectrumAggregate>, modifier: Modifier) {
-    Canvas(modifier) {
-        drawRect(Color.Black)
-        if (rows.isEmpty()) return@Canvas
-        val sortedTimes = rows.map(SpectrumAggregate::bucketEpoch).distinct().sorted()
-        val sortedFrequencies = rows.map(SpectrumAggregate::frequencyBucketHz).distinct().sorted()
-        val width = size.width / sortedTimes.size.coerceAtLeast(1)
-        val height = size.height / sortedFrequencies.size.coerceAtLeast(1)
-        rows.take(100_000).forEach { row ->
-            val x = sortedTimes.binarySearch(row.bucketEpoch).coerceAtLeast(0) * width
-            val y = (sortedFrequencies.size - 1 - sortedFrequencies.binarySearch(row.frequencyBucketHz).coerceAtLeast(0)) * height
-            val t = (row.occupancyPercent / 100f).coerceIn(0f, 1f)
-            drawRect(Color(t, .18f + .75f * t, 1f - .85f * t), Offset(x, y), Size(width + 1, height + 1))
+private fun SpectrumMatrix(rows: List<SpectrumAggregate>, modifier: Modifier) {
+    val bandLabels = rows.map(SpectrumAggregate::band).distinct().take(9).ifEmpty {
+        listOf("160m", "80m", "40m", "30m", "20m", "15m", "10m", "6m", "2m")
+    }
+    Column(modifier.background(WorkbenchRaised).padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+        Row(Modifier.weight(1f).fillMaxWidth()) {
+            Column(Modifier.width(52.dp).fillMaxHeight().padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.SpaceBetween) {
+                bandLabels.asReversed().forEach { Text(it, color = WorkbenchMuted, fontSize = 9.sp) }
+            }
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                Canvas(Modifier.fillMaxSize()) {
+                    drawRect(Color(0xFF0C171C))
+                    for (step in 0..12) {
+                        val x = size.width * step / 12f
+                        drawLine(Color(0xFF35515B), Offset(x, 0f), Offset(x, size.height), 1.dp.toPx())
+                    }
+                    for (step in 0..bandLabels.size) {
+                        val y = size.height * step / bandLabels.size.coerceAtLeast(1)
+                        drawLine(Color(0xFF35515B), Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
+                    }
+                    if (rows.isNotEmpty()) {
+                        val sortedTimes = rows.map(SpectrumAggregate::bucketEpoch).distinct().sorted()
+                        val sortedFrequencies = rows.map(SpectrumAggregate::frequencyBucketHz).distinct().sorted()
+                        val width = size.width / sortedTimes.size.coerceAtLeast(1)
+                        val height = size.height / sortedFrequencies.size.coerceAtLeast(1)
+                        rows.take(100_000).forEach { row ->
+                            val x = sortedTimes.binarySearch(row.bucketEpoch).coerceAtLeast(0) * width
+                            val y = (sortedFrequencies.size - 1 - sortedFrequencies.binarySearch(row.frequencyBucketHz).coerceAtLeast(0)) * height
+                            val t = (row.occupancyPercent / 100f).coerceIn(0f, 1f)
+                            drawRect(Color(t, .18f + .75f * t, 1f - .85f * t), Offset(x, y), Size(width + 1, height + 1))
+                        }
+                    }
+                }
+                if (rows.isEmpty()) Column(Modifier.align(Alignment.Center).padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("NO CAPTURED SPECTRUM YET", color = WorkbenchAmber, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text("Start an explicit spectrum survey from Panadapter or Scanner. This matrix will then show measured frequency × UTC occupancy.",
+                        color = WorkbenchInk, fontSize = 12.sp)
+                    Text("No synthetic occupancy is drawn.", color = WorkbenchCyan, fontSize = 11.sp)
+                }
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(start = 52.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            listOf("00", "04", "08", "12", "16", "20", "24 UTC").forEach { Text(it, color = WorkbenchMuted, fontSize = 9.sp) }
         }
     }
 }

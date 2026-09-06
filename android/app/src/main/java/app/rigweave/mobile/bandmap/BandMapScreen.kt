@@ -146,7 +146,12 @@ internal fun BandMapScreen(
     }
     Column(keyboardModifier.fillMaxSize().focusable().background(MapBackground).padding(10.dp).testTag("band-map-screen"),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        BandMapHeader(visibleSnapshot, keyer, { filterOpen = true })
+        BandMapHeader(visibleSnapshot, keyer, {
+            val current = snapshot.selectedBands.firstOrNull()
+            val next = bandMapVisibleBands[(bandMapVisibleBands.indexOf(current).takeIf { it >= 0 } ?: -1)
+                .let { (it + 1) % bandMapVisibleBands.size }]
+            controller.updateSettings { it.copy(selectedBands = listOf(next), selectedLayout = BandMapLayoutMode.SINGLE_EXPANDED) }
+        }, { filterOpen = true })
         BandControls(controller)
         PresetAndLayoutControls(controller, contestSnapshot.activeSession != null)
         if (snapshot.unavailableReasons.isNotEmpty()) Text(snapshot.unavailableReasons.joinToString(" · "), color = MapAmber, fontSize = 12.sp)
@@ -163,10 +168,11 @@ internal fun BandMapScreen(
     if (filterOpen) FilterDialog(controller, app) { filterOpen = false }
 }
 
-@Composable private fun BandMapHeader(snapshot: BandMapUiSnapshot, keyer: BandMapKeyerContext, openFilters: () -> Unit) {
+@Composable private fun BandMapHeader(snapshot: BandMapUiSnapshot, keyer: BandMapKeyerContext, cycleBand: () -> Unit, openFilters: () -> Unit) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Column {
+        Column(Modifier.clickable(onClick = cycleBand).semantics { contentDescription = "Band Maps header, tap to show the next band" }) {
             Text("INTELLIGENT BAND MAPS", color = MapText, fontWeight = FontWeight.Black, fontSize = 20.sp)
+            Text("TAP HEADER FOR NEXT BAND", color = MapCyan, fontSize = 10.sp, fontWeight = FontWeight.Bold)
             Text("gen ${snapshot.generation} · ${snapshot.diagnostic.sourceObservations} received · ${snapshot.diagnostic.canonicalSpots} repository · ${snapshot.diagnostic.afterSourceFilter} source · ${snapshot.diagnostic.afterBandModeFilter} band/mode · ${snapshot.diagnostic.afterIntelligenceFilter} intelligence · ${snapshot.rankedSpots.size} displayed · ${snapshot.diagnostic.rebuildMillis} ms",
                 color = MapMuted, fontSize = 11.sp)
         }
@@ -350,45 +356,54 @@ internal fun BandMapScreen(
             val labelStartPx = with(density) { when (controller.settings.laneSize) { 1 -> 42.dp; 3 -> 54.dp; else -> 46.dp }.toPx() }
             val labelHeightPx = with(density) { (controller.settings.spotLabelSizeSp * 3.5f).dp.toPx() }
             val minimumLabelSpacingPx = with(density) { (controller.settings.spotLabelSizeSp * 4.4f).dp.toPx().roundToInt() }
-            val placements = BandMapLayoutEngine.place(rows.map { it.spot }, segment, heightPx.roundToInt().coerceAtLeast(1), minimumLabelSpacingPx)
+            val plotTopPx = with(density) { (if (showScaleControls) 60.dp else 14.dp).toPx() }
+            val plotBottomInsetPx = with(density) { 30.dp.toPx() }
+            val plotBottomPx = (heightPx - plotBottomInsetPx).coerceAtLeast(plotTopPx + 1f)
+            val plotHeightPx = (plotBottomPx - plotTopPx).coerceAtLeast(1f)
+            val rawPlacements = BandMapLayoutEngine.place(rows.map { it.spot }, segment, plotHeightPx.roundToInt(), minimumLabelSpacingPx)
+            val placements = BandMapLayoutEngine.fitVerticalLabels(
+                rawPlacements, heightPx, labelHeightPx, plotTopPx, plotBottomInsetPx,
+            )
             val markerColors = placements.associate { placed -> placed.id to Color(app.spotStatusColour(SPOT_STATUS_DS, statuses[placed.id]?.dxccStatus)) }
-            val labelTopPx = with(density) { (if (showScaleControls) 52.dp else 8.dp).toPx() }
-            val labelPositions = BandMapLayoutEngine.resolveVerticalLabels(placements, heightPx, labelHeightPx, labelTopPx)
-            fun labelY(placed: BandMapPlacedSpot) = labelPositions[placed.id] ?: labelTopPx
+            val labelPositions = BandMapLayoutEngine.resolveVerticalLabels(
+                placements, heightPx, labelHeightPx, plotTopPx, plotBottomInsetPx,
+            )
+            fun labelY(placed: BandMapPlacedSpot) = labelPositions[placed.id] ?: plotTopPx
+            fun axisY(primary: Float) = plotTopPx + primary * plotHeightPx
             Canvas(Modifier.fillMaxSize()) {
-                val x = 18.dp.toPx(); drawLine(MapGrid, Offset(x, 0f), Offset(x, size.height), 2f)
+                val x = 18.dp.toPx(); drawLine(MapGrid, Offset(x, plotTopPx), Offset(x, plotBottomPx), 2f)
                 BandMapDisplayPlans.forBand(band, controller.settings.iaruRegion).segments.forEach { plan ->
-                    val top = BandMapLayoutEngine.coordinate(plan.lowerHz, segment) * size.height
-                    val bottom = BandMapLayoutEngine.coordinate(plan.upperHz, segment) * size.height
-                    if (bottom > 0 && top < size.height) {
-                        drawRect(segmentColor(plan.kind).copy(alpha = .10f), Offset(0f, top.coerceAtLeast(0f)),
-                            androidx.compose.ui.geometry.Size(size.width, (bottom.coerceAtMost(size.height) - top.coerceAtLeast(0f)).coerceAtLeast(0f)))
-                        drawLine(segmentColor(plan.kind), Offset(x, top.coerceAtLeast(0f)), Offset(x, bottom.coerceAtMost(size.height)), 5f)
+                    val top = axisY(BandMapLayoutEngine.coordinate(plan.lowerHz, segment))
+                    val bottom = axisY(BandMapLayoutEngine.coordinate(plan.upperHz, segment))
+                    if (bottom > plotTopPx && top < plotBottomPx) {
+                        drawRect(segmentColor(plan.kind).copy(alpha = .10f), Offset(0f, top.coerceAtLeast(plotTopPx)),
+                            androidx.compose.ui.geometry.Size(size.width, (bottom.coerceAtMost(plotBottomPx) - top.coerceAtLeast(plotTopPx)).coerceAtLeast(0f)))
+                        drawLine(segmentColor(plan.kind), Offset(x, top.coerceAtLeast(plotTopPx)), Offset(x, bottom.coerceAtMost(plotBottomPx)), 5f)
                     }
                 }
                 BandMapLayoutEngine.ticks(segment, size.height.roundToInt()).forEach { tick ->
-                    val y = tick.position * size.height; drawLine(MapGrid, Offset(x - 5f, y), Offset(x + if (tick.major) 15f else 8f, y), 1f)
+                    val y = axisY(tick.position); drawLine(MapGrid, Offset(x - 5f, y), Offset(x + if (tick.major) 15f else 8f, y), 1f)
                 }
                 radioContext?.let { context ->
                     val rx = context.receiveFrequencyHz.value
                     val bandwidth = context.receiveBandwidthHz.value
                     if (rx in segment.lowerHz..segment.upperHz && bandwidth > 0) {
-                        val top = BandMapLayoutEngine.coordinate(rx - bandwidth / 2, segment) * size.height
-                        val bottom = BandMapLayoutEngine.coordinate(rx + bandwidth / 2, segment) * size.height
-                        drawRect(MapCyan.copy(alpha = .16f), Offset(0f, top.coerceAtLeast(0f)),
-                            androidx.compose.ui.geometry.Size(size.width, (bottom - top).coerceAtLeast(1f)))
+                        val top = axisY(BandMapLayoutEngine.coordinate(rx - bandwidth / 2, segment))
+                        val bottom = axisY(BandMapLayoutEngine.coordinate(rx + bandwidth / 2, segment))
+                        drawRect(MapCyan.copy(alpha = .16f), Offset(0f, top.coerceAtLeast(plotTopPx)),
+                            androidx.compose.ui.geometry.Size(size.width, (bottom.coerceAtMost(plotBottomPx) - top.coerceAtLeast(plotTopPx)).coerceAtLeast(1f)))
                     }
                     if (rx in segment.lowerHz..segment.upperHz) {
-                        val y = BandMapLayoutEngine.coordinate(rx, segment) * size.height
+                        val y = axisY(BandMapLayoutEngine.coordinate(rx, segment))
                         drawLine(MapCyan, Offset(0f, y), Offset(size.width, y), 3f)
                     }
                     context.transmitFrequencyHz.value?.takeIf { context.split.value && it in segment.lowerHz..segment.upperHz }?.let { tx ->
-                        val y = BandMapLayoutEngine.coordinate(tx, segment) * size.height
+                        val y = axisY(BandMapLayoutEngine.coordinate(tx, segment))
                         drawLine(MapMagenta, Offset(0f, y), Offset(size.width, y), 3f)
                     }
                 }
                 placements.forEach { placed ->
-                    val anchorY = placed.primary * size.height
+                    val anchorY = axisY(placed.primary)
                     val targetY = labelY(placed)
                     drawLine(MapGrid, Offset(x, anchorY), Offset(labelStartPx - 6.dp.toPx(), targetY), 1f)
                     drawCircle(markerColors[placed.id] ?: MapAmber, 3.dp.toPx(), Offset(x, anchorY))
@@ -397,9 +412,9 @@ internal fun BandMapScreen(
             if (showScaleControls) BandScaleControls(band, controller, Modifier.align(Alignment.TopCenter), includeBand = true)
             BandMapLayoutEngine.ticks(segment, heightPx.roundToInt()).filterIndexed { index, _ -> index % controller.settings.frequencyLabelEvery == 0 }.forEach { tick ->
                 Text(formatBandMapFrequency(tick.frequencyHz), color = MapMuted, fontSize = 8.sp,
-                    modifier = Modifier.offset { IntOffset(0, (tick.position * heightPx).roundToInt().coerceIn(0, (heightPx - 18).roundToInt().coerceAtLeast(0))) })
+                    modifier = Modifier.offset { IntOffset(0, (axisY(tick.position) - with(density) { 8.dp.toPx() }).roundToInt()) })
             }
-            rows.forEach { ranked -> placements.firstOrNull { it.id == ranked.spot.id }?.let { placed ->
+            placements.forEach { placed -> rows.firstOrNull { it.spot.id == placed.id }?.let { ranked ->
                 Box(Modifier.offset { IntOffset(labelStartPx.roundToInt(), labelY(placed).roundToInt()) }
                     .widthIn(max = when (controller.settings.laneSize) { 1 -> 126.dp; 3 -> 236.dp; else -> 168.dp })) {
                     SpotLabel(ranked, statuses[ranked.spot.id], app, select, controller.settings.labelMetadata,
@@ -421,8 +436,10 @@ internal fun BandMapScreen(
     modifier: Modifier = Modifier,
 ) {
     val snapshot = controller.snapshot
-    val activeBand = bandMapBands.firstOrNull { operatingContext.receiveFrequencyHz.value in it.lowerHz..it.upperHz }?.name
+    val radioBand = bandMapBands.firstOrNull { operatingContext.receiveFrequencyHz.value in it.lowerHz..it.upperHz }?.name
         ?: snapshot.selectedBands.firstOrNull()
+    var manualBand by remember { mutableStateOf<String?>(null) }
+    val activeBand = manualBand ?: radioBand
     var selected by remember(activeBand) { mutableStateOf<BandMapRankedSpot?>(null) }
     if (activeBand == null) return
     val activeRows = snapshot.rankedSpots.filter { it.spot.band == activeBand }
@@ -436,7 +453,13 @@ internal fun BandMapScreen(
         value = withContext(Dispatchers.IO) { database.spotStatuses(identities, operatingContext.stationProfileId.value) }
     }
     Column(modifier.background(MapBackground).padding(6.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Text("BAND MAP · $activeBand", color = MapAmber, fontWeight = FontWeight.Black, fontSize = 12.sp)
+        Column(Modifier.fillMaxWidth().clickable {
+            val index = bandMapVisibleBands.indexOf(activeBand).takeIf { it >= 0 } ?: -1
+            manualBand = bandMapVisibleBands[(index + 1) % bandMapVisibleBands.size]
+        }.semantics { contentDescription = "Band Map $activeBand, tap to show the next band" }) {
+            Text("BAND MAP · $activeBand", color = MapAmber, fontWeight = FontWeight.Black, fontSize = 15.sp)
+            Text("TAP HEADER TO CHANGE BAND", color = MapCyan, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+        }
         BandScaleControls(activeBand, controller, Modifier.fillMaxWidth())
         Text("Drag/pinch · RX cyan · TX magenta", color = MapMuted, fontSize = 8.sp)
         VerticalLane(activeBand, activeRows, controller, statuses, app,
@@ -457,17 +480,18 @@ internal fun BandMapScreen(
 @Composable private fun BandScaleControls(band: String, controller: BandMapController, modifier: Modifier = Modifier, includeBand: Boolean = false) {
     val span = controller.visibleSegment(band).spanHz
     val spanLabel = if (span >= 1_000L) "${(span + 500L) / 1_000L} kHz" else "$span Hz"
-    Row(modifier.background(MapBackground.copy(alpha = .88f), RoundedCornerShape(8.dp)),
+    Row(modifier.heightIn(min = 56.dp).background(MapBackground.copy(alpha = .88f), RoundedCornerShape(8.dp)),
         horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clickable { controller.zoom(band, 1.5) }
+        Box(Modifier.size(56.dp).clickable { controller.zoom(band, 1.5) }
             .semantics { contentDescription = "Widen $band band map spacing" }, contentAlignment = Alignment.Center) {
-            Text("−", color = MapText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("−", color = MapText, fontSize = 28.sp, fontWeight = FontWeight.Black)
         }
-        Text(if (includeBand) "${band.uppercase()} · $spanLabel" else spanLabel, color = MapCyan, fontSize = 9.sp, maxLines = 1,
-            modifier = Modifier.semantics { contentDescription = "$band band map span $span hertz" })
-        Box(Modifier.size(44.dp).clickable { controller.zoom(band, 2.0 / 3.0) }
+        Text(if (includeBand) "${band.uppercase()} · $spanLabel" else spanLabel, color = MapCyan, fontSize = 13.sp,
+            fontWeight = FontWeight.Bold, maxLines = 1, modifier = Modifier.padding(horizontal = 8.dp)
+                .semantics { contentDescription = "$band band map span $span hertz" })
+        Box(Modifier.size(56.dp).clickable { controller.zoom(band, 2.0 / 3.0) }
             .semantics { contentDescription = "Narrow $band band map spacing" }, contentAlignment = Alignment.Center) {
-            Text("+", color = MapText, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("+", color = MapText, fontSize = 28.sp, fontWeight = FontWeight.Black)
         }
     }
 }
@@ -483,14 +507,22 @@ internal fun BandMapScreen(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(spot.callsign, color = Color(app.spotStatusColour(SPOT_STATUS_CS, status?.callStatus)),
                 fontWeight = FontWeight.Bold, fontSize = labelSizeSp.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (BandMapLabelMetadata.CALL_STATUS in metadata) {
+                Spacer(Modifier.width(8.dp))
+                Text(status?.callStatus ?: "?", color = Color(app.spotStatusColour(SPOT_STATUS_CS, status?.callStatus)),
+                    fontWeight = FontWeight.Bold, fontSize = (labelSizeSp - 1).coerceAtLeast(8).sp)
+            }
+            if (BandMapLabelMetadata.DXCC_STATUS in metadata) {
+                Spacer(Modifier.width(6.dp))
+                Text(status?.dxccStatus ?: "?", color = Color(app.spotStatusColour(SPOT_STATUS_DS, status?.dxccStatus)),
+                    fontWeight = FontWeight.Bold, fontSize = (labelSizeSp - 1).coerceAtLeast(8).sp)
+            }
             if (stackMembers.size > 1) Text(" +${stackMembers.size - 1}", color = MapMagenta, fontWeight = FontWeight.Black, fontSize = (labelSizeSp - 2).coerceAtLeast(8).sp)
         }
         if (showFrequency) Text(formatBandMapFrequency(spot.frequencyHz), color = MapMuted, fontSize = (labelSizeSp - 2).coerceAtLeast(8).sp)
         val observation = spot.observations.maxByOrNull(BandMapSourceObservation::observedEpoch)
         val details = buildList {
             if (BandMapLabelMetadata.AGE in metadata) add("${((Instant.now().epochSecond - spot.newestObservationEpoch).coerceAtLeast(0) / 60)}m")
-            if (BandMapLabelMetadata.CALL_STATUS in metadata) add("CS ${status?.callStatus ?: "?"}")
-            if (BandMapLabelMetadata.DXCC_STATUS in metadata) add("DS ${status?.dxccStatus ?: "?"}")
             if (BandMapLabelMetadata.BEARING in metadata) observation?.bearingDegrees?.let { add("$it°") }
             if (BandMapLabelMetadata.DISTANCE in metadata) observation?.distanceKm?.let { add("$it km") }
             if (BandMapLabelMetadata.MODE in metadata) add(spot.submode.ifBlank { spot.modeFamily.name })

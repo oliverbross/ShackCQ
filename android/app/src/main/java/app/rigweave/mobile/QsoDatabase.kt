@@ -117,7 +117,7 @@ fun bandForFrequency(frequencyHz: Long): String = when (frequencyHz) {
     in 10_000_000_000L..10_499_999_999L -> "3cm"; else -> ""
 }
 
-class QsoDatabase(context: Context, databaseName: String = "rigweave.sqlite") : SQLiteOpenHelper(context, databaseName, null, 16) {
+class QsoDatabase(context: Context, databaseName: String = "rigweave.sqlite") : SQLiteOpenHelper(context, databaseName, null, 17) {
     companion object {
         @Volatile private var sharedInstance: QsoDatabase? = null
 
@@ -163,6 +163,7 @@ class QsoDatabase(context: Context, databaseName: String = "rigweave.sqlite") : 
         if (oldVersion < 14) QsoProjectionStore.migrateV3(db)
         if (oldVersion < 15) QsoProjectionStore.migrateV4(db)
         if (oldVersion < 16) QsoProjectionStore.migrateV5(db)
+        if (oldVersion < 17) QsoProjectionStore.migrateV6(db)
     }
 
     private fun createPagingIndexes(db: SQLiteDatabase) {
@@ -850,7 +851,7 @@ class QsoDatabase(context: Context, databaseName: String = "rigweave.sqlite") : 
     fun updateDelivery(record: DeliveryRecord) {
         writableDatabase.execSQL("""UPDATE qso_delivery SET state=?,updated_at=?,attempt_count=?,last_attempt_at=?,next_attempt_at=?,
             payload_hash=?,remote_id=?,provider_message=?,http_status=? WHERE qso_id=? AND provider=?""".trimIndent(),
-            arrayOf(record.state.name, record.updatedAt, record.attemptCount, record.lastAttemptAt, record.nextAttemptAt,
+            arrayOf<Any?>(record.state.name, record.updatedAt, record.attemptCount, record.lastAttemptAt, record.nextAttemptAt,
                 record.payloadHash, record.remoteId, record.providerMessage.take(1_000), record.httpStatus, record.qsoId, record.provider.name))
         changeRevision.incrementAndGet()
     }
@@ -860,7 +861,7 @@ class QsoDatabase(context: Context, databaseName: String = "rigweave.sqlite") : 
         if (from.isEmpty()) return
         val names = from.joinToString(",") { "'${it.name}'" }
         writableDatabase.execSQL("UPDATE qso_delivery SET state=?,updated_at=? WHERE provider=? AND state IN ($names)",
-            arrayOf(state.name, now, provider.name))
+            arrayOf<Any?>(state.name, now, provider.name))
         changeRevision.incrementAndGet()
     }
 
@@ -880,7 +881,7 @@ class QsoDatabase(context: Context, databaseName: String = "rigweave.sqlite") : 
         update(qso)
         if (toADIF(old) != toADIF(qso)) {
             writableDatabase.execSQL("UPDATE qso_delivery SET state='LOCAL_CHANGED',updated_at=? WHERE qso_id=? AND state IN ('ACCEPTED','ACCEPTED_DUPLICATE','ACCEPTED_MODIFIED','SUBMITTED_BATCH')",
-                arrayOf(System.currentTimeMillis() / 1_000, qso.id))
+                arrayOf<Any?>(System.currentTimeMillis() / 1_000, qso.id))
         }
     }
 

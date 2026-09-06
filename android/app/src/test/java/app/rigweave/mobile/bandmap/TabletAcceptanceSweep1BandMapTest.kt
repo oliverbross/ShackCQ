@@ -59,6 +59,24 @@ class TabletAcceptanceSweep1BandMapTest {
         assertTrue(ordered.all { it in 52f..956f })
     }
 
+    @Test fun denseVerticalLabelsAreStackedAndStayClearOfBothFrequencyBoundaries() {
+        val placements = (0 until 60).map { index ->
+            BandMapPlacedSpot("spot-$index", index / 59f, index % 6)
+        }
+        val fitted = BandMapLayoutEngine.fitVerticalLabels(
+            placements, heightPx = 600f, labelHeightPx = 40f, topPx = 60f, bottomInsetPx = 32f,
+        )
+        val positions = BandMapLayoutEngine.resolveVerticalLabels(
+            fitted, heightPx = 600f, labelHeightPx = 40f, topPx = 60f, bottomInsetPx = 32f,
+        )
+        val ordered = fitted.sortedBy(BandMapPlacedSpot::primary).map { positions.getValue(it.id) }
+
+        assertTrue(fitted.size <= 12)
+        assertEquals(placements.map { it.id }.toSet(), fitted.flatMap { it.memberIds }.toSet())
+        assertTrue(ordered.zipWithNext().all { (left, right) -> right - left >= 40f })
+        assertTrue(ordered.all { it in 60f..528f })
+    }
+
     @Test fun iaruDisplayPlanIsGuidanceNotRegulatoryAuthority() {
         val plan = BandMapDisplayPlans.forBand("20m", BandMapIaruRegion.REGION_1)
         assertFalse(plan.regulatoryAuthority)

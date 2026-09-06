@@ -150,7 +150,10 @@ private val Danger = Color(0xFFE4544D)
 
 @Composable private fun RigWeaveTheme(content: @Composable () -> Unit) = MaterialTheme(
     colorScheme = darkColorScheme(primary = Amber, onPrimary = Color(0xFF201708), background = Chassis,
-        surface = Panel, surfaceVariant = Raised, outline = Color(0xFF4A555D), onBackground = Ink, onSurface = Ink),
+        secondary = Hold, onSecondary = Color(0xFF211B05), tertiary = Healthy, onTertiary = Color(0xFF071B10),
+        surface = Panel, surfaceVariant = Raised, onSurfaceVariant = Muted,
+        outline = Color(0xFF66727B), outlineVariant = Color(0xFF3D4850),
+        error = Danger, onError = Color.White, onBackground = Ink, onSurface = Ink),
     content = content,
 )
 
@@ -257,6 +260,11 @@ internal fun parseGeneralRadioCommand(raw: String): GeneralRadioCommand {
     val bandMaps = remember { BandMapController(bandMapStore.load(), bandMapStore::save) }
     val keyerProfiles = remember { KeyerProfileStore(context, app.macroLabels.toList(), app.macroTexts.toList(), app.voiceMacroLabels.toList(), app.cqRepeatSeconds) }
     val wavelog = remember { WavelogController(context, database) }
+    val logbook = remember(database) { LogbookController(LogbookRepository(database)) }
+    DisposableEffect(logbook) { onDispose(logbook::close) }
+    LaunchedEffect(logbook, wavelog.logMode, wavelog.stationId) {
+        logbook.apply(LogbookFilter(), wavelog.stationId.takeIf { wavelog.logMode == LogMode.WAVELOG })
+    }
     val operatingContext = remember { OperatingContextAuthority() }
     val keyerPort = remember { arrayOfNulls<KeyerDispatchPort>(1) }
     val contest = remember { ContestRuntime(context, database, mutations, keyerProfiles,
@@ -955,7 +963,7 @@ internal fun parseGeneralRadioCommand(raw: String): GeneralRadioCommand {
                         { Icon(navIcon(item), item.label) }, label = { Text(item.label) }) }
                 }
             }
-            Screen(destination, radio, usbDetail, database, mutations, progress, operations, publicProviders, hamClockSettings, features, neuralDx, wavelog, wavelogNative, syncHub, callbook, cty, audio,
+            Screen(destination, radio, usbDetail, database, logbook, mutations, progress, operations, publicProviders, hamClockSettings, features, neuralDx, wavelog, wavelogNative, syncHub, callbook, cty, audio,
                 panadapter, tciRxAudio, tciRuntime, tciTransmit, scanner, sdrOperationalV2, sdrWorkbenchV4, localReceivers, rfObservations, bandStacks, announcements, debugSdrLab, controlSurfaces,
                 portable, activation, pendingPortableDraft, { pendingPortableDraft = null }, foreground, app, remoteRuntime, remoteFactory,
                 { station -> pendingRemoteAutoConnect = station.radioProfile().id; app.upsertRemoteStation(station) },
@@ -998,7 +1006,7 @@ internal fun parseGeneralRadioCommand(raw: String): GeneralRadioCommand {
             Destination.entries.filterNot { it == Destination.DIGI || it == Destination.EQ || it == Destination.PANADAPTER || it == Destination.PORTABLE || it == Destination.PROGRESS || it == Destination.SYNC || it == Destination.OPERATIONS || it == Destination.GROUPS_IO || (it == Destination.ROTATOR && !app.rotatorEnabled) || (it == Destination.CONTEST && !contestDestinationVisible(app.contestEnabled)) || (it == Destination.BAND_MAPS && (!bandMaps.settings.enabled || !bandMaps.settings.navigationVisible)) }.forEach { item -> NavigationBarItem(destination == item || (item == Destination.RADIO && destination == Destination.DIGI), { destination = item },
                 { Icon(navIcon(item), item.label) }, label = { Text(item.label, fontSize = 9.sp) }) }
         } }) { padding -> Box(Modifier.padding(padding)) {
-            Screen(destination, radio, usbDetail, database, mutations, progress, operations, publicProviders, hamClockSettings, features, neuralDx, wavelog, wavelogNative, syncHub, callbook, cty, audio,
+            Screen(destination, radio, usbDetail, database, logbook, mutations, progress, operations, publicProviders, hamClockSettings, features, neuralDx, wavelog, wavelogNative, syncHub, callbook, cty, audio,
                 panadapter, tciRxAudio, tciRuntime, tciTransmit, scanner, sdrOperationalV2, sdrWorkbenchV4, localReceivers, rfObservations, bandStacks, announcements, debugSdrLab, controlSurfaces,
                 portable, activation, pendingPortableDraft, { pendingPortableDraft = null }, foreground, app, remoteRuntime, remoteFactory,
                 { station -> pendingRemoteAutoConnect = station.radioProfile().id; app.upsertRemoteStation(station) },
@@ -1070,6 +1078,7 @@ private fun navIcon(item: Destination) = when (item) {
 }
 
 @Composable private fun Screen(destination: Destination, radio: RadioState, detail: String, database: QsoDatabase,
+    logbookController: LogbookController,
     mutations: QsoMutationCoordinator, progress: ProgressController, operations: OperationsController,
     publicProviders: app.rigweave.mobile.hamclock.HamClockPublicProviders,
     hamClockSettings: HamClockSettingsCoordinator,
@@ -1268,6 +1277,7 @@ private fun navIcon(item: Destination) = when (item) {
             qsoSummary = logSummary, candidates = candidates,
         ))
     }
+    Surface(Modifier.fillMaxSize(), color = Chassis, contentColor = Ink) {
     Column(Modifier.fillMaxSize()) {
         if (selectedProfile.backendKind == RadioBackendKind.REMOTE_STATION) {
             RemoteConnectionBanner(remoteRuntime.snapshot)
@@ -1296,8 +1306,8 @@ private fun navIcon(item: Destination) = when (item) {
                     }
                     Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(if (showCompactBandMap) 8.dp else 0.dp)) {
                         if (showCompactBandMap) CompactRadioBandMap(bandMaps, database, cty, operatingContext, app, workspaceAction,
-                            Modifier.fillMaxHeight().weight(.1f))
-                        Box(Modifier.fillMaxHeight().weight(if (showCompactBandMap) .9f else 1f)) {
+                            Modifier.fillMaxHeight().weight(.17f))
+                        Box(Modifier.fillMaxHeight().weight(if (showCompactBandMap) .83f else 1f)) {
                         if (selectedProfile.backendKind == RadioBackendKind.NATIVE_FLEX) FlexRadioScreen(flex, openLogbook)
                         else if (selectedProfile.backendKind == RadioBackendKind.NATIVE_TCI) TciRadioCockpit(
                             tciRuntime, platformSnapshot, panadapter, tciRxAudio, scanner, sdrOperationalV2, sdrWorkbenchV4, localReceivers,
@@ -1357,7 +1367,7 @@ private fun navIcon(item: Destination) = when (item) {
             else EqUnavailableScreen("EQ is unavailable for ${app.radioFamily.displayName}; SHOW only exposes this setup state and sends no CAT command.", openSettings)
         Destination.LOGBOOK -> Column(Modifier.fillMaxSize()) {
             PotaActivationStrip(activation, radio, openActivation)
-            Box(Modifier.weight(1f)) { LogbookScreen(radio, database, mutations, wavelog, wavelogNative, syncHub, callbook, app,
+            Box(Modifier.weight(1f)) { LogbookScreen(radio, database, logbookController, mutations, wavelog, wavelogNative, syncHub, callbook, app,
                 openSync, openProgress, progress.logbookRequest, progress::consumeLogbookRequest, homeQsoId, consumeHomeQso) }
         }
         Destination.PROGRESS -> RfIntelligenceWorkspace(rfObservations, sdrWorkbenchV4) {
@@ -1404,6 +1414,7 @@ private fun navIcon(item: Destination) = when (item) {
                 disconnectPlatform, connect, direct) }
         }
         }
+    }
     }
 }
 }
@@ -1502,6 +1513,7 @@ private fun navIcon(item: Destination) = when (item) {
     var feedbackBaseline by remember { mutableStateOf<RadioState?>(null) }
     var stationInsight by remember { mutableStateOf<StationInsight?>(null) }
     var identityVisible by remember { mutableStateOf(false) }
+    val cwMacroContext = remember { mutableStateOf(CwMacroContext(myCall = app.stationCallsign, myGrid = app.stationGrid)) }
     LaunchedEffect(state.revision) {
         val previous = previousState
         previousState = state
@@ -1543,11 +1555,11 @@ private fun navIcon(item: Destination) = when (item) {
             Row(Modifier.fillMaxWidth().weight(1.75f), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Column(Modifier.weight(.8f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     when {
-                        isCwMacroMode(state.mode) -> CwMacroStrip(state, app, send, Modifier.fillMaxWidth().height(54.dp))
+                        isCwMacroMode(state.mode) -> CwMacroStrip(state, app, cwMacroContext.value, send, Modifier.fillMaxWidth().height(70.dp))
                         isVoiceMacroMode(state.mode) -> VoiceMacroStrip(state, voiceStore, voiceTx, requestVoice,
                             Modifier.fillMaxWidth().heightIn(min = 54.dp))
                     }
-            CompactLogger(state, database, mutations, wavelog, callbook, cty, app, send, portableDraft, consumePortableDraft, onQsoSaved,
+            CompactLogger(state, database, mutations, wavelog, callbook, cty, app, send, cwMacroContext, portableDraft, consumePortableDraft, onQsoSaved,
                         onInsight = { stationInsight = it; identityVisible = true },
                         onInsightCleared = { stationInsight = null; identityVisible = false },
                         modifier = Modifier.weight(1f).fillMaxWidth())
@@ -1613,8 +1625,9 @@ private fun navIcon(item: Destination) = when (item) {
     }
 }
 
-@Composable private fun CwMacroStrip(state: RadioState, app: AppController, send: (String) -> Unit,
+@Composable private fun CwMacroStrip(state: RadioState, app: AppController, context: CwMacroContext, send: (String) -> Unit,
     modifier: Modifier = Modifier) {
+    var resolutionError by remember { mutableStateOf("") }
     val configured = (0 until CW_MACRO_COUNT).mapNotNull { index ->
         app.macroTexts.getOrNull(index)?.takeIf(String::isNotBlank)?.let { text ->
             Triple(index, app.macroLabels.getOrNull(index).orEmpty().ifBlank { "M${index + 1}" }, text)
@@ -1623,11 +1636,18 @@ private fun navIcon(item: Destination) = when (item) {
     if (!isCwMacroMode(state.mode) || configured.isEmpty()) return
     Surface(color = Color(0xFF15191A), shape = MaterialTheme.shapes.small,
         border = androidx.compose.foundation.BorderStroke(1.dp, Hold.copy(alpha = .72f)), modifier = modifier) {
-        Row(Modifier.fillMaxSize().padding(3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        Column(Modifier.fillMaxSize().padding(3.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(Modifier.fillMaxWidth().weight(1f), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
             configured.forEach { (_, label, text) ->
-                Kx3DirectKey(label, state.connected, { cwMacroCommand(text)?.let(send) },
+                Kx3DirectKey(label, state.connected, {
+                    val resolved = resolveCwMacroTemplate(text, context)
+                    resolutionError = resolved.error.orEmpty()
+                    if (resolved.error == null) cwMacroCommand(resolved.text)?.let(send)
+                },
                     Modifier.weight(1f), secondary = true, risky = true, compact = true)
             }
+        }
+        if (resolutionError.isNotBlank()) Text(resolutionError, color = Danger, fontSize = 9.sp, maxLines = 1)
         }
     }
 }
@@ -3360,6 +3380,7 @@ private fun formatSpotFrequency(frequencyHz: Long): String = "%d.%03d.%02d".form
 @Composable private fun CompactLogger(state: RadioState, database: QsoDatabase, mutations: QsoMutationCoordinator,
     wavelog: WavelogController,
     callbook: CallbookController, cty: CtyController, app: AppController, send: (String) -> Unit,
+    macroContext: MutableState<CwMacroContext>,
     portableDraft: PortableLogDraft?, consumePortableDraft: () -> Unit, onQsoSaved: () -> Unit,
     onInsight: (StationInsight) -> Unit, onInsightCleared: () -> Unit, modifier: Modifier = Modifier) {
     var tab by remember { mutableStateOf(QsoEditorTab.QSO) }
@@ -3384,6 +3405,11 @@ private fun formatSpotFrequency(frequencyHz: Long): String = "%d.%03d.%02d".form
     val lookupScope = rememberCoroutineScope()
     val selectedStation = wavelog.selectedStation
     val utc = wavelog.synchronizedNow().atZone(ZoneOffset.UTC)
+    LaunchedEffect(call, sent, received, name, qth, grid, logMode, state.frequencyHz, app.stationCallsign, app.stationGrid) {
+        macroContext.value = CwMacroContext(myCall = app.stationCallsign, call = call, name = name, qth = qth,
+            rst = received, rstSent = sent, rstRecv = received, grid = grid, myGrid = app.stationGrid,
+            mode = logMode, band = bandForFrequency(state.frequencyHz))
+    }
     fun clear() {
         lookupGeneration++
         call = ""; sent = "59"; received = "59"; name = ""; qth = ""; grid = ""; iota = ""; sota = ""; wwff = ""; pota = ""
@@ -4064,7 +4090,7 @@ private enum class DXView { LIVE, SMART, BANDMAP, PULSE, WORLD, WATCH }
         trailingContent = { Text(trailing, color = if (alert) Hold else Muted) }, colors = ListItemDefaults.colors(containerColor = Color.Transparent))
 }
 
-@Composable private fun LogbookScreen(state: RadioState, database: QsoDatabase, mutations: QsoMutationCoordinator,
+@Composable private fun LogbookScreen(state: RadioState, database: QsoDatabase, logbookController: LogbookController, mutations: QsoMutationCoordinator,
     wavelog: WavelogController, wavelogNative: WavelogNativeController,
     syncHub: SyncHubController, callbook: CallbookController, app: AppController, openSync: () -> Unit, openProgress: () -> Unit,
     initialFilter: LogbookFilter? = null, consumeInitialFilter: () -> Unit = {},
@@ -4082,12 +4108,11 @@ private enum class DXView { LIVE, SMART, BANDMAP, PULSE, WORLD, WATCH }
     var previousQsoRecord by remember { mutableStateOf<AndroidCallbookRecord?>(null) }
     val context = LocalContext.current
     val logbookScope = rememberCoroutineScope()
-    val logbookController=remember(database){LogbookController(LogbookRepository(database))}
-    DisposableEffect(logbookController){onDispose(logbookController::close)}
     val queryState=logbookController.state
     val ready=queryState as? LogbookQueryState.Ready
     val pageRows=ready?.rows.orEmpty()
-    val pageData=QsoPage(pageRows,ready?.exactTotal?:pageRows.size,logbookController.pageIndex,applied.limit)
+    val approximateTotal = logbookController.pageIndex * applied.limit + pageRows.size + if (ready?.hasMore == true) 1 else 0
+    val pageData=QsoPage(pageRows,ready?.exactTotal?:approximateTotal,logbookController.pageIndex,applied.limit)
     val pageLoading=queryState is LogbookQueryState.LoadingFirstPage||queryState is LogbookQueryState.LoadingAnotherPage
     val pageError=(queryState as? LogbookQueryState.RecoverableError)?.message.orEmpty()
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/x-adif")) { uri ->
@@ -4190,7 +4215,8 @@ private enum class DXView { LIVE, SMART, BANDMAP, PULSE, WORLD, WATCH }
             OutlinedButton(openProgress, modifier = Modifier.heightIn(min = 48.dp)) {
                 Icon(Icons.Outlined.Insights, null); Spacer(Modifier.width(6.dp)); Text("PROGRESS")
             }
-            Text("${pageData.rows.size} / ${pageData.total} RESULTS", color = Ink, fontWeight = FontWeight.Black, fontSize = 16.sp)
+            Text(if (ready?.exactTotal == null) "${pageData.rows.size}+ RESULTS · COUNTING…" else "${pageData.rows.size} / ${pageData.total} RESULTS",
+                color = Ink, fontWeight = FontWeight.Black, fontSize = 16.sp)
             if (logbookController.refreshing) Text("UPDATING…", color = Hold, fontWeight = FontWeight.Bold)
             CompactPager(pageData, applied.limit, { limit ->
                 draft = draft.copy(limit = limit); applied = applied.copy(limit = limit); selectedId = null
@@ -4760,6 +4786,8 @@ private fun statusColourForeground(argb: Int): Color {
     var showTciWizard by remember { mutableStateOf(false) }
     var showRotatorWizard by remember { mutableStateOf(false) }
     var showAlertProfileHelp by remember { mutableStateOf(false) }
+    var radioProfilesExpanded by rememberSaveable { mutableStateOf(false) }
+    var radioAdvancedExpanded by rememberSaveable { mutableStateOf(false) }
     var host by remember { mutableStateOf(features.clusterHost) }; var port by remember { mutableStateOf(features.clusterPort.toString()) }
     var fallbackHost by remember { mutableStateOf(features.fallbackHost) }; var fallbackPort by remember { mutableStateOf(features.fallbackPort.toString()) }
     var fallback2Host by remember { mutableStateOf(features.fallback2Host) }; var fallback2Port by remember { mutableStateOf(features.fallback2Port.toString()) }
@@ -4970,6 +4998,18 @@ private fun statusColourForeground(argb: Int): Color {
                 OutlinedButton({ showRadioWizard = true }) { Text("CHOOSE ACTIVE PROFILE") }
             }
             Text("Select the single active radio backend. Switching closes the previous connection before the next backend starts.", color = Muted)
+            val activeRadioProfile = app.selectedRadioProfile
+            Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Healthy.copy(alpha = .12f))) {
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("ACTIVE RADIO", color = Healthy, fontWeight = FontWeight.Black)
+                    Text(activeRadioProfile.name, fontWeight = FontWeight.Bold)
+                    Text("${activeRadioProfile.backendKind} · ${activeRadioProfile.model} · ${if (state.connected) "CONNECTED" else "DISCONNECTED"}", color = Muted)
+                }
+            }
+            OutlinedButton({ radioProfilesExpanded = !radioProfilesExpanded }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (radioProfilesExpanded) "HIDE PROFILE LIST" else "MANAGE RADIO PROFILES")
+            }
+            if (radioProfilesExpanded) {
             (RadioProfileCatalog.nativeProfiles + app.tciProfiles).forEach { candidate ->
                 val active = app.selectedRadioProfileId == candidate.id
                 Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = if (active) Healthy.copy(alpha = .12f) else Panel)) {
@@ -5002,6 +5042,11 @@ private fun statusColourForeground(argb: Int): Color {
                     FilterChip(app.selectedRadioProfileId == profile.id, { app.selectRadioProfile(profile) }, { Text(profile.name) })
                 }
             }
+            }
+            OutlinedButton({ radioAdvancedExpanded = !radioAdvancedExpanded }, modifier = Modifier.fillMaxWidth()) {
+                Text(if (radioAdvancedExpanded) "HIDE ADVANCED RADIO OPTIONS" else "SHOW ADVANCED RADIO OPTIONS")
+            }
+            if (radioAdvancedExpanded) {
             SdrSettingsPanel(tciRuntime, tciRxAudio, scanner, sdrOperationalV2, sdrWorkbenchV4, localReceivers, rfObservations, announcements, bandStacks, debugSdrLab)
             Text("Native profiles are preferred when RigWeave has a dedicated integration. Unknown or future stored identifiers restore disconnected.", color = Muted)
             OutlinedTextField(
@@ -5068,6 +5113,7 @@ private fun statusColourForeground(argb: Int): Color {
                 }
                 Switch(app.panadapterEnabled, app::updatePanadapterEnabled,
                     enabled = app.selectedRadioProfile.backendKind == RadioBackendKind.NATIVE_ELECRAFT)
+            }
             }
         }
         if (section == SettingsSection.BAND_MAPS) SettingsCard("INTELLIGENT BAND MAPS") { BandMapSettingsPanel(bandMaps) }
@@ -5189,6 +5235,7 @@ private fun statusColourForeground(argb: Int): Color {
                 if (macroKind == "CW") {
                     val configuredMacros = macroTexts.count(String::isNotBlank)
                     Text("$configuredMacros of $CW_MACRO_COUNT configured · blank messages stay hidden on the Radio screen.", color = Muted)
+                    Text("Templates use the current logging fields. Example: <HIS CALL> TU 599 BK. Available fields: {CALL}, {MYCALL}, {NAME}, {QTH}, {RST_SENT}, {RST_RECV}, {GRID}, {MYGRID}, {BAND}, {MODE}, {SERIAL}, {EXCHANGE}. Add ? before } for an optional field, for example {NAME?}. Contest Run and S&P profiles resolve the same fields from the active Contest entry. The expanded message must fit the verified $CW_MACRO_TEXT_MAX-character radio limit.", color = Hold)
                     BoxWithConstraints(Modifier.fillMaxWidth().testTag("settings-cw-macro-grid")) {
                         val wideMacros = maxWidth >= 600.dp
                         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -5207,9 +5254,9 @@ private fun statusColourForeground(argb: Int): Color {
                                     OutlinedTextField(macroLabels[index], { macroLabels[index] = sanitizeCwMacroLabel(it) },
                                         label = { Text("Button label") }, placeholder = { Text("M${index + 1}") },
                                         singleLine = true, modifier = Modifier.weight(1f))
-                                    OutlinedTextField(macroTexts[index], { macroTexts[index] = sanitizeCwMacroText(it) },
+                                    OutlinedTextField(macroTexts[index], { macroTexts[index] = sanitizeCwMacroTemplate(it) },
                                         label = { Text("CW message") },
-                                        trailingIcon = { Text("${macroTexts[index].length}/$CW_MACRO_TEXT_MAX", color = Muted,
+                                        trailingIcon = { Text("${macroTexts[index].length}/$CW_MACRO_TEMPLATE_MAX", color = Muted,
                                             style = MaterialTheme.typography.labelSmall) },
                                         singleLine = true, modifier = Modifier.weight(3f))
                                 } else Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Raised)) {
@@ -5220,9 +5267,9 @@ private fun statusColourForeground(argb: Int): Color {
                                                 label = { Text("Button label") }, placeholder = { Text("M${index + 1}") },
                                                 singleLine = true, modifier = Modifier.weight(1f))
                                         }
-                                        OutlinedTextField(macroTexts[index], { macroTexts[index] = sanitizeCwMacroText(it) },
+                                        OutlinedTextField(macroTexts[index], { macroTexts[index] = sanitizeCwMacroTemplate(it) },
                                             label = { Text("CW message") },
-                                            trailingIcon = { Text("${macroTexts[index].length}/$CW_MACRO_TEXT_MAX", color = Muted,
+                                            trailingIcon = { Text("${macroTexts[index].length}/$CW_MACRO_TEMPLATE_MAX", color = Muted,
                                                 style = MaterialTheme.typography.labelSmall) },
                                             singleLine = true, modifier = Modifier.fillMaxWidth())
                                     }
@@ -5287,18 +5334,23 @@ private fun statusColourForeground(argb: Int): Color {
             }, { Text(value.name) }) }; TextButton({ showAlertProfileHelp = true }) { Text("HELP") } }
             Text("${profile.name} · ${brightness.toInt()}% · auto dim ${if (autoDim) "on" else "off"} · tones ${if (tones) "on" else "off"} · quiet ${if (quiet) "on" else "off"}", color = Muted)
             Row(verticalAlignment = Alignment.CenterVertically) { Text("Brightness", modifier = Modifier.width(90.dp)); Slider(brightness, { brightness = it }, valueRange = 10f..100f, modifier = Modifier.weight(1f)); Text("${brightness.toInt()}%") }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                listOf(
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val screenOptions = listOf(
                     Triple("Auto dim", "Reduce display brightness using the active display policy", autoDim),
                     Triple("Audible tones", "Allow supported non-transmit alert tones", tones),
                     Triple("Quiet non-critical alerts", "Suppress non-critical alert presentation", quiet),
-                ).forEachIndexed { index, item ->
+                )
+                val columns = when { maxWidth >= 1_000.dp -> 3; maxWidth >= 620.dp -> 2; else -> 1 }
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { screenOptions.withIndex().toList().chunked(columns).forEach { rowItems ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) { rowItems.forEach { indexed ->
+                    val index = indexed.index; val item = indexed.value
                     Card(Modifier.weight(1f)) { Column(Modifier.fillMaxWidth().padding(10.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                         Text(item.first, fontWeight = FontWeight.Bold)
                         Text(item.second, color = Muted, style = MaterialTheme.typography.bodySmall)
                         Switch(item.third, { enabled -> when (index) { 0 -> autoDim = enabled; 1 -> tones = enabled; else -> quiet = enabled } })
                     } }
-                }
+                    }; repeat(columns - rowItems.size) { Spacer(Modifier.weight(1f)) } }
+                } }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(7.dp)) { listOf("NONE", "POTA", "SOTA", "WWFF").forEach { value -> FilterChip(program == value, { program = value }, { Text(value) }) } }
             if (program != "NONE") OutlinedTextField(activation, { activation = it.uppercase() }, label = { Text("Activation reference") }, modifier = Modifier.fillMaxWidth())
@@ -5761,7 +5813,12 @@ private fun statusColourForeground(argb: Int): Color {
         if (section == SettingsSection.ABOUT) SettingsCard("ABOUT RIGWEAVE") {
             Text("RIGWEAVE", color = Amber, fontWeight = FontWeight.Black)
             Text("RigWeave is an original, GPL-3.0-only integrated application combining radio control, logging, intelligence, Digi, contesting, portable operations, maps, rotators and connected services into one coherent shack application. Compatible open-source components are incorporated only where recorded below; behavioural references contributed ideas, not copied source or artwork.", color = Muted)
-            ProvenanceClass.entries.forEach { classification ->
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val provenanceColumns = when { maxWidth >= 1_050.dp -> 3; maxWidth >= 680.dp -> 2; else -> 1 }
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                ProvenanceClass.entries.toList().chunked(provenanceColumns).forEach { classificationRow ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    classificationRow.forEach { classification -> Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
                 Text(when (classification) {
                     ProvenanceClass.INCORPORATED -> "INCORPORATED / ADAPTED SOFTWARE"
                     ProvenanceClass.BEHAVIOURAL_REFERENCE -> "BEHAVIOURAL INSPIRATION · NO COPIED SOURCE"
@@ -5775,12 +5832,17 @@ private fun statusColourForeground(argb: Int): Color {
                         TextButton({ inAppBrowser?.open(entry.sourceUrl) }) { Text("SOURCE / LICENCE") }
                     } }
                 }
+                    } }
+                    repeat(provenanceColumns - classificationRow.size) { Spacer(Modifier.weight(1f)) }
+                    }
+                }
+                }
             }
             Text("THANKS", color = Amber, fontWeight = FontWeight.Bold)
             Text("Thank you to the authors, maintainers, radio amateurs, testers, standards communities and data providers whose careful work makes interoperable amateur-radio software possible.", color = Muted)
             val buildSummary = "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n" +
                 "Build SHA ${BuildConfig.BUILD_SHA}\nBuild channel ${BuildConfig.BUILD_CHANNEL}\n" +
-                "QSO schema 16 · projection contract 5\n" +
+                "QSO schema 17 · projection contract 6\n" +
                 "OpenHamClock stable 26.5.0 · d4a50eaaa61d · checked 2026-08-22"
             Surface(color = Raised, shape = RoundedCornerShape(8.dp), modifier = Modifier.fillMaxWidth()) {
                 Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

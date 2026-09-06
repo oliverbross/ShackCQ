@@ -150,6 +150,7 @@ data class ContestWorkspaceCallbacks(
 
 @Composable fun ContestWorkspace(state: ContestWorkspaceState, callbacks: ContestWorkspaceCallbacks, modifier: Modifier = Modifier) {
     val wide = LocalConfiguration.current.screenWidthDp >= 900
+    Surface(modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
     Column(modifier.fillMaxSize().semantics { contentDescription = "Contest workspace" }) {
         ScrollableTabRow(
             selectedTabIndex = ContestWorkspacePage.entries.indexOf(state.page),
@@ -174,6 +175,7 @@ data class ContestWorkspaceCallbacks(
             ContestWorkspacePage.REVIEW -> ContestReviewScreen(state, callbacks)
             ContestWorkspacePage.NETWORK -> ContestNetworkScreen(state, callbacks)
         }
+    }
     }
 }
 

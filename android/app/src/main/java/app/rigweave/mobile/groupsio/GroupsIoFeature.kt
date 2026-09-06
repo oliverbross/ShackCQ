@@ -1436,9 +1436,14 @@ fun GroupsIoSettingsPanel(controller: GroupsIoController, openGroupsIo: () -> Un
         Text("PER-GROUP OVERRIDES", fontWeight = FontWeight.Black)
         Text("Group | Enabled | Inherit | Lookback | Max messages | Attachments | Retention | Reset",
             style = MaterialTheme.typography.labelSmall)
-        controller.groups.forEach { group ->
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            val columns = when { maxWidth >= 1_050.dp -> 3; maxWidth >= 680.dp -> 2; else -> 1 }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            controller.groups.chunked(columns).forEach { groupRow ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                groupRow.forEach { group ->
             val override = controller.groupOverrides[group.id] ?: GroupsIoGroupOverride()
-            Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Card(Modifier.weight(1f)) { Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Checkbox(group.id in selectedGroups, { checked -> selectedGroups = if (checked) selectedGroups + group.id else selectedGroups - group.id })
@@ -1446,7 +1451,7 @@ fun GroupsIoSettingsPanel(controller: GroupsIoController, openGroupsIo: () -> Un
                     }
                     Switch(override.enabled, { controller.updateGroupOverride(group.id, override.copy(enabled = it)) })
                 }
-                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Column { Text("INHERIT", style = MaterialTheme.typography.labelSmall); Switch(override.inheritGlobal, { controller.updateGroupOverride(group.id, override.copy(inheritGlobal = it)) }) }
                     if (!override.inheritGlobal) {
                         OutlinedTextField(override.lookbackDays.toString(), { controller.updateGroupOverride(group.id, override.copy(lookbackDays = it.toIntOrNull() ?: override.lookbackDays)) }, label = { Text("Lookback days") }, modifier = Modifier.width(130.dp), singleLine = true)
@@ -1459,6 +1464,11 @@ fun GroupsIoSettingsPanel(controller: GroupsIoController, openGroupsIo: () -> Un
                 }
                 Text("Archive ${if (group.downloadArchives) "available" else "not downloaded"} · last sync ${groupsIoTimestampText(group.lastSyncMillis).row}", style = MaterialTheme.typography.bodySmall)
             } }
+                }
+                repeat(columns - groupRow.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+            }
         }
         TextButton({ controller.disconnect() }, enabled = controller.connected) { Text("Disconnect Groups.io") }
         TextButton({ confirmDelete = true }) { Text("Clear Downloaded Groups.io Cache") }

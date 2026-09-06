@@ -55,25 +55,25 @@ private val contestUtc = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").w
         }
 
         OutlinedTextField(state.session.name, { callbacks.onSession(state.session.copy(name = it.take(80))) },
-            label = { Text("Session name") }, enabled = editable, modifier = Modifier.fillMaxWidth())
+            label = { Text("Session name") }, enabled = editable, colors = contestFieldColors(), modifier = Modifier.fillMaxWidth())
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(state.session.stationCallsign, { callbacks.onSession(state.session.copy(stationCallsign = it.uppercase().take(24))) },
-                label = { Text("Station callsign") }, enabled = editable, modifier = Modifier.weight(1f))
+                label = { Text("Station callsign") }, enabled = editable, colors = contestFieldColors(), modifier = Modifier.weight(1f))
             OutlinedTextField(state.session.stationGrid, { callbacks.onSession(state.session.copy(stationGrid = it.uppercase().take(10))) },
-                label = { Text("Station grid") }, enabled = editable, modifier = Modifier.weight(1f))
+                label = { Text("Station grid") }, enabled = editable, colors = contestFieldColors(), modifier = Modifier.weight(1f))
             OutlinedTextField(state.session.operators.joinToString(","), { value ->
                 callbacks.onSession(state.session.copy(operators = value.split(',').map(String::trim).filter(String::isNotBlank).map(String::uppercase)))
-            }, label = { Text("Operator callsign(s)") }, enabled = editable, modifier = Modifier.weight(1.2f))
+            }, label = { Text("Operator callsign(s)") }, enabled = editable, colors = contestFieldColors(), modifier = Modifier.weight(1.2f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(state.session.utcStart.toString(), { it.toLongOrNull()?.let { epoch -> callbacks.onSession(state.session.copy(utcStart = epoch)) } },
                 label = { Text("UTC start epoch") }, supportingText = { Text(contestUtc.format(Instant.ofEpochSecond(state.session.utcStart))) },
-                enabled = editable, modifier = Modifier.weight(1f))
+                enabled = editable, colors = contestFieldColors(), modifier = Modifier.weight(1f))
             OutlinedTextField(state.session.utcEnd.toString(), { it.toLongOrNull()?.let { epoch -> callbacks.onSession(state.session.copy(utcEnd = epoch)) } },
                 label = { Text("UTC end epoch") }, supportingText = { Text(contestUtc.format(Instant.ofEpochSecond(state.session.utcEnd))) },
-                enabled = editable, modifier = Modifier.weight(1f))
+                enabled = editable, colors = contestFieldColors(), modifier = Modifier.weight(1f))
             OutlinedTextField(state.session.initialSerial.toString(), { it.toIntOrNull()?.let { serial -> callbacks.onSession(state.session.copy(initialSerial = serial.coerceAtLeast(1))) } },
-                label = { Text("Initial serial") }, enabled = editable && state.definition.serialRequired, modifier = Modifier.weight(.7f))
+                label = { Text("Initial serial") }, enabled = editable && state.definition.serialRequired, colors = contestFieldColors(), modifier = Modifier.weight(.7f))
         }
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -104,7 +104,7 @@ private val contestUtc = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").w
         }
         if (state.definition.family == ContestRuleFamily.ARRL_FIELD_DAY) {
             OutlinedTextField(state.session.category.overlay, { callbacks.onSession(state.session.copy(category = state.session.category.copy(overlay = it.uppercase().take(24)))) },
-                label = { Text("Overlay / class where supported") }, enabled = editable, modifier = Modifier.fillMaxWidth())
+                label = { Text("Overlay / class where supported") }, enabled = editable, colors = contestFieldColors(), modifier = Modifier.fillMaxWidth())
         }
 
         Card(Modifier.fillMaxWidth()) {
@@ -159,7 +159,16 @@ private val contestUtc = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm 'UTC'").w
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(7.dp)) {
-            values.distinct().forEach { value -> FilterChip(selected == value, { choose(value) }, { Text(value.replace('_', ' ')) }, enabled = enabled) }
+            values.distinct().forEach { value -> FilterChip(selected == value, { choose(value) }, { Text(value.replace('_', ' ')) }, enabled = enabled,
+                colors = FilterChipDefaults.filterChipColors(disabledLabelColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .78f),
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .72f))) }
         }
     }
 }
+
+@Composable private fun contestFieldColors() = OutlinedTextFieldDefaults.colors(
+    disabledTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = .82f),
+    disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .90f),
+    disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = .80f),
+    disabledSupportingTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = .82f),
+)
