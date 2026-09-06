@@ -60,10 +60,10 @@ jobs:
           mkdir -p artifacts/macos/ShackCQAgent.app/Contents/MacOS
           cp build/macos/ShackCQAgent artifacts/macos/ShackCQAgent.app/Contents/MacOS/
           cp desktop/packaging/macos/agent-Info.plist artifacts/macos/ShackCQAgent.app/Contents/Info.plist
-          macdeployqt artifacts/macos/ShackCQAgent.app
-          rm -f artifacts/macos/ShackCQAgent.app/Contents/PlugIns/sqldrivers/libqsqlodbc.dylib \
-                artifacts/macos/ShackCQAgent.app/Contents/PlugIns/sqldrivers/libqsqlpsql.dylib \
-                artifacts/macos/ShackCQAgent.app/Contents/PlugIns/sqldrivers/libqsqlmimer.dylib
+          agent_deploy_log="$(mktemp)"
+          macdeployqt artifacts/macos/ShackCQAgent.app -no-plugins 2>&1 | tee "$agent_deploy_log"
+          ! grep -q 'ERROR:' "$agent_deploy_log"
+          test ! -d artifacts/macos/ShackCQAgent.app/Contents/PlugIns
           mkdir -p artifacts/macos/ShackCQAgent.app/Contents/Resources
           cp COPYING NOTICE artifacts/macos/ShackCQAgent.app/Contents/Resources/
           ! find artifacts/macos/ShackCQAgent.app -type f | grep -Ei '(private|identity|\.pem$|rigctld)'
