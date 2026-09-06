@@ -50,7 +50,7 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
           &CloudAgentClient::receiveText);
   connect(&m_socket, &QWebSocket::binaryMessageReceived, this,
           [this](const QByteArray &) {
-            m_socket.close(QWebSocketProtocol::CloseCodeUnsupportedData,
+            m_socket.close(QWebSocketProtocol::CloseCodeDatatypeNotSupported,
                            "binary frames prohibited");
           });
   connect(&m_socket, &QWebSocket::sslErrors, this,
