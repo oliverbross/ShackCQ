@@ -4,7 +4,7 @@ Date: 2026-09-06
 
 ## Completed scope
 
-- Replaced 3,124 tracked `RigWeave`, `rigweave`, and `RIGWEAVE` occurrences across 724 text files.
+- Replaced 3,124 tracked legacy product-name occurrences across 724 text files.
 - Renamed 520 tracked paths, including Android packages, Apple targets and schemes, C/C++ headers and namespaces, QML modules, Rust crates, workflows, documentation, and branding assets.
 - Set the Android application identity to `app.shackcq.mobile` and the visible product name to `ShackCQ`.
 - Renamed the Apple project, targets, schemes, source tree, entitlements, bundle identifiers, and asset catalog to ShackCQ.
