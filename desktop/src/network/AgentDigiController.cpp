@@ -135,13 +135,16 @@ QVariantMap AgentDigiController::configuration() const {
 }
 
 bool AgentDigiController::isKx3Profile() const {
-  if(!m_radio)return false;const int id=m_radio->hamlibProfile().value("modelId").toInt();HamlibModelRegistry registry;
+  if(!m_radio)return false;
+  const int id=m_radio->hamlibProfile().value("modelId").toInt();
+  HamlibModelRegistry registry;
   for(const auto &model:registry.allModels())if(model.id==id)return model.manufacturer.contains("Elecraft",Qt::CaseInsensitive)&&model.model.contains("KX3",Qt::CaseInsensitive);
   return false;
 }
 
 QString AgentDigiController::currentAcceptanceIdentity() const {
-  if(!m_radio||m_profile.isEmpty())return{};const QVariantMap radio=m_radio->hamlibProfile();
+  if(!m_radio||m_profile.isEmpty())return{};
+  const QVariantMap radio=m_radio->hamlibProfile();
   const QByteArray material=QStringLiteral("%1\n%2\n%3\n%4\n%5\n%6\n%7\n%8")
       .arg(radio.value("modelId").toInt()).arg(radio.value("route").toString()).arg(radio.value("baudRate").toInt())
       .arg(m_profile.value("inputDeviceId").toString()).arg(m_profile.value("outputDeviceId").toString())
@@ -158,7 +161,8 @@ QJsonArray AgentDigiController::audioDevices() {
 }
 
 void AgentDigiController::setServerTxPermitted(bool permitted) {
-  if(m_serverTxPermitted==permitted)return;m_serverTxPermitted=permitted;
+  if(m_serverTxPermitted==permitted)return;
+  m_serverTxPermitted=permitted;
   if(!permitted&&(m_state==State::Armed||m_state==State::Ready||m_pttOwned||m_pttReleaseRequired||m_sendScheduled))stop("server Digi TX policy disabled");
   emit snapshotChanged();
 }
@@ -423,7 +427,8 @@ void AgentDigiController::processDisplayAndContinuous(){
   m_dspFuture=QtConcurrent::run([self,display=std::move(display),continuous=std::move(continuous),mode,pitch,context,contextGeneration]{
     std::array<float,512> bins{};const int count=shackcq_digi_spectrum(display.constData(),display.size(),12'000,0,3'000,bins.size(),0,bins.data(),bins.size());QJsonArray row;for(int i=0;i<count;++i)row.append(std::clamp(int((bins[i]+120.0f)*2.0f),0,255));QString transcript;QJsonObject sstv;
     if(!continuous.isEmpty()&&QStringList{"CW","RTTY","PSK31","SSTV"}.contains(mode)){std::array<char,8192> output{};int n=mode=="CW"?shackcq_digi_feed_cw(context,continuous.constData(),continuous.size(),output.data(),output.size()):mode=="RTTY"?shackcq_digi_feed_rtty(context,continuous.constData(),continuous.size(),output.data(),output.size()):mode=="PSK31"?shackcq_digi_decode_psk31(continuous.constData(),continuous.size(),pitch,output.data(),output.size()):shackcq_digi_feed_sstv(context,continuous.constData(),continuous.size(),output.data(),output.size());if(n>0){if(mode=="SSTV"){sstv=QJsonDocument::fromJson(QByteArray(output.data(),n)).object();if(sstv.value("complete").toBool()){const int w=sstv.value("width").toInt(),h=sstv.value("height").toInt(),needed=context?shackcq_digi_copy_sstv_image(context,nullptr,0):-1;if(w>0&&h>0&&needed==w*h*3&&needed<=2'000'000){QByteArray rgb(needed,Qt::Uninitialized);if(shackcq_digi_copy_sstv_image(context,reinterpret_cast<uint8_t *>(rgb.data()),rgb.size())==needed){QImage image(reinterpret_cast<const uchar *>(rgb.constData()),w,h,w*3,QImage::Format_RGB888);QByteArray jpeg;for(const int quality:{70,55,40,25}){jpeg.clear();QBuffer buffer(&jpeg);buffer.open(QIODevice::WriteOnly);image.save(&buffer,"JPEG",quality);if(jpeg.size()<=18'000)break;}if(jpeg.size()<=18'000)sstv.insert("previewBase64",QString::fromLatin1(jpeg.toBase64()));else sstv.insert("previewOmitted","SNAPSHOT_SIZE_BOUND");}}}}else transcript=QString::fromUtf8(output.data(),n);}}
-    if(!self)return;QMetaObject::invokeMethod(self,[self,row=std::move(row),transcript=std::move(transcript),sstv=std::move(sstv),contextGeneration]{if(!self)return;self->m_dspInFlight=false;if(self->m_contextGeneration!=contextGeneration)return;if(!row.isEmpty()){self->m_waterfall.append(QJsonObject{{"rowId",QUuid::createUuid().toString(QUuid::WithoutBraces)},{"sessionId",self->m_sessionId},{"observedUtc",QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},{"lowHz",0},{"highHz",3000},{"scale","DB_QUANTIZED_0_255"},{"bins",row}});while(self->m_waterfall.size()>8)self->m_waterfall.removeFirst();}if(!sstv.isEmpty())self->m_sstv=sstv;if(!transcript.isEmpty()){self->m_decodes.prepend(QJsonObject{{"id",QUuid::createUuid().toString(QUuid::WithoutBraces)},{"slotStartMillis",QDateTime::currentMSecsSinceEpoch()},{"source","LIVE_CAPTURE"},{"exactSlotTiming",false},{"snr",0},{"dt",0},{"audioHz",self->m_rxAudioHz},{"text",transcript.left(512)}});while(self->m_decodes.size()>256)self->m_decodes.removeLast();}emit self->snapshotChanged();},Qt::QueuedConnection);
+    if(!self)return;
+    QMetaObject::invokeMethod(self,[self,row=std::move(row),transcript=std::move(transcript),sstv=std::move(sstv),contextGeneration]{if(!self)return;self->m_dspInFlight=false;if(self->m_contextGeneration!=contextGeneration)return;if(!row.isEmpty()){self->m_waterfall.append(QJsonObject{{"rowId",QUuid::createUuid().toString(QUuid::WithoutBraces)},{"sessionId",self->m_sessionId},{"observedUtc",QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},{"lowHz",0},{"highHz",3000},{"scale","DB_QUANTIZED_0_255"},{"bins",row}});while(self->m_waterfall.size()>8)self->m_waterfall.removeFirst();}if(!sstv.isEmpty())self->m_sstv=sstv;if(!transcript.isEmpty()){self->m_decodes.prepend(QJsonObject{{"id",QUuid::createUuid().toString(QUuid::WithoutBraces)},{"slotStartMillis",QDateTime::currentMSecsSinceEpoch()},{"source","LIVE_CAPTURE"},{"exactSlotTiming",false},{"snr",0},{"dt",0},{"audioHz",self->m_rxAudioHz},{"text",transcript.left(512)}});while(self->m_decodes.size()>256)self->m_decodes.removeLast();}emit self->snapshotChanged();},Qt::QueuedConnection);
   });
 #endif
 }
