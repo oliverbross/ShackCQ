@@ -27,6 +27,13 @@ target_link_libraries(desktop_platform_safety_tests PRIVATE ${SHACKCQ_TEST_LIBS}
 shackcq_target_warnings(desktop_platform_safety_tests)
 add_test(NAME desktop_platform_safety_tests COMMAND desktop_platform_safety_tests)
 
+qt_add_executable(cloud_agent_client_tests unit/cloud_agent_client_tests.cpp)
+target_link_libraries(cloud_agent_client_tests PRIVATE ${SHACKCQ_TEST_LIBS} Qt6::WebSockets)
+target_compile_definitions(cloud_agent_client_tests PRIVATE
+    SHACKCQ_RADIO_AGENT_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../fixtures/radio-agent-v1")
+shackcq_target_warnings(cloud_agent_client_tests)
+add_test(NAME cloud_agent_client_tests COMMAND cloud_agent_client_tests)
+
 qt_add_executable(desktop_rf_observation_tests unit/desktop_rf_observation_tests.cpp)
 target_link_libraries(desktop_rf_observation_tests PRIVATE ${SHACKCQ_TEST_LIBS})
 shackcq_target_warnings(desktop_rf_observation_tests)

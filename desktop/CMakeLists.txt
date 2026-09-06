@@ -55,6 +55,7 @@ set(SHACKCQ_DESKTOP_SERVICE_SOURCES
     src/data/AdifService.cpp
     src/network/WavelogSync.cpp
     src/network/ClusterController.cpp
+    src/network/CloudAgentClient.cpp
     src/network/RemoteStationService.cpp
     src/network/RemoteStationClient.cpp
     src/platform/DesktopPlatform.cpp
@@ -170,6 +171,10 @@ qt_add_executable(shackcq-stationd src/app/stationd_main.cpp)
 target_link_libraries(shackcq-stationd PRIVATE shackcq_desktop_services)
 shackcq_target_warnings(shackcq-stationd)
 
+qt_add_executable(ShackCQAgent src/app/stationd_main.cpp)
+target_link_libraries(ShackCQAgent PRIVATE shackcq_desktop_services)
+shackcq_target_warnings(ShackCQAgent)
+
 file(GLOB_RECURSE SHACKCQ_QML_FILES CONFIGURE_DEPENDS "qml/*.qml")
 file(GLOB SHACKCQ_ICON_FILES CONFIGURE_DEPENDS "resources/icons/*.svg")
 set(SHACKCQ_APP_ICON "${CMAKE_CURRENT_SOURCE_DIR}/../assets/branding/shackcq-app-icon-1024.png")
@@ -197,9 +202,9 @@ install(TARGETS ShackCQDesktop
     BUNDLE DESTINATION .
     RUNTIME DESTINATION .)
 if(WIN32)
-    install(TARGETS shackcq-stationd RUNTIME DESTINATION .)
+    install(TARGETS shackcq-stationd ShackCQAgent RUNTIME DESTINATION .)
 else()
-    install(TARGETS shackcq-stationd RUNTIME DESTINATION stationd)
+    install(TARGETS shackcq-stationd ShackCQAgent RUNTIME DESTINATION stationd)
 endif()
 
 if(WIN32)

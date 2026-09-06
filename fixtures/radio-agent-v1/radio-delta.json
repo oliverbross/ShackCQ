@@ -1,0 +1,1 @@
+{"agentId":"agent-fixture-1","deviceId":"hamlib:1","generation":7,"observedUtc":"2026-09-07T00:00:01.000Z","patch":{"frequencyHz":14075000,"meters":{"signal":-89}},"protocol":{"major":1,"minor":0},"sequence":4,"type":"radio.delta"}

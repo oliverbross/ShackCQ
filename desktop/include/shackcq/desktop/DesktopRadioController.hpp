@@ -55,6 +55,7 @@ class DesktopRadioController final : public QObject {
   Q_PROPERTY(QString backend READ backend NOTIFY snapshotChanged)
   Q_PROPERTY(qulonglong frequencyHz READ frequencyHz NOTIFY snapshotChanged)
   Q_PROPERTY(QString mode READ mode NOTIFY snapshotChanged)
+  Q_PROPERTY(int filterHz READ filterHz NOTIFY snapshotChanged)
   Q_PROPERTY(bool readOnly READ readOnly NOTIFY snapshotChanged)
   Q_PROPERTY(bool pttAvailable READ pttAvailable CONSTANT)
   Q_PROPERTY(bool tuneAvailable READ tuneAvailable CONSTANT)
@@ -75,9 +76,12 @@ public:
   ~DesktopRadioController() override;
   QString state() const { return m_state; }
   QString model() const { return m_model; }
+  QString manufacturer() const { return m_manufacturer; }
   QString backend() const { return m_backend; }
   quint64 frequencyHz() const { return m_frequencyHz; }
   QString mode() const { return m_mode; }
+  int filterHz() const { return m_filterHz; }
+  int hamlibModelId() const { return m_hamlibModelId; }
   bool readOnly() const { return true; }
   bool pttAvailable() const { return false; }
   bool tuneAvailable() const { return false; }
@@ -108,6 +112,7 @@ public:
   }
   Q_INVOKABLE bool requestFrequency(qulonglong frequencyHz);
   Q_INVOKABLE bool requestMode(const QString &mode);
+  Q_INVOKABLE bool requestFilter(int filterHz);
   Q_INVOKABLE void globalStop();
   void setTciTimeoutsForTest(int connectionMs, int readyMs, int reconnectMs);
   void setHamlibSnapshotForTest(quint64 frequencyHz, const QString &mode);
@@ -145,6 +150,7 @@ private:
   ReceiverListModel m_receivers;
   QString m_state{"Disconnected"};
   QString m_model;
+  QString m_manufacturer;
   QString m_backend{"none"};
   QString m_activeReceiverId;
   QString m_listeningReceiverId;
@@ -158,6 +164,8 @@ private:
                          {"audioRouteEnabled", false}};
   quint64 m_frequencyHz{};
   QString m_mode;
+  int m_filterHz{};
+  int m_hamlibModelId{1};
   QString m_lastError;
   quint64 m_generation{};
 };

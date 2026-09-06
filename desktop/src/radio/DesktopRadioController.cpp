@@ -14,6 +14,24 @@
 
 #ifdef SHACKCQ_HAVE_HAMLIB
 #include <hamlib/rig.h>
+
+namespace {
+rmode_t hamlibModeForCloud(const QString &value) {
+  if (value.compare(QStringLiteral("DATA"), Qt::CaseInsensitive) == 0)
+    return RIG_MODE_PKTUSB;
+  if (value.compare(QStringLiteral("CW"), Qt::CaseInsensitive) == 0)
+    return RIG_MODE_CW;
+  return rig_parse_mode(value.toLatin1().constData());
+}
+
+QString cloudModeFromHamlib(rmode_t value) {
+  if (value == RIG_MODE_PKTUSB || value == RIG_MODE_PKTLSB)
+    return QStringLiteral("DATA");
+  if (value == RIG_MODE_CWR)
+    return QStringLiteral("CW");
+  return QString::fromLatin1(rig_strrmode(value));
+}
+} // namespace
 #endif
 
 namespace shackcq::desktop {
@@ -203,10 +221,15 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
     return false;
   }
   m_rig = rig;
+  m_hamlibModelId = modelId;
   m_generation++;
   m_backend = "hamlib";
   m_state = "Connected — receive controls only; PTT/TUNE disabled";
-  m_model = QString::number(modelId);
+  const struct rig_caps *caps = rig->caps;
+  m_model = caps && caps->model_name ? QString::fromUtf8(caps->model_name)
+                                    : QString::number(modelId);
+  m_manufacturer =
+      caps && caps->mfg_name ? QString::fromUtf8(caps->mfg_name) : "Hamlib";
   m_activeReceiverId = m_listeningReceiverId = m_transmitReceiverId =
       "hamlib:0";
   m_backendCapabilities = {{"receiverCount", 1},
@@ -214,6 +237,71 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
                            {"rxAudioStreaming", false},
                            {"ptt", false},
                            {"tune", false}};
+  if (caps) {
+    QVariantList ranges, filters, modes, setters, meters;
+    auto appendRanges = [&ranges](const freq_range_t *source) {
+      for (int index = 0; index < HAMLIB_FRQRANGESIZ; ++index) {
+        const auto &range = source[index];
+        if (RIG_IS_FRNG_END(range))
+          break;
+        if (range.startf > 0 && range.endf >= range.startf)
+          ranges << QVariantMap{
+              {"min", QVariant::fromValue<qulonglong>(
+                          static_cast<quint64>(range.startf))},
+              {"max", QVariant::fromValue<qulonglong>(
+                          static_cast<quint64>(range.endf))}};
+      }
+    };
+    appendRanges(caps->rx_range_list1);
+    appendRanges(caps->rx_range_list2);
+    appendRanges(caps->rx_range_list3);
+    appendRanges(caps->rx_range_list4);
+    appendRanges(caps->rx_range_list5);
+    struct CloudMode {
+      rmode_t hamlib;
+      const char *name;
+    };
+    static constexpr std::array<CloudMode, 6> knownModes{{
+        {RIG_MODE_CW | RIG_MODE_CWR, "CW"},
+        {RIG_MODE_USB, "USB"},
+        {RIG_MODE_LSB, "LSB"},
+        {RIG_MODE_AM, "AM"},
+        {RIG_MODE_FM, "FM"},
+        {RIG_MODE_PKTUSB | RIG_MODE_PKTLSB, "DATA"},
+    }};
+    for (int index = 0; index < HAMLIB_FLTLSTSIZ; ++index) {
+      const auto &filter = caps->filters[index];
+      if (RIG_IS_FLT_END(filter))
+        break;
+      if (filter.width > 0 && !filters.contains(int(filter.width)))
+        filters << int(filter.width);
+      for (const auto &candidate : knownModes) {
+        const QString name = QString::fromLatin1(candidate.name);
+        if ((filter.modes & candidate.hamlib) && !modes.contains(name))
+          modes << name;
+      }
+    }
+    if (caps->set_freq && caps->get_freq)
+      setters << "radio.set.frequency";
+    if (caps->set_mode && caps->get_mode) {
+      setters << "radio.set.mode" << "radio.set.filter";
+      if (setters.contains("radio.set.frequency"))
+        setters << "preset.recall";
+    }
+    if (caps->get_level) {
+      if (rig_has_get_level(rig, RIG_LEVEL_STRENGTH))
+        meters << "signal";
+      if (rig_has_get_level(rig, RIG_LEVEL_SWR))
+        meters << "swr";
+      if (rig_has_get_level(rig, RIG_LEVEL_ALC))
+        meters << "alc";
+    }
+    m_backendCapabilities.insert("frequencyRangesHz", ranges);
+    m_backendCapabilities.insert("modes", modes);
+    m_backendCapabilities.insert("filtersHz", filters);
+    m_backendCapabilities.insert("setters", setters);
+    m_backendCapabilities.insert("meters", meters);
+  }
   m_poll.start();
   poll();
   return true;
@@ -407,8 +495,11 @@ void DesktopRadioController::disconnectRadio() {
   m_backend = "none";
   m_state = "Disconnected";
   m_model.clear();
+  m_manufacturer.clear();
   m_frequencyHz = 0;
   m_mode.clear();
+  m_filterHz = 0;
+  m_hamlibModelId = 1;
   m_activeReceiverId.clear();
   m_listeningReceiverId.clear();
   m_transmitReceiverId.clear();
@@ -557,7 +648,7 @@ bool DesktopRadioController::requestMode(const QString &value) {
 #ifdef SHACKCQ_HAVE_HAMLIB
   if (!m_rig)
     return false;
-  const rmode_t parsed = rig_parse_mode(value.toUtf8().constData());
+  const rmode_t parsed = hamlibModeForCloud(value);
   if (parsed == RIG_MODE_NONE)
     return false;
   const int code = rig_set_mode(static_cast<RIG *>(m_rig), RIG_VFO_CURR, parsed,
@@ -570,6 +661,28 @@ bool DesktopRadioController::requestMode(const QString &value) {
   return true;
 #else
   Q_UNUSED(value);
+  return false;
+#endif
+}
+bool DesktopRadioController::requestFilter(int filterHz) {
+  if (m_backend != "hamlib" || filterHz < 50 || filterHz > 20'000)
+    return false;
+#ifdef SHACKCQ_HAVE_HAMLIB
+  if (!m_rig)
+    return false;
+  const rmode_t parsed = hamlibModeForCloud(m_mode);
+  if (parsed == RIG_MODE_NONE)
+    return false;
+  const int code =
+      rig_set_mode(static_cast<RIG *>(m_rig), RIG_VFO_CURR, parsed, filterHz);
+  if (code != RIG_OK) {
+    emit error(QString::fromLatin1(rigerror(code)));
+    return false;
+  }
+  poll();
+  return true;
+#else
+  Q_UNUSED(filterHz);
   return false;
 #endif
 }
@@ -588,8 +701,10 @@ void DesktopRadioController::poll() {
   auto *rig = static_cast<RIG *>(m_rig);
   if (rig_get_freq(rig, RIG_VFO_CURR, &frequency) == RIG_OK)
     m_frequencyHz = static_cast<quint64>(frequency);
-  if (rig_get_mode(rig, RIG_VFO_CURR, &parsed, &width) == RIG_OK)
-    m_mode = QString::fromLatin1(rig_strrmode(parsed));
+  if (rig_get_mode(rig, RIG_VFO_CURR, &parsed, &width) == RIG_OK) {
+    m_mode = cloudModeFromHamlib(parsed);
+    m_filterHz = static_cast<int>(width);
+  }
   QVariantList rows{hamlibSnapshot(m_model, m_frequencyHz, m_mode)};
   m_receivers.replace(rows, m_activeReceiverId, m_listeningReceiverId,
                       m_transmitReceiverId);
@@ -797,8 +912,11 @@ void DesktopRadioController::setHamlibSnapshotForTest(quint64 frequency,
   m_backend = "hamlib";
   m_state = "Connected — fixture receive controls only; PTT/TUNE disabled";
   m_model = "Hamlib fixture";
+  m_manufacturer = "Hamlib";
   m_frequencyHz = frequency;
   m_mode = mode;
+  m_filterHz = 400;
+  m_hamlibModelId = 1;
   m_activeReceiverId = m_listeningReceiverId = m_transmitReceiverId =
       "hamlib:0";
   m_backendCapabilities = {{"receiverCount", 1},
