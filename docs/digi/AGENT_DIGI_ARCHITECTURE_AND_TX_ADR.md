@@ -8,7 +8,7 @@ There is one local Digi owner, one existing radio owner, and one selected Qt aud
 
 The command state machine is `SAFE/RX -> PREPARING -> READY_FOR_EXPLICIT_ARM -> ARMED_FOR_VALID_WINDOW -> PTT_CONFIRMED -> LOCAL_AUDIO_TRANSMITTING -> STOPPING -> RX_VERIFIED`. Failure to prove PTT release latches `RX_UNCONFIRMED` and blocks subsequent work. STOP is idempotent and releases only PTT acquired by this Digi owner.
 
-This state machine is not yet sufficient evidence for TX release: encoding and Hamlib calls can still occupy the Qt event loop that owns STOP and watchdog timers. Transmit packaging and deployment remain blocked until an independently scheduled safety path can de-key and verify RX even if the command/encoder path stalls.
+Hamlib route ownership is isolated in the `shackcq-hamlib-helper` process. Generic receive mutations carry a supervisor epoch and remain single-flight. STOP advances that epoch, terminates the primary owner instead of queueing behind a hung call, rejects late results, and starts a separate bounded emergency helper that may report success only after PTT-off RX readback. Failed proof remains `RX_UNCONFIRMED` and receives at most three autonomous retries; parent EOF also makes a bounded best-effort PTT-off/readback attempt. Every recovery starts a new primary helper and requires a fresh PTT-off readback before generic control resumes. This automated boundary is no hardware/RF acceptance and does not release TX while the independent clock, audio, packaging, and operator acceptance gates remain open.
 
 ## Five independent TX gates
 

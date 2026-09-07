@@ -64,6 +64,7 @@ set(SHACKCQ_DESKTOP_SERVICE_SOURCES
     src/platform/DesktopParityPlatform.cpp
     src/platform/DesktopFunctionalOwners.cpp
     src/radio/DesktopRadioController.cpp
+    src/radio/HamlibHelperTransport.cpp
     src/radio/ReceiverListModel.cpp
     src/radio/TciClient.cpp
     src/rotator/DesktopRotatorController.cpp
@@ -179,6 +180,14 @@ qt_add_executable(ShackCQAgent src/app/stationd_main.cpp)
 target_link_libraries(ShackCQAgent PRIVATE shackcq_desktop_services)
 shackcq_target_warnings(ShackCQAgent)
 
+qt_add_executable(shackcq-hamlib-helper src/app/hamlib_helper_main.cpp)
+target_link_libraries(shackcq-hamlib-helper PRIVATE Qt6::Core)
+if(ShackCQHamlib_FOUND)
+    target_link_libraries(shackcq-hamlib-helper PRIVATE ShackCQ::Hamlib)
+    target_compile_definitions(shackcq-hamlib-helper PRIVATE SHACKCQ_HAVE_HAMLIB=1)
+endif()
+shackcq_target_warnings(shackcq-hamlib-helper)
+
 file(GLOB_RECURSE SHACKCQ_QML_FILES CONFIGURE_DEPENDS "qml/*.qml")
 file(GLOB SHACKCQ_ICON_FILES CONFIGURE_DEPENDS "resources/icons/*.svg")
 set(SHACKCQ_APP_ICON "${CMAKE_CURRENT_SOURCE_DIR}/../assets/branding/shackcq-app-icon-1024.png")
@@ -206,9 +215,13 @@ install(TARGETS ShackCQDesktop
     BUNDLE DESTINATION .
     RUNTIME DESTINATION .)
 if(WIN32)
-    install(TARGETS shackcq-stationd ShackCQAgent RUNTIME DESTINATION .)
+    install(TARGETS shackcq-stationd ShackCQAgent shackcq-hamlib-helper RUNTIME DESTINATION .)
 else()
-    install(TARGETS shackcq-stationd ShackCQAgent RUNTIME DESTINATION stationd)
+    install(TARGETS shackcq-stationd ShackCQAgent shackcq-hamlib-helper RUNTIME DESTINATION stationd)
+    if(APPLE)
+        install(TARGETS shackcq-hamlib-helper
+            RUNTIME DESTINATION ShackCQDesktop.app/Contents/MacOS)
+    endif()
 endif()
 
 if(WIN32)

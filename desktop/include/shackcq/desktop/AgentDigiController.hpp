@@ -25,6 +25,7 @@ class DesktopRadioController;
 class AgentDigiController final : public QObject {
   Q_OBJECT
 public:
+  enum class StopOutcome { RxVerified, RxUnconfirmed, InProgress };
   explicit AgentDigiController(DesktopRadioController *radio,
                                QObject *parent = nullptr);
   ~AgentDigiController() override;
@@ -36,7 +37,7 @@ public:
   QJsonObject snapshot(const QString &agentId, const QString &deviceId,
                        quint64 generation);
   void setServerTxPermitted(bool permitted);
-  void stop(const QString &reason);
+  StopOutcome stop(const QString &reason);
   bool radioMutationBlocked() const;
   QString currentAcceptanceIdentity() const;
   bool isKx3Profile() const;
@@ -66,6 +67,8 @@ private:
   void processDisplayAndContinuous();
   bool applyReceiveEntry(const QJsonObject &entry, QString *error);
   void scannerStep();
+  StopOutcome performStop(bool autonomousRetry);
+  void handleUnsafeRadioLoss(bool rxVerified);
   void resetPrepared();
   QString stateName() const;
   QJsonObject result(const QJsonObject &frame, const QString &agentId,
@@ -109,12 +112,14 @@ private:
   qint64 m_lastInputMono{};
   qint64 m_nextSlotEpoch{};
   qint64 m_captureSlotStart{};
+  qint64 m_nextStopRetryMono{};
   int m_messageRevision{};
   int m_maxRepeats{1};
   int m_repeatsRemaining{};
   int m_modeIndex{};
   int m_scannerIndex{};
   int m_scannerRemaining{};
+  int m_stopRetryAttempts{};
   int m_sampleRate{12000};
   int m_preparedFilterHz{};
   int m_channels{1};
@@ -130,6 +135,7 @@ private:
   bool m_pttOwned{};
   bool m_pttReleaseRequired{};
   bool m_sendScheduled{};
+  bool m_stopInProgress{};
   bool m_dspInFlight{};
   bool m_slotDecodeInFlight{};
   QHash<QString, QJsonObject> m_commandResults;

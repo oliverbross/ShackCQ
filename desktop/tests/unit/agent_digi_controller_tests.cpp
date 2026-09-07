@@ -73,6 +73,129 @@ private slots:
     digi.stop("confirmed");QCOMPARE(offAttempts,beforeConfirmed+1);QVERIFY(!digi.m_pttReleaseRequired);QCOMPARE(digi.m_state,AgentDigiController::State::RxVerified);
   }
 
+  void stopNeverClaimsRxVerifiedWhenHelperIsUnavailable() {
+    DesktopRadioController radio;
+    radio.setHamlibSnapshotForTest(14'074'000, "DATA");
+    AgentDigiController digi(&radio);
+    const QJsonObject stopped = run(digi, "digi.stop");
+    QVERIFY(!stopped.value("ok").toBool());
+    QCOMPARE(stopped.value("code").toString(), QString("RX_UNCONFIRMED"));
+    QCOMPARE(digi.m_state, AgentDigiController::State::RxUnconfirmed);
+  }
+
+  void reentrantStopReportsInProgressUnconfirmed() {
+    DesktopRadioController radio;
+    AgentDigiController digi(&radio);
+    digi.m_stopInProgress = true;
+    QCOMPARE(digi.stop("direct reentrant"),
+             AgentDigiController::StopOutcome::InProgress);
+    const QJsonObject stopped = run(digi, "digi.stop");
+    QVERIFY(!stopped.value("ok").toBool());
+    QCOMPARE(stopped.value("code").toString(),
+             QString("STOP_IN_PROGRESS_RX_UNCONFIRMED"));
+    digi.m_stopInProgress = false;
+  }
+
+  void failedPostTransmitReleaseArmsAutonomousRetry() {
+    DesktopRadioController radio;
+    AgentDigiController digi(&radio);
+    int offAttempts = 0;
+    digi.setSafetyHooksForTest(
+        [&](bool enabled) { if (!enabled) ++offAttempts; return enabled; },
+        [] { return std::optional<bool>{}; });
+    digi.m_pttOwned = true;
+    digi.m_pttReleaseRequired = true;
+    digi.m_state = AgentDigiController::State::Transmitting;
+    digi.finishTransmit();
+    QCOMPARE(digi.m_state, AgentDigiController::State::RxUnconfirmed);
+    QVERIFY(digi.m_nextStopRetryMono > 0);
+    QTest::qWait(2);
+    digi.m_nextStopRetryMono = digi.m_monotonic.elapsed();
+    digi.expireLease();
+    QCOMPARE(offAttempts, 2);
+    QCOMPARE(digi.m_stopRetryAttempts, 1);
+  }
+
+  void autonomousStopRetriesRecoverAndRemainBounded() {
+    DesktopRadioController radio;
+    AgentDigiController digi(&radio);
+    int offAttempts = 0;
+    digi.setSafetyHooksForTest(
+        [&](bool enabled) {
+          if (!enabled) ++offAttempts;
+          return enabled || offAttempts >= 2;
+        },
+        [&] { return offAttempts >= 2 ? std::optional<bool>(false)
+                                     : std::optional<bool>{}; });
+    digi.m_pttReleaseRequired = true;
+    digi.m_state = AgentDigiController::State::Transmitting;
+    digi.stop("initial failure");
+    QCOMPARE(digi.m_state, AgentDigiController::State::RxUnconfirmed);
+    QTest::qWait(2);
+    digi.m_nextStopRetryMono = digi.m_monotonic.elapsed();
+    digi.expireLease();
+    QCOMPARE(offAttempts, 2);
+    QCOMPARE(digi.m_state, AgentDigiController::State::RxVerified);
+    QVERIFY(!digi.m_pttReleaseRequired);
+
+    digi.setSafetyHooksForTest(
+        [&](bool enabled) { if (!enabled) ++offAttempts; return enabled; },
+        [] { return std::optional<bool>{}; });
+    digi.m_pttReleaseRequired = true;
+    digi.m_state = AgentDigiController::State::Transmitting;
+    const int before = offAttempts;
+    digi.stop("bounded failure");
+    QTest::qWait(2);
+    for (int attempt = 0; attempt < 8; ++attempt) {
+      if (digi.m_nextStopRetryMono > 0)
+        digi.m_nextStopRetryMono = digi.m_monotonic.elapsed();
+      digi.expireLease();
+    }
+    QCOMPARE(offAttempts - before, 4);
+    QCOMPARE(digi.m_stopRetryAttempts, 3);
+    QCOMPARE(digi.m_nextStopRetryMono, qint64(0));
+    QCOMPARE(digi.m_state, AgentDigiController::State::RxUnconfirmed);
+  }
+
+#ifdef SHACKCQ_AGENT_HAMLIB_FIXTURE
+  void emergencyHelperRxProofClearsDigiPttOwnership() {
+    DesktopRadioController radio;
+    radio.hamlibHelperForTest()->setProgramForTest(
+        QStringLiteral(SHACKCQ_AGENT_HAMLIB_FIXTURE));
+    radio.hamlibHelperForTest()->setTimeoutsForTest(500, 250);
+    QVERIFY(radio.connectRadio(1, "fixture", 0));
+    AgentDigiController digi(&radio);
+    digi.m_pttOwned = true;
+    digi.m_pttReleaseRequired = true;
+    digi.m_state = AgentDigiController::State::Transmitting;
+    digi.stop("emergency helper proof");
+    QCOMPARE(digi.m_state, AgentDigiController::State::RxVerified);
+    QVERIFY(!digi.m_pttOwned);
+    QVERIFY(!digi.m_pttReleaseRequired);
+  }
+
+
+  void keyedHelperCrashCancelsDigiAndRunsEmergencyRecovery() {
+    DesktopRadioController radio;
+    radio.hamlibHelperForTest()->setProgramForTest(
+        QStringLiteral(SHACKCQ_AGENT_HAMLIB_FIXTURE),
+        {QStringLiteral("crash-after-key")});
+    radio.hamlibHelperForTest()->setTimeoutsForTest(500, 250);
+    QVERIFY(radio.connectRadio(1, "fixture", 0));
+    AgentDigiController digi(&radio);
+    digi.m_pttOwned = true;
+    digi.m_pttReleaseRequired = true;
+    digi.m_state = AgentDigiController::State::Transmitting;
+    (void)radio.requestDigiPtt(true);
+    QTRY_COMPARE_WITH_TIMEOUT(digi.m_state,
+                              AgentDigiController::State::RxVerified, 1'000);
+    QVERIFY(!digi.m_pttOwned);
+    QVERIFY(!digi.m_pttReleaseRequired);
+    QVERIFY(radio.state().contains("emergency RX verified"));
+    QVERIFY(radio.hamlibHelperForTest()->quarantined());
+  }
+#endif
+
   void takeoverDiscardsPreparedWorkAndExpiredCommandsNeverRun() {
     DesktopRadioController radio;AgentDigiController digi(&radio);
     QVERIFY(run(digi,"digi.control.acquire")["ok"].toBool());

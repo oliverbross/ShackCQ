@@ -39,8 +39,14 @@ int sendAdminRequest(const QJsonObject &request) {
   if (!socket.waitForConnected(2'000)) return 5;
   socket.write(QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n');
   if (!socket.waitForBytesWritten(2'000) || !socket.waitForReadyRead(3'000)) return 6;
-  QTextStream(stdout) << socket.readAll();
-  return 0;
+  const QByteArray response = socket.readAll();
+  QTextStream(stdout) << response;
+  QJsonParseError parse;
+  const QJsonObject envelope = QJsonDocument::fromJson(response, &parse).object();
+  return parse.error == QJsonParseError::NoError &&
+                 envelope.value("ok").toBool(false)
+             ? 0
+             : 8;
 }
 }
 
@@ -245,12 +251,12 @@ int main(int argc, char **argv) {
         else if (action == "list-clients") response = service.pairedDevices();
         else if (action == "pairing-offer") response = service.createPairingOffer();
         else if (action == "revoke") { service.revokeDevice(request.value("deviceId").toString()); response = QVariantMap{{"revoked", true}}; }
-        else if (action == "stop") { service.globalStop(); response = QVariantMap{{"stopped", true}}; }
-        else if (action == "digi-stop") { digi.stop("local operator STOP"); response = QVariantMap{{"stopped", true}}; }
+        else if (action == "stop") { const bool stopped = service.globalStop(); ok = stopped; response = QVariantMap{{"stopped", stopped}, {"code", stopped ? "GLOBAL_STOPPED" : "RX_UNCONFIRMED"}}; }
+        else if (action == "digi-stop") { const auto outcome = digi.stop("local operator STOP"); const bool stopped = outcome == AgentDigiController::StopOutcome::RxVerified; ok = stopped; const QString code = stopped ? "STOPPED_RX_VERIFIED" : outcome == AgentDigiController::StopOutcome::InProgress ? "STOP_IN_PROGRESS_RX_UNCONFIRMED" : "RX_UNCONFIRMED"; response = QVariantMap{{"stopped", stopped}, {"code", code}}; }
         else { ok = false; response = QVariantMap{{"error", "unknown admin action"}}; }
         socket->write(QJsonDocument(QJsonObject{{"ok", ok}, {"result", QJsonValue::fromVariant(response)}}).toJson(QJsonDocument::Indented));
         socket->flush(); socket->disconnectFromServer();
-        if (action == "stop") QMetaObject::invokeMethod(&application, "quit", Qt::QueuedConnection);
+        if (action == "stop" && ok) QMetaObject::invokeMethod(&application, "quit", Qt::QueuedConnection);
       });
       QObject::connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
     }

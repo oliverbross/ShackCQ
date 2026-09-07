@@ -2,6 +2,7 @@
 
 #include "shackcq/desktop/ReceiverListModel.hpp"
 #include "shackcq/desktop/TciClient.hpp"
+#include "shackcq/desktop/HamlibHelperTransport.hpp"
 
 #include <QAbstractListModel>
 #include <QObject>
@@ -120,16 +121,18 @@ public:
   Q_INVOKABLE bool requestFrequency(qulonglong frequencyHz);
   Q_INVOKABLE bool requestMode(const QString &mode);
   Q_INVOKABLE bool requestFilter(int filterHz);
-  Q_INVOKABLE void globalStop();
+  Q_INVOKABLE bool globalStop();
   // Dedicated local Digi owner only. These are intentionally not Q_INVOKABLE,
   // not advertised as generic Radio setters, and never available to v1 frames.
   bool requestDigiPtt(bool enabled);
   std::optional<bool> digiPttReadback() const;
   void setTciTimeoutsForTest(int connectionMs, int readyMs, int reconnectMs);
   void setHamlibSnapshotForTest(quint64 frequencyHz, const QString &mode);
+  HamlibHelperTransport *hamlibHelperForTest() { return &m_hamlibHelper; }
 
 signals:
   void aboutToDisconnect();
+  void unsafeRadioOwnershipLost(bool rxVerified);
   void snapshotChanged();
   void preferencesChanged();
   void iqFrame(QString receiverId, quint32 sampleRate, QVector<float> values);
@@ -152,7 +155,7 @@ private:
                                      bool *ok = nullptr);
   static QVariantMap encodeTciProfile(const TciProfile &profile);
 
-  void *m_rig{};
+  mutable HamlibHelperTransport m_hamlibHelper;
   QSerialPort m_nativeSerial;
   QTcpSocket m_nativeTcp;
   QByteArray m_nativeBuffer;

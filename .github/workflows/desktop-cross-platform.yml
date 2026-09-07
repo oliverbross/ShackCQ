@@ -62,7 +62,7 @@ jobs:
       - name: Unsigned standalone ShackCQ Agent packaging proof
         run: |
           mkdir -p artifacts/macos/ShackCQAgent.app/Contents/MacOS
-          cp build/macos/ShackCQAgent artifacts/macos/ShackCQAgent.app/Contents/MacOS/
+          cp build/macos/ShackCQAgent build/macos/shackcq-hamlib-helper artifacts/macos/ShackCQAgent.app/Contents/MacOS/
           cp desktop/packaging/macos/agent-Info.plist artifacts/macos/ShackCQAgent.app/Contents/Info.plist
           agent_deploy_log="$(mktemp)"
           macdeployqt artifacts/macos/ShackCQAgent.app -no-plugins 2>&1 | tee "$agent_deploy_log"

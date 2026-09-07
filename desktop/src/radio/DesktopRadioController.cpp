@@ -24,13 +24,6 @@ rmode_t hamlibModeForCloud(const QString &value) {
   return rig_parse_mode(value.toLatin1().constData());
 }
 
-QString cloudModeFromHamlib(rmode_t value) {
-  if (value == RIG_MODE_PKTUSB || value == RIG_MODE_PKTLSB)
-    return QStringLiteral("DATA");
-  if (value == RIG_MODE_CWR)
-    return QStringLiteral("CW");
-  return QString::fromLatin1(rig_strrmode(value));
-}
 } // namespace
 #endif
 
@@ -149,7 +142,7 @@ void HamlibModelRegistry::setSearch(const QString &search) {
 }
 
 DesktopRadioController::DesktopRadioController(QObject *parent)
-    : QObject(parent), m_tci(this), m_receivers(this) {
+    : QObject(parent), m_hamlibHelper(this), m_tci(this), m_receivers(this) {
   m_poll.setInterval(250);
   connect(&m_poll, &QTimer::timeout, this, &DesktopRadioController::poll);
   connect(&m_nativeSerial, &QSerialPort::readyRead, this, [this] {
@@ -173,6 +166,24 @@ DesktopRadioController::DesktopRadioController(QObject *parent)
     m_lastError = message.left(300);
     emit error(m_lastError);
   });
+  connect(&m_hamlibHelper, &HamlibHelperTransport::sanitizedError, this,
+          [this](const QString &message) {
+            m_lastError = message.left(300);
+            emit error(m_lastError);
+          });
+  connect(&m_hamlibHelper, &HamlibHelperTransport::unsafeOwnershipLost, this,
+          [this] {
+            if (m_backend != "hamlib")
+              return;
+            const bool verified = m_hamlibHelper.priorityStop();
+            m_transmitting = verified ? std::optional<bool>(false)
+                                      : std::nullopt;
+            m_state = verified
+                          ? "Quarantined — helper lost; emergency RX verified"
+                          : "Quarantined — helper lost; RX unconfirmed";
+            emit unsafeRadioOwnershipLost(verified);
+            emit snapshotChanged();
+          });
   connect(&m_tci, &TciClient::iqFrame, this,
           [this](int rx, quint32 rate, QVector<float> values) {
             emit iqFrame(QStringLiteral("tci:%1").arg(rx), rate,
@@ -195,42 +206,18 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
     emit error("An explicit serial or network route is required");
     return false;
   }
-  RIG *rig = rig_init(modelId);
-  if (!rig) {
-    emit error("Hamlib rejected the selected model");
+  QJsonObject description;
+  if (!m_hamlibHelper.open(modelId, port, baudRate, &description)) {
+    emit error("Hamlib helper failed to open and verify RX");
     return false;
   }
-  auto set = [rig](const char *name, const QString &value) {
-    const token_t token = rig_token_lookup(rig, name);
-    return token != RIG_CONF_END &&
-           rig_set_conf(rig, token, value.toUtf8().constData()) == RIG_OK;
-  };
-  if (!set("rig_pathname", port)) {
-    rig_cleanup(rig);
-    emit error("Hamlib rejected the route");
-    return false;
-  }
-  if (baudRate > 0)
-    set("serial_speed", QString::number(baudRate));
-  const int code = rig_open(rig);
-  if (code != RIG_OK) {
-    const QString message = QStringLiteral("Hamlib connect failed: %1")
-                                .arg(QString::fromLatin1(rigerror(code)));
-    rig_cleanup(rig);
-    emit error(message);
-    return false;
-  }
-  m_rig = rig;
   m_hamlibModelId = modelId;
   m_generation++;
   m_backend = "hamlib";
   m_state = "Connected — receive controls only; PTT/TUNE disabled";
-  const struct rig_caps *caps = rig->caps;
-  m_digiPttSupported = caps && caps->set_ptt && caps->get_ptt;
-  m_model = caps && caps->model_name ? QString::fromUtf8(caps->model_name)
-                                    : QString::number(modelId);
-  m_manufacturer =
-      caps && caps->mfg_name ? QString::fromUtf8(caps->mfg_name) : "Hamlib";
+  m_digiPttSupported = description.value("pttSupported").toBool(false);
+  m_model = description.value("model").toString(QString::number(modelId));
+  m_manufacturer = description.value("manufacturer").toString("Hamlib");
   m_activeReceiverId = m_listeningReceiverId = m_transmitReceiverId =
       "hamlib:0";
   m_backendCapabilities = {{"receiverCount", 1},
@@ -238,7 +225,7 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
                            {"rxAudioStreaming", false},
                            {"ptt", false},
                            {"tune", false}};
-  if (caps) {
+  if (const struct rig_caps *caps = rig_get_caps(modelId)) {
     QVariantList ranges, filters, modes, setters, meters;
     auto appendRanges = [&ranges](const freq_range_t *source) {
       for (int index = 0; index < HAMLIB_FRQRANGESIZ; ++index) {
@@ -290,11 +277,11 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
         setters << "preset.recall";
     }
     if (caps->get_level) {
-      if (rig_has_get_level(rig, RIG_LEVEL_STRENGTH))
+      if (caps->has_get_level & RIG_LEVEL_STRENGTH)
         meters << "signal";
-      if (rig_has_get_level(rig, RIG_LEVEL_SWR))
+      if (caps->has_get_level & RIG_LEVEL_SWR)
         meters << "swr";
-      if (rig_has_get_level(rig, RIG_LEVEL_ALC))
+      if (caps->has_get_level & RIG_LEVEL_ALC)
         meters << "alc";
     }
     m_backendCapabilities.insert("frequencyRangesHz", ranges);
@@ -523,14 +510,7 @@ void DesktopRadioController::disconnectRadio() {
     m_nativeTcp.abort();
   m_nativeBuffer.clear();
   m_nativeProfileId.clear();
-#ifdef SHACKCQ_HAVE_HAMLIB
-  if (m_rig) {
-    auto *rig = static_cast<RIG *>(m_rig);
-    rig_close(rig);
-    rig_cleanup(rig);
-    m_rig = nullptr;
-  }
-#endif
+  m_hamlibHelper.close();
   m_generation++;
   m_backend = "none";
   m_state = "Disconnected";
@@ -664,16 +644,14 @@ bool DesktopRadioController::requestFrequency(qulonglong hz) {
     return !setter.isEmpty() && writeNative(setter);
   }
 #ifdef SHACKCQ_HAVE_HAMLIB
-  if (!m_rig || hz < 100000 || hz > 10500000000ULL)
+  if (m_backend != "hamlib" || hz < 100000 || hz > 10500000000ULL)
     return false;
-  const int code = rig_set_freq(static_cast<RIG *>(m_rig), RIG_VFO_CURR,
-                                static_cast<freq_t>(hz));
-  if (code != RIG_OK) {
-    emit error(QString::fromLatin1(rigerror(code)));
+  const QJsonObject response = m_hamlibHelper.mutate(
+      "radio.set.frequency", {{"frequencyHz", QJsonValue(double(hz))}});
+  if (!response.value("ok").toBool())
     return false;
-  }
-  poll();
-  return true;
+  m_frequencyHz = response.value("frequencyHz").toVariant().toULongLong();
+  return m_frequencyHz == hz;
 #else
   Q_UNUSED(hz);
   return false;
@@ -689,19 +667,18 @@ bool DesktopRadioController::requestMode(const QString &value) {
     return !setter.isEmpty() && writeNative(setter);
   }
 #ifdef SHACKCQ_HAVE_HAMLIB
-  if (!m_rig)
+  if (m_backend != "hamlib")
     return false;
   const rmode_t parsed = hamlibModeForCloud(value);
   if (parsed == RIG_MODE_NONE)
     return false;
-  const int code = rig_set_mode(static_cast<RIG *>(m_rig), RIG_VFO_CURR, parsed,
-                                RIG_PASSBAND_NORMAL);
-  if (code != RIG_OK) {
-    emit error(QString::fromLatin1(rigerror(code)));
+  const QJsonObject response =
+      m_hamlibHelper.mutate("radio.set.mode", {{"mode", value}});
+  if (!response.value("ok").toBool())
     return false;
-  }
-  poll();
-  return true;
+  m_mode = response.value("mode").toString();
+  m_filterHz = response.value("filterHz").toInt();
+  return m_mode.compare(value, Qt::CaseInsensitive) == 0;
 #else
   Q_UNUSED(value);
   return false;
@@ -711,19 +688,15 @@ bool DesktopRadioController::requestFilter(int filterHz) {
   if (m_backend != "hamlib" || filterHz < 50 || filterHz > 20'000)
     return false;
 #ifdef SHACKCQ_HAVE_HAMLIB
-  if (!m_rig)
+  if (m_backend != "hamlib")
     return false;
-  const rmode_t parsed = hamlibModeForCloud(m_mode);
-  if (parsed == RIG_MODE_NONE)
+  const QJsonObject response =
+      m_hamlibHelper.mutate("radio.set.filter", {{"filterHz", filterHz}});
+  if (!response.value("ok").toBool())
     return false;
-  const int code =
-      rig_set_mode(static_cast<RIG *>(m_rig), RIG_VFO_CURR, parsed, filterHz);
-  if (code != RIG_OK) {
-    emit error(QString::fromLatin1(rigerror(code)));
-    return false;
-  }
-  poll();
-  return true;
+  m_mode = response.value("mode").toString();
+  m_filterHz = response.value("filterHz").toInt();
+  return m_filterHz == filterHz;
 #else
   Q_UNUSED(filterHz);
   return false;
@@ -736,39 +709,19 @@ void DesktopRadioController::poll() {
     return;
   }
 #ifdef SHACKCQ_HAVE_HAMLIB
-  if (!m_rig)
+  if (m_backend != "hamlib" || m_hamlibHelper.quarantined() ||
+      m_hamlibHelper.operationActive())
     return;
-  freq_t frequency = 0;
-  rmode_t parsed = RIG_MODE_NONE;
-  pbwidth_t width = 0;
-  auto *rig = static_cast<RIG *>(m_rig);
-  if (rig_get_freq(rig, RIG_VFO_CURR, &frequency) == RIG_OK)
-    m_frequencyHz = static_cast<quint64>(frequency);
-  if (rig_get_mode(rig, RIG_VFO_CURR, &parsed, &width) == RIG_OK) {
-    m_mode = cloudModeFromHamlib(parsed);
-    m_filterHz = static_cast<int>(width);
-  }
-  m_meters.clear();
-  const QStringList advertisedMeters =
-      m_backendCapabilities.value("meters").toStringList();
-  auto readLevel = [rig, this](setting_t level, const QString &name,
-                               bool floatingPoint) {
-    value_t value{};
-    if (rig_get_level(rig, RIG_VFO_CURR, level, &value) == RIG_OK)
-      m_meters.insert(name, floatingPoint ? QVariant(value.f)
-                                         : QVariant(value.i));
-  };
-  if (advertisedMeters.contains("signal"))
-    readLevel(RIG_LEVEL_STRENGTH, "signal", false);
-  if (advertisedMeters.contains("swr"))
-    readLevel(RIG_LEVEL_SWR, "swr", true);
-  if (advertisedMeters.contains("alc"))
-    readLevel(RIG_LEVEL_ALC, "alc", true);
-  ptt_t ptt = RIG_PTT_OFF;
-  if (rig_get_ptt(rig, RIG_VFO_CURR, &ptt) == RIG_OK)
-    m_transmitting = ptt != RIG_PTT_OFF;
-  else
-    m_transmitting.reset();
+  const QJsonObject observed = m_hamlibHelper.snapshot();
+  if (!observed.value("ok").toBool())
+    return;
+  m_frequencyHz = observed.value("frequencyHz").toVariant().toULongLong();
+  m_mode = observed.value("mode").toString();
+  m_filterHz = observed.value("filterHz").toInt();
+  m_meters = observed.value("meters").toObject().toVariantMap();
+  m_transmitting = observed.value("transmitting").isBool()
+                       ? std::optional<bool>(observed.value("transmitting").toBool())
+                       : std::nullopt;
   QVariantList rows{hamlibSnapshot(m_model, m_frequencyHz, m_mode)};
   m_receivers.replace(rows, m_activeReceiverId, m_listeningReceiverId,
                       m_transmitReceiverId);
@@ -992,19 +945,13 @@ QVariantMap DesktopRadioController::health() const {
 }
 bool DesktopRadioController::requestDigiPtt(bool enabled) {
 #ifdef SHACKCQ_HAVE_HAMLIB
-  if (!m_rig || m_backend != "hamlib" || !m_digiPttSupported)
+  if (m_backend != "hamlib" || !m_digiPttSupported)
     return false;
-  auto *rig = static_cast<RIG *>(m_rig);
-  const int code = rig_set_ptt(rig, RIG_VFO_CURR,
-                               enabled ? RIG_PTT_ON : RIG_PTT_OFF);
-  if (code != RIG_OK) {
-    emit error(QString::fromLatin1(rigerror(code)));
+  const QJsonObject response = m_hamlibHelper.setPtt(enabled);
+  if (!response.value("ok").toBool() ||
+      !response.value("transmitting").isBool())
     return false;
-  }
-  ptt_t observed = RIG_PTT_OFF;
-  if (rig_get_ptt(rig, RIG_VFO_CURR, &observed) != RIG_OK)
-    return false;
-  m_transmitting = observed != RIG_PTT_OFF;
+  m_transmitting = response.value("transmitting").toBool();
   emit snapshotChanged();
   return *m_transmitting == enabled;
 #else
@@ -1015,18 +962,31 @@ bool DesktopRadioController::requestDigiPtt(bool enabled) {
 
 std::optional<bool> DesktopRadioController::digiPttReadback() const {
 #ifdef SHACKCQ_HAVE_HAMLIB
-  if (!m_rig || m_backend != "hamlib" || !m_digiPttSupported)
+  if (m_backend != "hamlib" || !m_digiPttSupported)
     return std::nullopt;
-  ptt_t observed = RIG_PTT_OFF;
-  return rig_get_ptt(static_cast<RIG *>(m_rig), RIG_VFO_CURR, &observed) == RIG_OK
-             ? std::optional<bool>(observed != RIG_PTT_OFF)
+  const QJsonObject observed = m_hamlibHelper.snapshot();
+  return observed.value("ok").toBool() &&
+                 observed.value("transmitting").isBool()
+             ? std::optional<bool>(observed.value("transmitting").toBool())
              : std::nullopt;
 #else
   return std::nullopt;
 #endif
 }
 
-void DesktopRadioController::globalStop() { m_tci.globalStop(); }
+bool DesktopRadioController::globalStop() {
+  m_tci.globalStop();
+  if (m_backend == "hamlib") {
+    const bool verified = m_hamlibHelper.priorityStop();
+    m_transmitting = verified ? std::optional<bool>(false) : std::nullopt;
+    m_state = verified
+                  ? "Quarantined — STOPPED, RX verified; reconnect required"
+                  : "Quarantined — STOP requested; RX readback unconfirmed";
+    emit snapshotChanged();
+    return verified;
+  }
+  return true;
+}
 void DesktopRadioController::setTciTimeoutsForTest(int a, int b, int c) {
   m_tci.setTimeoutsForTest(a, b, c);
 }

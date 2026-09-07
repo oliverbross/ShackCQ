@@ -29,6 +29,8 @@ namespace shackcq::desktop {
 namespace {
 constexpr qint64 LeaseMillis = 15'000;
 constexpr qint64 MaximumWaveformSamples = 24'000'000;
+constexpr qint64 StopRetryMillis = 250;
+constexpr int MaximumStopRetries = 3;
 QString audioId(const QAudioDevice &device) {
   return QString::fromLatin1(device.id().toBase64(QByteArray::Base64UrlEncoding |
                                                    QByteArray::OmitTrailingEquals));
@@ -88,13 +90,16 @@ AgentDigiController::AgentDigiController(DesktopRadioController *radio, QObject 
   if(m_radio)connect(m_radio,&DesktopRadioController::aboutToDisconnect,this,[this]{stop("radio owner disconnecting");},Qt::DirectConnection);
   if(m_radio)connect(m_radio,&DesktopRadioController::preferencesChanged,this,[this]{if(m_hardwareAccepted&&m_acceptedRadioIdentity!=currentAcceptanceIdentity()){m_hardwareAccepted=false;m_localTxPermitted=false;m_acceptedRadioIdentity.clear();stop("accepted radio or audio identity changed");}});
   if (m_radio) connect(m_radio, &DesktopRadioController::snapshotChanged, this, [this] {
-    if (radioMutationBlocked() &&
+    if (m_state != State::RxUnconfirmed && radioMutationBlocked() &&
         (!m_radio->state().startsWith("Connected") || m_radio->frequencyHz() == 0 ||
          (m_preparedFrequencyHz > 0 && (m_radio->frequencyHz()!=m_preparedFrequencyHz ||
           m_radio->mode().compare(m_preparedRadioMode,Qt::CaseInsensitive)!=0 ||
           m_radio->filterHz()!=m_preparedFilterHz)))) stop("radio context changed");
     emit snapshotChanged();
   });
+  if (m_radio) connect(m_radio, &DesktopRadioController::unsafeRadioOwnershipLost,
+                       this, &AgentDigiController::handleUnsafeRadioLoss,
+                       Qt::DirectConnection);
 }
 
 AgentDigiController::~AgentDigiController() {
@@ -206,7 +211,10 @@ QJsonObject AgentDigiController::processCommand(const QJsonObject &frame,const Q
     if(m_leaseExpiryMono>m_monotonic.elapsed()&&!ownsLease(frame)){stop("control taken over");}
     m_leaseBrowserSession=frame.value("browserSessionId").toString();m_leaseControlInstance=frame.value("controlInstanceId").toString();m_leaseExpiryMono=m_monotonic.elapsed()+LeaseMillis;emit snapshotChanged();return result(frame,agentId,deviceId,generation,true,"CONTROL_ACQUIRED");
   }
-  if(action=="digi.stop"){stop("operator STOP");return result(frame,agentId,deviceId,generation,m_state!=State::RxUnconfirmed,m_state==State::RxUnconfirmed?"RX_UNCONFIRMED":"STOPPED_RX_VERIFIED");}
+  if(action=="digi.stop"){
+    const StopOutcome stopped=stop("operator STOP");
+    if(stopped==StopOutcome::InProgress)return QJsonObject{{"type","digi.command.result"},{"protocol",QJsonObject{{"major",1},{"minor",1}}},{"commandId",frame.value("commandId")},{"agentId",agentId},{"deviceId",deviceId},{"generation",QJsonValue::fromVariant(generation)},{"ok",false},{"code","STOP_IN_PROGRESS_RX_UNCONFIRMED"}};
+    return result(frame,agentId,deviceId,generation,stopped==StopOutcome::RxVerified,stopped==StopOutcome::RxVerified?"STOPPED_RX_VERIFIED":"RX_UNCONFIRMED");}
   if(!ownsLease(frame))return result(frame,agentId,deviceId,generation,false,"CONTROL_LEASE_REQUIRED");
   m_leaseExpiryMono=m_monotonic.elapsed()+LeaseMillis;
   if(action=="digi.control.renew"){emit snapshotChanged();return result(frame,agentId,deviceId,generation,true,"CONTROL_RENEWED");}
@@ -398,10 +406,12 @@ bool AgentDigiController::scheduleTransmit(QString *error){
   });
   return true;
 }
-void AgentDigiController::finishTransmit(){if(m_sink){m_sink->reset();m_sink->deleteLater();m_sink=nullptr;}m_output.close();m_state=State::Stopping;const bool released=!m_pttReleaseRequired||setPtt(false);const auto rx=pttReadback();const bool safe=released&&rx&&!*rx;m_pttOwned=false;m_pttReleaseRequired=!safe;m_state=safe?State::RxVerified:State::RxUnconfirmed;if(m_state==State::RxVerified&&m_repeatsRemaining>0&&m_armExpiryMono>m_monotonic.elapsed()){m_state=State::Armed;QString error;if(scheduleTransmit(&error)){emit snapshotChanged();return;}}resetPrepared();emit snapshotChanged();}
-void AgentDigiController::stop(const QString &reason){Q_UNUSED(reason);++m_sendIntentGeneration;m_sendScheduled=false;m_contextGeneration++;m_scanner.stop();m_scannerEntries={};m_scannerRemaining=0;m_txFinish.stop();if(m_sink){m_sink->reset();m_sink->deleteLater();m_sink=nullptr;}m_output.close();if(m_pttReleaseRequired){m_state=State::Stopping;const bool released=setPtt(false);const auto rx=pttReadback();const bool safe=released&&rx&&!*rx;m_pttOwned=false;m_pttReleaseRequired=!safe;m_state=safe?State::RxVerified:State::RxUnconfirmed;}else if(m_state!=State::RxUnconfirmed)m_state=m_source?State::Rx:State::Safe;resetPrepared();emit snapshotChanged();}
+void AgentDigiController::finishTransmit(){if(m_sink){m_sink->reset();m_sink->deleteLater();m_sink=nullptr;}m_output.close();m_state=State::Stopping;const bool released=!m_pttReleaseRequired||setPtt(false);const auto rx=pttReadback();const bool safe=released&&rx&&!*rx;m_pttOwned=false;m_pttReleaseRequired=!safe;m_state=safe?State::RxVerified:State::RxUnconfirmed;if(!safe){m_stopRetryAttempts=0;m_nextStopRetryMono=m_monotonic.elapsed()+StopRetryMillis;}if(m_state==State::RxVerified&&m_repeatsRemaining>0&&m_armExpiryMono>m_monotonic.elapsed()){m_state=State::Armed;QString error;if(scheduleTransmit(&error)){emit snapshotChanged();return;}}resetPrepared();emit snapshotChanged();}
+AgentDigiController::StopOutcome AgentDigiController::stop(const QString &reason){Q_UNUSED(reason);if(m_stopInProgress)return StopOutcome::InProgress;m_stopRetryAttempts=0;m_nextStopRetryMono=0;return performStop(false);}
+AgentDigiController::StopOutcome AgentDigiController::performStop(bool autonomousRetry){if(m_stopInProgress)return StopOutcome::InProgress;m_stopInProgress=true;++m_sendIntentGeneration;m_sendScheduled=false;m_contextGeneration++;m_scanner.stop();m_scannerEntries={};m_scannerRemaining=0;m_txFinish.stop();if(m_sink){m_sink->reset();m_sink->deleteLater();m_sink=nullptr;}m_output.close();const bool radioStopVerified=!m_radio||m_radio->globalStop();const bool helperRxProof=m_radio&&m_radio->backend()=="hamlib"&&radioStopVerified;if(m_pttReleaseRequired){m_state=State::Stopping;const bool released=helperRxProof||setPtt(false);const auto rx=helperRxProof?std::optional<bool>(false):pttReadback();const bool safe=radioStopVerified&&released&&rx&&!*rx;m_pttOwned=false;m_pttReleaseRequired=!safe;m_state=safe?State::RxVerified:State::RxUnconfirmed;}else if(!radioStopVerified)m_state=State::RxUnconfirmed;else if(m_state!=State::RxUnconfirmed)m_state=m_source?State::Rx:State::Safe;resetPrepared();const bool unconfirmed=m_state==State::RxUnconfirmed||m_pttReleaseRequired;if(unconfirmed&&m_stopRetryAttempts<MaximumStopRetries)m_nextStopRetryMono=m_monotonic.elapsed()+StopRetryMillis;else m_nextStopRetryMono=0;if(!unconfirmed){m_stopRetryAttempts=0;m_nextStopRetryMono=0;}Q_UNUSED(autonomousRetry);m_stopInProgress=false;emit snapshotChanged();return unconfirmed?StopOutcome::RxUnconfirmed:StopOutcome::RxVerified;}
+void AgentDigiController::handleUnsafeRadioLoss(bool rxVerified){const bool active=m_pttReleaseRequired||m_pttOwned||m_state==State::PttConfirmed||m_state==State::Transmitting||m_state==State::Stopping||m_sink;if(!active)return;++m_sendIntentGeneration;m_sendScheduled=false;m_contextGeneration++;m_txFinish.stop();if(m_sink){m_sink->reset();m_sink->deleteLater();m_sink=nullptr;}m_output.close();m_pttOwned=false;m_pttReleaseRequired=!rxVerified;m_state=rxVerified?State::RxVerified:State::RxUnconfirmed;resetPrepared();m_stopRetryAttempts=0;m_nextStopRetryMono=rxVerified?0:m_monotonic.elapsed()+StopRetryMillis;emit snapshotChanged();}
 void AgentDigiController::resetPrepared(){m_txPcm.clear();m_preparedMessage.clear();m_preparedFrequencyHz=0;m_preparedRadioMode.clear();m_preparedFilterHz=0;m_armExpiryMono=0;m_nextSlotEpoch=0;m_repeatsRemaining=0;}
-void AgentDigiController::expireLease(){if(m_leaseExpiryMono>0&&m_leaseExpiryMono<=m_monotonic.elapsed()){stop("control lease expired");m_leaseExpiryMono=0;m_leaseBrowserSession.clear();m_leaseControlInstance.clear();}if(m_armExpiryMono>0&&m_armExpiryMono<=m_monotonic.elapsed()&&m_state==State::Armed){m_state=State::Ready;m_armExpiryMono=0;emit snapshotChanged();}if(m_state==State::Rx&&m_lastInputMono>0&&m_monotonic.elapsed()-m_lastInputMono>2'000){m_audioState="SILENT";m_audioDetail="No fresh samples from selected input";emit snapshotChanged();}processDisplayAndContinuous();}
+void AgentDigiController::expireLease(){if(m_leaseExpiryMono>0&&m_leaseExpiryMono<=m_monotonic.elapsed()){stop("control lease expired");m_leaseExpiryMono=0;m_leaseBrowserSession.clear();m_leaseControlInstance.clear();}if(m_nextStopRetryMono>0&&m_nextStopRetryMono<=m_monotonic.elapsed()&&m_stopRetryAttempts<MaximumStopRetries){++m_stopRetryAttempts;m_nextStopRetryMono=0;performStop(true);}if(m_armExpiryMono>0&&m_armExpiryMono<=m_monotonic.elapsed()&&m_state==State::Armed){m_state=State::Ready;m_armExpiryMono=0;emit snapshotChanged();}if(m_state==State::Rx&&m_lastInputMono>0&&m_monotonic.elapsed()-m_lastInputMono>2'000){m_audioState="SILENT";m_audioDetail="No fresh samples from selected input";emit snapshotChanged();}processDisplayAndContinuous();}
 
 bool AgentDigiController::applyReceiveEntry(const QJsonObject &entry,QString *error){
   if(!m_radio||m_radio->transmitting().value_or(true)){if(error)*error="RECEIVER_NOT_VERIFIED_SAFE";return false;}

@@ -24,5 +24,5 @@ Screen-level omissions are not labelled platform-inapplicable. Local Android gal
 - No decode-driven FT8/FT4 automatic QSO sequencer is claimed; `autoSequenceModes` is empty.
 - Android package workflows do not yet prove this Agent Digi implementation on every requested platform.
 - Audio channel selection and release-quality resampling need real-device implementation and acceptance.
-- The STOP/watchdog safety path is not independent of the potentially blocking command, encoder, and Hamlib event loop.
+- The primary-plus-emergency Hamlib STOP/watchdog boundary has deterministic blocked-call preemption, queued-write rejection, late-result rejection, bounded retry, quarantine, and recovery-readback coverage; physical-radio timing and RX recovery remain owner-present acceptance evidence.
 - Slotted modes have no measured UTC authority and therefore remain fail-closed.
