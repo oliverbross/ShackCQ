@@ -620,7 +620,7 @@ void RemoteStationService::handleText(QWebSocket *socket, const QString &message
         lease == remote::Lease::Rotator && m_rotatorPolicy);
     sendReply(socket, request, ok, ok ? "LEASE_GRANTED" : "LEASE_DENIED"); emit sessionsChanged(); return;
   }
-  if (type == "GLOBAL_STOP") { globalStop(); sendReply(socket, request, true, "GLOBAL_STOPPED"); return; }
+  if (type == "GLOBAL_STOP") { const bool stopped = globalStop(); sendReply(socket, request, stopped, stopped ? "GLOBAL_STOPPED" : "RX_UNCONFIRMED"); return; }
   if (type == "MUTATE") {
     QString failure;
     const bool ok = executeMutation(session, payload.value("operation").toString(), payload, &failure);
@@ -881,12 +881,13 @@ bool RemoteStationService::executeBridgeMutation(const remote::ProtocolReply &re
 }
 
 void RemoteStationService::localPreempt() { m_authority.localPreempt(); ++m_generation; emit sessionsChanged(); }
-void RemoteStationService::globalStop() {
+bool RemoteStationService::globalStop() {
   m_authority.globalStop(); ++m_generation;
   clearLocalAcceptance();
-  if (m_radio) m_radio->globalStop();
+  const bool radioStopped = !m_radio || m_radio->globalStop();
   if (m_rotator) m_rotator->stop();
   emit sessionsChanged();
+  return radioStopped;
 }
 
 QVariantList RemoteStationService::sessions() const {

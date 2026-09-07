@@ -52,7 +52,7 @@ public:
                                         const QString &role);
   Q_INVOKABLE void revokeDevice(const QString &deviceId);
   Q_INVOKABLE void localPreempt();
-  Q_INVOKABLE void globalStop();
+  Q_INVOKABLE bool globalStop();
   Q_INVOKABLE QVariantList sessions() const;
   Q_INVOKABLE QVariantList pairedDevices() const;
   Q_INVOKABLE QVariantList pendingDevices() const;

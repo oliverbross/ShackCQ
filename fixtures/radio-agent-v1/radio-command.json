@@ -1,0 +1,1 @@
+{"action":"radio.set.frequency","agentId":"agent-fixture-1","commandId":"command-fixture-1","deviceId":"hamlib:1","expectedGeneration":7,"parameters":{"frequencyHz":14075000},"protocol":{"major":1,"minor":0},"type":"radio.command"}

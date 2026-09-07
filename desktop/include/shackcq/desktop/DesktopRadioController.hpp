@@ -2,12 +2,14 @@
 
 #include "shackcq/desktop/ReceiverListModel.hpp"
 #include "shackcq/desktop/TciClient.hpp"
+#include "shackcq/desktop/HamlibHelperTransport.hpp"
 
 #include <QAbstractListModel>
 #include <QObject>
 #include <QSerialPort>
 #include <QTcpSocket>
 #include <QTimer>
+#include <optional>
 
 namespace shackcq::desktop {
 
@@ -55,6 +57,7 @@ class DesktopRadioController final : public QObject {
   Q_PROPERTY(QString backend READ backend NOTIFY snapshotChanged)
   Q_PROPERTY(qulonglong frequencyHz READ frequencyHz NOTIFY snapshotChanged)
   Q_PROPERTY(QString mode READ mode NOTIFY snapshotChanged)
+  Q_PROPERTY(int filterHz READ filterHz NOTIFY snapshotChanged)
   Q_PROPERTY(bool readOnly READ readOnly NOTIFY snapshotChanged)
   Q_PROPERTY(bool pttAvailable READ pttAvailable CONSTANT)
   Q_PROPERTY(bool tuneAvailable READ tuneAvailable CONSTANT)
@@ -75,9 +78,12 @@ public:
   ~DesktopRadioController() override;
   QString state() const { return m_state; }
   QString model() const { return m_model; }
+  QString manufacturer() const { return m_manufacturer; }
   QString backend() const { return m_backend; }
   quint64 frequencyHz() const { return m_frequencyHz; }
   QString mode() const { return m_mode; }
+  int filterHz() const { return m_filterHz; }
+  int hamlibModelId() const { return m_hamlibModelId; }
   bool readOnly() const { return true; }
   bool pttAvailable() const { return false; }
   bool tuneAvailable() const { return false; }
@@ -87,13 +93,19 @@ public:
   QString listeningReceiverId() const { return m_listeningReceiverId; }
   QString transmitReceiverId() const { return m_transmitReceiverId; }
   QVariantMap backendCapabilities() const { return m_backendCapabilities; }
+  QVariantMap meters() const { return m_meters; }
+  std::optional<bool> transmitting() const { return m_transmitting; }
   QVariantList tciProfiles() const { return m_tciProfiles; }
+  QVariantMap hamlibProfile() const { return m_hamlibProfile; }
   QVariantMap configuration() const;
   bool restoreConfiguration(const QVariantMap &section,
                             QString *error = nullptr);
   QVariantMap health() const;
 
   Q_INVOKABLE bool connectRadio(int modelId, const QString &port, int baudRate);
+  Q_INVOKABLE bool saveHamlibProfile(int modelId, const QString &route,
+                                     int baudRate, bool autoConnect = true);
+  Q_INVOKABLE void clearHamlibProfile();
   Q_INVOKABLE bool connectNativeProfile(const QString &profileId,
                                         const QString &route, int baudRate);
   Q_INVOKABLE bool connectTciProfile(const QString &profileId);
@@ -108,11 +120,19 @@ public:
   }
   Q_INVOKABLE bool requestFrequency(qulonglong frequencyHz);
   Q_INVOKABLE bool requestMode(const QString &mode);
-  Q_INVOKABLE void globalStop();
+  Q_INVOKABLE bool requestFilter(int filterHz);
+  Q_INVOKABLE bool globalStop();
+  // Dedicated local Digi owner only. These are intentionally not Q_INVOKABLE,
+  // not advertised as generic Radio setters, and never available to v1 frames.
+  bool requestDigiPtt(bool enabled);
+  std::optional<bool> digiPttReadback() const;
   void setTciTimeoutsForTest(int connectionMs, int readyMs, int reconnectMs);
   void setHamlibSnapshotForTest(quint64 frequencyHz, const QString &mode);
+  HamlibHelperTransport *hamlibHelperForTest() { return &m_hamlibHelper; }
 
 signals:
+  void aboutToDisconnect();
+  void unsafeRadioOwnershipLost(bool rxVerified);
   void snapshotChanged();
   void preferencesChanged();
   void iqFrame(QString receiverId, quint32 sampleRate, QVector<float> values);
@@ -135,7 +155,7 @@ private:
                                      bool *ok = nullptr);
   static QVariantMap encodeTciProfile(const TciProfile &profile);
 
-  void *m_rig{};
+  mutable HamlibHelperTransport m_hamlibHelper;
   QSerialPort m_nativeSerial;
   QTcpSocket m_nativeTcp;
   QByteArray m_nativeBuffer;
@@ -145,12 +165,16 @@ private:
   ReceiverListModel m_receivers;
   QString m_state{"Disconnected"};
   QString m_model;
+  QString m_manufacturer;
   QString m_backend{"none"};
   QString m_activeReceiverId;
   QString m_listeningReceiverId;
   QString m_transmitReceiverId;
   QString m_autoConnectProfileId;
   QVariantMap m_backendCapabilities;
+  QVariantMap m_meters;
+  std::optional<bool> m_transmitting;
+  QVariantMap m_hamlibProfile;
   QVariantMap m_legacyConfiguration;
   QVariantList m_tciProfiles;
   QVariantMap m_safeView{{"spectrumVisible", true},
@@ -158,8 +182,11 @@ private:
                          {"audioRouteEnabled", false}};
   quint64 m_frequencyHz{};
   QString m_mode;
+  int m_filterHz{};
+  int m_hamlibModelId{1};
   QString m_lastError;
   quint64 m_generation{};
+  bool m_digiPttSupported{};
 };
 
 } // namespace shackcq::desktop

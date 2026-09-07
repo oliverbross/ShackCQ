@@ -1,0 +1,1 @@
+{"agentId":"agent-fixture-1","code":"STALE_AGENT_GENERATION","detail":"Command generation no longer owns this Agent socket","deviceId":"hamlib:1","protocol":{"major":1,"minor":0},"type":"agent.error"}

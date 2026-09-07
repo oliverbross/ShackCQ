@@ -36,6 +36,15 @@ private slots:
     QVERIFY(!service.armThirdPartyWriter());
   }
 
+  void globalStopPropagatesUnconfirmedRadioState() {
+    MemoryVault vault;
+    DesktopRadioController radio;
+    radio.setHamlibSnapshotForTest(14'074'000, "DATA");
+    RemoteStationService service(&vault, &radio, nullptr, nullptr);
+    QVERIFY(!service.globalStop());
+    QVERIFY(radio.state().contains("unconfirmed", Qt::CaseInsensitive));
+  }
+
   void secureLoopbackLifecycleCreatesPrivateIdentityAndBoundedOffer() {
     QTcpServer probe;
     QVERIFY(probe.listen(QHostAddress::LocalHost, 0));

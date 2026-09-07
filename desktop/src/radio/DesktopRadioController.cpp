@@ -14,11 +14,22 @@
 
 #ifdef SHACKCQ_HAVE_HAMLIB
 #include <hamlib/rig.h>
+
+namespace {
+rmode_t hamlibModeForCloud(const QString &value) {
+  if (value.compare(QStringLiteral("DATA"), Qt::CaseInsensitive) == 0)
+    return RIG_MODE_PKTUSB;
+  if (value.compare(QStringLiteral("CW"), Qt::CaseInsensitive) == 0)
+    return RIG_MODE_CW;
+  return rig_parse_mode(value.toLatin1().constData());
+}
+
+} // namespace
 #endif
 
 namespace shackcq::desktop {
 namespace {
-constexpr int RadioProfilesSchema = 2;
+constexpr int RadioProfilesSchema = 3;
 
 QVariantMap hamlibSnapshot(const QString &model, quint64 frequency,
                            const QString &mode) {
@@ -131,7 +142,7 @@ void HamlibModelRegistry::setSearch(const QString &search) {
 }
 
 DesktopRadioController::DesktopRadioController(QObject *parent)
-    : QObject(parent), m_tci(this), m_receivers(this) {
+    : QObject(parent), m_hamlibHelper(this), m_tci(this), m_receivers(this) {
   m_poll.setInterval(250);
   connect(&m_poll, &QTimer::timeout, this, &DesktopRadioController::poll);
   connect(&m_nativeSerial, &QSerialPort::readyRead, this, [this] {
@@ -155,6 +166,24 @@ DesktopRadioController::DesktopRadioController(QObject *parent)
     m_lastError = message.left(300);
     emit error(m_lastError);
   });
+  connect(&m_hamlibHelper, &HamlibHelperTransport::sanitizedError, this,
+          [this](const QString &message) {
+            m_lastError = message.left(300);
+            emit error(m_lastError);
+          });
+  connect(&m_hamlibHelper, &HamlibHelperTransport::unsafeOwnershipLost, this,
+          [this] {
+            if (m_backend != "hamlib")
+              return;
+            const bool verified = m_hamlibHelper.priorityStop();
+            m_transmitting = verified ? std::optional<bool>(false)
+                                      : std::nullopt;
+            m_state = verified
+                          ? "Quarantined — helper lost; emergency RX verified"
+                          : "Quarantined — helper lost; RX unconfirmed";
+            emit unsafeRadioOwnershipLost(verified);
+            emit snapshotChanged();
+          });
   connect(&m_tci, &TciClient::iqFrame, this,
           [this](int rx, quint32 rate, QVector<float> values) {
             emit iqFrame(QStringLiteral("tci:%1").arg(rx), rate,
@@ -177,36 +206,18 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
     emit error("An explicit serial or network route is required");
     return false;
   }
-  RIG *rig = rig_init(modelId);
-  if (!rig) {
-    emit error("Hamlib rejected the selected model");
+  QJsonObject description;
+  if (!m_hamlibHelper.open(modelId, port, baudRate, &description)) {
+    emit error("Hamlib helper failed to open and verify RX");
     return false;
   }
-  auto set = [rig](const char *name, const QString &value) {
-    const token_t token = rig_token_lookup(rig, name);
-    return token != RIG_CONF_END &&
-           rig_set_conf(rig, token, value.toUtf8().constData()) == RIG_OK;
-  };
-  if (!set("rig_pathname", port)) {
-    rig_cleanup(rig);
-    emit error("Hamlib rejected the route");
-    return false;
-  }
-  if (baudRate > 0)
-    set("serial_speed", QString::number(baudRate));
-  const int code = rig_open(rig);
-  if (code != RIG_OK) {
-    const QString message = QStringLiteral("Hamlib connect failed: %1")
-                                .arg(QString::fromLatin1(rigerror(code)));
-    rig_cleanup(rig);
-    emit error(message);
-    return false;
-  }
-  m_rig = rig;
+  m_hamlibModelId = modelId;
   m_generation++;
   m_backend = "hamlib";
   m_state = "Connected — receive controls only; PTT/TUNE disabled";
-  m_model = QString::number(modelId);
+  m_digiPttSupported = description.value("pttSupported").toBool(false);
+  m_model = description.value("model").toString(QString::number(modelId));
+  m_manufacturer = description.value("manufacturer").toString("Hamlib");
   m_activeReceiverId = m_listeningReceiverId = m_transmitReceiverId =
       "hamlib:0";
   m_backendCapabilities = {{"receiverCount", 1},
@@ -214,6 +225,71 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
                            {"rxAudioStreaming", false},
                            {"ptt", false},
                            {"tune", false}};
+  if (const struct rig_caps *caps = rig_get_caps(modelId)) {
+    QVariantList ranges, filters, modes, setters, meters;
+    auto appendRanges = [&ranges](const freq_range_t *source) {
+      for (int index = 0; index < HAMLIB_FRQRANGESIZ; ++index) {
+        const auto &range = source[index];
+        if (RIG_IS_FRNG_END(range))
+          break;
+        if (range.startf > 0 && range.endf >= range.startf)
+          ranges << QVariantMap{
+              {"min", QVariant::fromValue<qulonglong>(
+                          static_cast<quint64>(range.startf))},
+              {"max", QVariant::fromValue<qulonglong>(
+                          static_cast<quint64>(range.endf))}};
+      }
+    };
+    appendRanges(caps->rx_range_list1);
+    appendRanges(caps->rx_range_list2);
+    appendRanges(caps->rx_range_list3);
+    appendRanges(caps->rx_range_list4);
+    appendRanges(caps->rx_range_list5);
+    struct CloudMode {
+      rmode_t hamlib;
+      const char *name;
+    };
+    static constexpr std::array<CloudMode, 6> knownModes{{
+        {RIG_MODE_CW | RIG_MODE_CWR, "CW"},
+        {RIG_MODE_USB, "USB"},
+        {RIG_MODE_LSB, "LSB"},
+        {RIG_MODE_AM, "AM"},
+        {RIG_MODE_FM, "FM"},
+        {RIG_MODE_PKTUSB | RIG_MODE_PKTLSB, "DATA"},
+    }};
+    for (int index = 0; index < HAMLIB_FLTLSTSIZ; ++index) {
+      const auto &filter = caps->filters[index];
+      if (RIG_IS_FLT_END(filter))
+        break;
+      if (filter.width > 0 && !filters.contains(int(filter.width)))
+        filters << int(filter.width);
+      for (const auto &candidate : knownModes) {
+        const QString name = QString::fromLatin1(candidate.name);
+        if ((filter.modes & candidate.hamlib) && !modes.contains(name))
+          modes << name;
+      }
+    }
+    if (caps->set_freq && caps->get_freq)
+      setters << "radio.set.frequency";
+    if (caps->set_mode && caps->get_mode) {
+      setters << "radio.set.mode" << "radio.set.filter";
+      if (setters.contains("radio.set.frequency"))
+        setters << "preset.recall";
+    }
+    if (caps->get_level) {
+      if (caps->has_get_level & RIG_LEVEL_STRENGTH)
+        meters << "signal";
+      if (caps->has_get_level & RIG_LEVEL_SWR)
+        meters << "swr";
+      if (caps->has_get_level & RIG_LEVEL_ALC)
+        meters << "alc";
+    }
+    m_backendCapabilities.insert("frequencyRangesHz", ranges);
+    m_backendCapabilities.insert("modes", modes);
+    m_backendCapabilities.insert("filtersHz", filters);
+    m_backendCapabilities.insert("setters", setters);
+    m_backendCapabilities.insert("meters", meters);
+  }
   m_poll.start();
   poll();
   return true;
@@ -224,6 +300,40 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
   emit error("This build was compiled without pinned Hamlib 4.7.2");
   return false;
 #endif
+}
+
+bool DesktopRadioController::saveHamlibProfile(int modelId,
+                                               const QString &route,
+                                               int baudRate,
+                                               bool autoConnect) {
+  const QString cleanRoute = route.trimmed();
+  if (modelId < 1 || cleanRoute.isEmpty() || cleanRoute.size() > 512 ||
+      cleanRoute.contains(QRegularExpression(QStringLiteral("[\\x00-\\x1f]"))) ||
+      (baudRate != 0 && (baudRate < 1200 || baudRate > 921600))) {
+    emit error("Invalid Hamlib model, route, or baud rate");
+    return false;
+  }
+  HamlibModelRegistry models;
+  const bool known = std::any_of(
+      models.allModels().cbegin(), models.allModels().cend(),
+      [modelId](const RadioModel &model) { return model.id == modelId; });
+  if (!known) {
+    emit error("Unknown Hamlib model id");
+    return false;
+  }
+  m_hamlibProfile = {{"modelId", modelId},
+                     {"route", cleanRoute},
+                     {"baudRate", baudRate},
+                     {"autoConnect", autoConnect}};
+  emit preferencesChanged();
+  return true;
+}
+
+void DesktopRadioController::clearHamlibProfile() {
+  if (m_backend == "hamlib")
+    disconnectRadio();
+  m_hamlibProfile.clear();
+  emit preferencesChanged();
 }
 
 bool DesktopRadioController::connectNativeProfile(const QString &profileId,
@@ -382,11 +492,16 @@ bool DesktopRadioController::removeTciProfile(const QString &id) {
 }
 
 void DesktopRadioController::startConfiguredAutoConnect() {
-  if (!m_autoConnectProfileId.isEmpty())
+  if (m_hamlibProfile.value("autoConnect", false).toBool()) {
+    connectRadio(m_hamlibProfile.value("modelId").toInt(),
+                 m_hamlibProfile.value("route").toString(),
+                 m_hamlibProfile.value("baudRate").toInt());
+  } else if (!m_autoConnectProfileId.isEmpty())
     connectTciProfile(m_autoConnectProfileId);
 }
 
 void DesktopRadioController::disconnectRadio() {
+  emit aboutToDisconnect();
   m_poll.stop();
   m_tci.disconnectFromServer();
   if (m_nativeSerial.isOpen())
@@ -395,24 +510,23 @@ void DesktopRadioController::disconnectRadio() {
     m_nativeTcp.abort();
   m_nativeBuffer.clear();
   m_nativeProfileId.clear();
-#ifdef SHACKCQ_HAVE_HAMLIB
-  if (m_rig) {
-    auto *rig = static_cast<RIG *>(m_rig);
-    rig_close(rig);
-    rig_cleanup(rig);
-    m_rig = nullptr;
-  }
-#endif
+  m_hamlibHelper.close();
   m_generation++;
   m_backend = "none";
   m_state = "Disconnected";
   m_model.clear();
+  m_manufacturer.clear();
   m_frequencyHz = 0;
   m_mode.clear();
+  m_filterHz = 0;
+  m_hamlibModelId = 1;
   m_activeReceiverId.clear();
   m_listeningReceiverId.clear();
   m_transmitReceiverId.clear();
   m_backendCapabilities.clear();
+  m_meters.clear();
+  m_transmitting.reset();
+  m_digiPttSupported = false;
   m_receivers.clear();
   emit snapshotChanged();
 }
@@ -530,16 +644,14 @@ bool DesktopRadioController::requestFrequency(qulonglong hz) {
     return !setter.isEmpty() && writeNative(setter);
   }
 #ifdef SHACKCQ_HAVE_HAMLIB
-  if (!m_rig || hz < 100000 || hz > 10500000000ULL)
+  if (m_backend != "hamlib" || hz < 100000 || hz > 10500000000ULL)
     return false;
-  const int code = rig_set_freq(static_cast<RIG *>(m_rig), RIG_VFO_CURR,
-                                static_cast<freq_t>(hz));
-  if (code != RIG_OK) {
-    emit error(QString::fromLatin1(rigerror(code)));
+  const QJsonObject response = m_hamlibHelper.mutate(
+      "radio.set.frequency", {{"frequencyHz", QJsonValue(double(hz))}});
+  if (!response.value("ok").toBool())
     return false;
-  }
-  poll();
-  return true;
+  m_frequencyHz = response.value("frequencyHz").toVariant().toULongLong();
+  return m_frequencyHz == hz;
 #else
   Q_UNUSED(hz);
   return false;
@@ -555,21 +667,38 @@ bool DesktopRadioController::requestMode(const QString &value) {
     return !setter.isEmpty() && writeNative(setter);
   }
 #ifdef SHACKCQ_HAVE_HAMLIB
-  if (!m_rig)
+  if (m_backend != "hamlib")
     return false;
-  const rmode_t parsed = rig_parse_mode(value.toUtf8().constData());
+  const rmode_t parsed = hamlibModeForCloud(value);
   if (parsed == RIG_MODE_NONE)
     return false;
-  const int code = rig_set_mode(static_cast<RIG *>(m_rig), RIG_VFO_CURR, parsed,
-                                RIG_PASSBAND_NORMAL);
-  if (code != RIG_OK) {
-    emit error(QString::fromLatin1(rigerror(code)));
+  const QJsonObject response =
+      m_hamlibHelper.mutate("radio.set.mode", {{"mode", value}});
+  if (!response.value("ok").toBool())
     return false;
-  }
-  poll();
-  return true;
+  m_mode = response.value("mode").toString();
+  m_filterHz = response.value("filterHz").toInt();
+  return m_mode.compare(value, Qt::CaseInsensitive) == 0;
 #else
   Q_UNUSED(value);
+  return false;
+#endif
+}
+bool DesktopRadioController::requestFilter(int filterHz) {
+  if (m_backend != "hamlib" || filterHz < 50 || filterHz > 20'000)
+    return false;
+#ifdef SHACKCQ_HAVE_HAMLIB
+  if (m_backend != "hamlib")
+    return false;
+  const QJsonObject response =
+      m_hamlibHelper.mutate("radio.set.filter", {{"filterHz", filterHz}});
+  if (!response.value("ok").toBool())
+    return false;
+  m_mode = response.value("mode").toString();
+  m_filterHz = response.value("filterHz").toInt();
+  return m_filterHz == filterHz;
+#else
+  Q_UNUSED(filterHz);
   return false;
 #endif
 }
@@ -580,16 +709,19 @@ void DesktopRadioController::poll() {
     return;
   }
 #ifdef SHACKCQ_HAVE_HAMLIB
-  if (!m_rig)
+  if (m_backend != "hamlib" || m_hamlibHelper.quarantined() ||
+      m_hamlibHelper.operationActive())
     return;
-  freq_t frequency = 0;
-  rmode_t parsed = RIG_MODE_NONE;
-  pbwidth_t width = 0;
-  auto *rig = static_cast<RIG *>(m_rig);
-  if (rig_get_freq(rig, RIG_VFO_CURR, &frequency) == RIG_OK)
-    m_frequencyHz = static_cast<quint64>(frequency);
-  if (rig_get_mode(rig, RIG_VFO_CURR, &parsed, &width) == RIG_OK)
-    m_mode = QString::fromLatin1(rig_strrmode(parsed));
+  const QJsonObject observed = m_hamlibHelper.snapshot();
+  if (!observed.value("ok").toBool())
+    return;
+  m_frequencyHz = observed.value("frequencyHz").toVariant().toULongLong();
+  m_mode = observed.value("mode").toString();
+  m_filterHz = observed.value("filterHz").toInt();
+  m_meters = observed.value("meters").toObject().toVariantMap();
+  m_transmitting = observed.value("transmitting").isBool()
+                       ? std::optional<bool>(observed.value("transmitting").toBool())
+                       : std::nullopt;
   QVariantList rows{hamlibSnapshot(m_model, m_frequencyHz, m_mode)};
   m_receivers.replace(rows, m_activeReceiverId, m_listeningReceiverId,
                       m_transmitReceiverId);
@@ -717,6 +849,7 @@ QVariantMap DesktopRadioController::configuration() const {
   result["activeReceiverId"] = m_activeReceiverId;
   result["listeningReceiverId"] = m_listeningReceiverId;
   result["autoConnectProfileId"] = m_autoConnectProfileId;
+  result["hamlibProfile"] = m_hamlibProfile;
   result["tciProfiles"] = m_tciProfiles;
   result["safeView"] = m_safeView;
   return result;
@@ -756,6 +889,24 @@ bool DesktopRadioController::restoreConfiguration(const QVariantMap &input,
   m_activeReceiverId = section.value("activeReceiverId").toString();
   m_listeningReceiverId = section.value("listeningReceiverId").toString();
   m_safeView = section.value("safeView", m_safeView).toMap();
+  m_hamlibProfile.clear();
+  const QVariantMap hamlibProfile = section.value("hamlibProfile").toMap();
+  if (!hamlibProfile.isEmpty()) {
+    const int modelId = hamlibProfile.value("modelId").toInt();
+    const QString route = hamlibProfile.value("route").toString().trimmed();
+    const int baudRate = hamlibProfile.value("baudRate").toInt();
+    if (modelId < 1 || route.isEmpty() || route.size() > 512 ||
+        route.contains(QRegularExpression(QStringLiteral("[\\x00-\\x1f]"))) ||
+        (baudRate != 0 && (baudRate < 1200 || baudRate > 921600))) {
+      if (error)
+        *error = "Invalid persisted Hamlib profile";
+      return false;
+    }
+    m_hamlibProfile = {{"modelId", modelId},
+                       {"route", route},
+                       {"baudRate", baudRate},
+                       {"autoConnect", hamlibProfile.value("autoConnect", true).toBool()}};
+  }
   m_tciProfiles.clear();
   m_autoConnectProfileId = section.value("autoConnectProfileId").toString();
   for (const QVariant &e : section.value("tciProfiles").toList()) {
@@ -784,10 +935,58 @@ QVariantMap DesktopRadioController::health() const {
           {"pttAvailable", false},
           {"tuneAvailable", false},
           {"capabilities", m_backendCapabilities},
+          {"meters", m_meters},
+          {"transmitting",
+           m_transmitting ? QVariant(*m_transmitting) : QVariant()},
           {"lastSanitizedError", m_lastError},
+          {"hamlibProfileConfigured", !m_hamlibProfile.isEmpty()},
+          {"hamlibProfileModelId", m_hamlibProfile.value("modelId")},
           {"tci", m_tci.diagnostics()}};
 }
-void DesktopRadioController::globalStop() { m_tci.globalStop(); }
+bool DesktopRadioController::requestDigiPtt(bool enabled) {
+#ifdef SHACKCQ_HAVE_HAMLIB
+  if (m_backend != "hamlib" || !m_digiPttSupported)
+    return false;
+  const QJsonObject response = m_hamlibHelper.setPtt(enabled);
+  if (!response.value("ok").toBool() ||
+      !response.value("transmitting").isBool())
+    return false;
+  m_transmitting = response.value("transmitting").toBool();
+  emit snapshotChanged();
+  return *m_transmitting == enabled;
+#else
+  Q_UNUSED(enabled);
+  return false;
+#endif
+}
+
+std::optional<bool> DesktopRadioController::digiPttReadback() const {
+#ifdef SHACKCQ_HAVE_HAMLIB
+  if (m_backend != "hamlib" || !m_digiPttSupported)
+    return std::nullopt;
+  const QJsonObject observed = m_hamlibHelper.snapshot();
+  return observed.value("ok").toBool() &&
+                 observed.value("transmitting").isBool()
+             ? std::optional<bool>(observed.value("transmitting").toBool())
+             : std::nullopt;
+#else
+  return std::nullopt;
+#endif
+}
+
+bool DesktopRadioController::globalStop() {
+  m_tci.globalStop();
+  if (m_backend == "hamlib") {
+    const bool verified = m_hamlibHelper.priorityStop();
+    m_transmitting = verified ? std::optional<bool>(false) : std::nullopt;
+    m_state = verified
+                  ? "Quarantined — STOPPED, RX verified; reconnect required"
+                  : "Quarantined — STOP requested; RX readback unconfirmed";
+    emit snapshotChanged();
+    return verified;
+  }
+  return true;
+}
 void DesktopRadioController::setTciTimeoutsForTest(int a, int b, int c) {
   m_tci.setTimeoutsForTest(a, b, c);
 }
@@ -797,8 +996,11 @@ void DesktopRadioController::setHamlibSnapshotForTest(quint64 frequency,
   m_backend = "hamlib";
   m_state = "Connected — fixture receive controls only; PTT/TUNE disabled";
   m_model = "Hamlib fixture";
+  m_manufacturer = "Hamlib";
   m_frequencyHz = frequency;
   m_mode = mode;
+  m_filterHz = 400;
+  m_hamlibModelId = 1;
   m_activeReceiverId = m_listeningReceiverId = m_transmitReceiverId =
       "hamlib:0";
   m_backendCapabilities = {{"receiverCount", 1},

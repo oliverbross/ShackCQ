@@ -1,0 +1,1 @@
+{"agentId":"agent-fixture-1","code":"READBACK_CONFIRMED","commandId":"command-fixture-1","deviceId":"hamlib:1","generation":7,"ok":true,"protocol":{"major":1,"minor":0},"type":"radio.command.result"}

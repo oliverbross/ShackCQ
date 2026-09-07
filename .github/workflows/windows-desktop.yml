@@ -4,7 +4,7 @@ on:
   workflow_call:
   workflow_dispatch:
   push:
-    branches: [feature/windows-desktop-alpha-v1, feature/tci-multirx-waterfall-globe-v1, feature/desktop-flightline-ui-convergence-v1, feature/desktop-ui-ux-deep-convergence-v2, feature/desktop-functional-parity-closure-v1]
+    branches: [feature/windows-desktop-alpha-v1, feature/tci-multirx-waterfall-globe-v1, feature/desktop-flightline-ui-convergence-v1, feature/desktop-ui-ux-deep-convergence-v2, feature/desktop-functional-parity-closure-v1, feature/hamlib-cloud-agent-v1, feature/digi-cloud-agent-v2]
     paths:
       - 'desktop/**'
       - 'core/**'
@@ -82,7 +82,7 @@ jobs:
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/hamlib
-          key: windows-hamlib-4.7.2-mingw1310-${{ hashFiles('core/third_party/hamlib/SOURCE_MANIFEST.json') }}
+          key: windows-hamlib-4.7.2-mingw1310-${{ hashFiles('docs/radio/hamlib/SOURCE_MANIFEST.json') }}
       - name: Build pinned Hamlib static library and supported backends
         if: steps.hamlib-cache.outputs.cache-hit != 'true'
         shell: msys2 {0}
@@ -110,7 +110,7 @@ jobs:
         uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/hamlib
-          key: windows-hamlib-4.7.2-mingw1310-${{ hashFiles('core/third_party/hamlib/SOURCE_MANIFEST.json') }}
+          key: windows-hamlib-4.7.2-mingw1310-${{ hashFiles('docs/radio/hamlib/SOURCE_MANIFEST.json') }}
       - name: Configure Release
         shell: pwsh
         run: cmake -S desktop -B build/windows -G Ninja -DCMAKE_BUILD_TYPE=Release -DSHACKCQ_BUILD_TESTS=ON -DSHACKCQ_REQUIRE_HAMLIB=ON "-DSHACKCQ_HAMLIB_ROOT=$env:RUNNER_TEMP/hamlib" "-DOPENSSL_ROOT_DIR=$env:OPENSSL_ROOT_DIR"
@@ -159,19 +159,20 @@ jobs:
       - name: Package portable ZIP and per-user NSIS installer
         shell: pwsh
         run: desktop/packaging/windows/package.ps1 -BuildDirectory build/windows -OutputDirectory artifacts/windows
-      - name: Package standalone stationd ZIP
+      - name: Package standalone ShackCQ Agent ZIP
         shell: pwsh
         run: |
-          $stage = 'artifacts/windows/stationd-portable'
+          $stage = 'artifacts/windows/agent-portable'
           New-Item -ItemType Directory -Force -Path $stage | Out-Null
-          Copy-Item build/windows/shackcq-stationd.exe $stage
+          Copy-Item build/windows/ShackCQAgent.exe $stage
+          Copy-Item build/windows/shackcq-hamlib-helper.exe $stage
           Copy-Item "$env:OPENSSL_ROOT_DIR/bin/libcrypto-3-x64.dll" $stage
           Copy-Item "$env:OPENSSL_ROOT_DIR/bin/libssl-3-x64.dll" $stage
           Copy-Item COPYING "$stage/COPYING.txt"
           Copy-Item NOTICE "$stage/NOTICE.txt"
-          windeployqt --release --no-translations --no-system-d3d-compiler --dir $stage "$stage/shackcq-stationd.exe"
-          if (Get-ChildItem $stage -Recurse -File | Where-Object Name -Match '(?i)(private|identity|\.pem$|rigctld)') { throw 'Forbidden stationd package content' }
-          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/windows/ShackCQ-stationd-Windows-x64-${{ github.sha }}.zip" -CompressionLevel Optimal
+          windeployqt --release --no-translations --no-system-d3d-compiler --dir $stage "$stage/ShackCQAgent.exe"
+          if (Get-ChildItem $stage -Recurse -File | Where-Object Name -Match '(?i)(private|identity|\.pem$|rigctld)') { throw 'Forbidden Agent package content' }
+          Compress-Archive -Path "$stage/*" -DestinationPath "artifacts/windows/ShackCQAgent-Windows-x64-${{ github.sha }}.zip" -CompressionLevel Optimal
       - name: Enforce measured size ceilings
         shell: pwsh
         run: |
@@ -185,9 +186,12 @@ jobs:
           $portable = Get-Item artifacts/windows/ShackCQ-Windows-x64-portable-v0.1.0-rc.1.zip -ErrorAction SilentlyContinue
           $installer = Get-Item artifacts/windows/ShackCQ-Windows-x64-setup-v0.1.0-rc.1.exe -ErrorAction SilentlyContinue
           if (!$portable -or !$installer) { throw 'Expected Windows packages were not produced' }
-          Get-ChildItem artifacts/windows -File | Where-Object Name -Match '^ShackCQ-Windows-x64-' |
+          Get-ChildItem artifacts/windows -File | Where-Object Name -Match '^ShackCQ(?:Agent)?-Windows-x64-' |
             Get-FileHash -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $([IO.Path]::GetFileName($_.Path))" } |
             Set-Content artifacts/windows/SHA256SUMS.txt
+          if (!(Select-String -Path artifacts/windows/SHA256SUMS.txt -Pattern "ShackCQAgent-Windows-x64-${{ github.sha }}.zip" -SimpleMatch)) {
+            throw 'Standalone Agent checksum is missing'
+          }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ShackCQ-Windows-x64-${{ github.sha }}

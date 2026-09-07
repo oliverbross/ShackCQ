@@ -161,9 +161,9 @@ private slots:
     QCOMPARE(radio.tciProfiles().size(), 1);
     QCOMPARE(radio.tciProfiles().first().toMap().value("endpoint").toString(),
              QString("ws://127.0.0.1:40001"));
-    QCOMPARE(radio.configuration().value("schemaVersion").toInt(), 2);
+  QCOMPARE(radio.configuration().value("schemaVersion").toInt(), 3);
     QCOMPARE(radio.configuration().value("nativeProfiles").toList().size(), 1);
-    QVERIFY(!radio.restoreConfiguration({{"schemaVersion", 3}}, &error));
+  QVERIFY(!radio.restoreConfiguration({{"schemaVersion", 4}}, &error));
     QVERIFY(error.contains("newer"));
     QVariantList excessive;
     for (int index = 0; index < 33; ++index) {

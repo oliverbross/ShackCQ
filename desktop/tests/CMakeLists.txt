@@ -27,6 +27,36 @@ target_link_libraries(desktop_platform_safety_tests PRIVATE ${SHACKCQ_TEST_LIBS}
 shackcq_target_warnings(desktop_platform_safety_tests)
 add_test(NAME desktop_platform_safety_tests COMMAND desktop_platform_safety_tests)
 
+qt_add_executable(cloud_agent_client_tests unit/cloud_agent_client_tests.cpp)
+target_link_libraries(cloud_agent_client_tests PRIVATE ${SHACKCQ_TEST_LIBS} Qt6::WebSockets)
+target_compile_definitions(cloud_agent_client_tests PRIVATE
+    SHACKCQ_RADIO_AGENT_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../fixtures/radio-agent-v1")
+shackcq_target_warnings(cloud_agent_client_tests)
+add_test(NAME cloud_agent_client_tests COMMAND cloud_agent_client_tests)
+
+qt_add_executable(agent_digi_controller_tests unit/agent_digi_controller_tests.cpp)
+target_link_libraries(agent_digi_controller_tests PRIVATE ${SHACKCQ_TEST_LIBS})
+shackcq_target_warnings(agent_digi_controller_tests)
+add_test(NAME agent_digi_controller_tests COMMAND agent_digi_controller_tests)
+
+qt_add_executable(hamlib_helper_fixture fixtures/hamlib_helper_fixture.cpp)
+target_link_libraries(hamlib_helper_fixture PRIVATE Qt6::Core)
+shackcq_target_warnings(hamlib_helper_fixture)
+
+if(ShackCQHamlib_FOUND)
+    target_compile_definitions(agent_digi_controller_tests PRIVATE
+        SHACKCQ_AGENT_HAMLIB_FIXTURE="$<TARGET_FILE:hamlib_helper_fixture>")
+    add_dependencies(agent_digi_controller_tests hamlib_helper_fixture)
+endif()
+
+qt_add_executable(hamlib_helper_transport_tests unit/hamlib_helper_transport_tests.cpp)
+target_link_libraries(hamlib_helper_transport_tests PRIVATE ${SHACKCQ_TEST_LIBS})
+target_compile_definitions(hamlib_helper_transport_tests PRIVATE
+    SHACKCQ_HAMLIB_FIXTURE="$<TARGET_FILE:hamlib_helper_fixture>")
+add_dependencies(hamlib_helper_transport_tests hamlib_helper_fixture)
+shackcq_target_warnings(hamlib_helper_transport_tests)
+add_test(NAME hamlib_helper_transport_tests COMMAND hamlib_helper_transport_tests)
+
 qt_add_executable(desktop_rf_observation_tests unit/desktop_rf_observation_tests.cpp)
 target_link_libraries(desktop_rf_observation_tests PRIVATE ${SHACKCQ_TEST_LIBS})
 shackcq_target_warnings(desktop_rf_observation_tests)
