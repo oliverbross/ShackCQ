@@ -241,8 +241,11 @@ bool AgentDigiController::clockGood() const {
 void AgentDigiController::resetClockEvidence(){m_clockStartedMono=m_monotonic.elapsed();m_clockStartedWall=QDateTime::currentMSecsSinceEpoch();m_clockSamples=0;m_clockUtcUncertaintyMs=-1;m_clockSampleUncertaintyMs=-1;}
 
 void AgentDigiController::updateClockEvidence(qsizetype samples){
-  if(m_clockStartedMono<=0)resetClockEvidence();m_clockSamples+=samples;const qint64 elapsed=m_monotonic.elapsed()-m_clockStartedMono;
-  if(elapsed<=0)return;const qint64 wallElapsed=QDateTime::currentMSecsSinceEpoch()-m_clockStartedWall;
+  if(m_clockStartedMono<=0) resetClockEvidence();
+  m_clockSamples+=samples;
+  const qint64 elapsed=m_monotonic.elapsed()-m_clockStartedMono;
+  if(elapsed<=0) return;
+  const qint64 wallElapsed=QDateTime::currentMSecsSinceEpoch()-m_clockStartedWall;
   m_clockUtcUncertaintyMs=std::llabs(wallElapsed-elapsed);
   m_clockSampleUncertaintyMs=std::llabs((m_clockSamples*1000/12'000)-elapsed);
 }
@@ -300,14 +303,16 @@ void AgentDigiController::advanceFtSequence(const QJsonObject &decode){
   else if(remote==locked&&state=="WAIT_R_REPORT"&&kind=="R_REPORT"){m_ftSequence.insert("receivedReport",msg.value("report"));next="RR73";}
   else if(remote==locked&&state=="WAIT_RR73"&&(kind=="RR73"||kind=="RRR"))next="FINAL_73";
   else if(remote==locked&&state=="WAIT_FINAL_73"&&kind=="FINAL_73"){m_ftSequence.insert("state","COMPLETE");m_ftSequence.insert("completionReason","Standard exchange complete");m_ftSequence.insert("expectedIncoming",QJsonArray{});m_ftDeadlineMono=0;emit snapshotChanged();return;}
-  if(next.isEmpty())return;m_ftSequence.insert("retryCount",0);m_ftDeadlineMono=0;QString error;if(!queueFtSequenceMessage(next,&error)){m_ftSequence.insert("state","FAILED");m_ftSequence.insert("completionReason",error);}
+  if(next.isEmpty()) return;
+  m_ftSequence.insert("retryCount",0);m_ftDeadlineMono=0;QString error;if(!queueFtSequenceMessage(next,&error)){m_ftSequence.insert("state","FAILED");m_ftSequence.insert("completionReason",error);}
 }
 
 void AgentDigiController::noteFtTransmitComplete(){
   const QString kind=m_ftSequence.value("pendingKind").toString();if(kind.isEmpty())return;const QHash<QString,QString> states{{"CQ","WAIT_CALLER"},{"GRID","WAIT_REPORT"},{"REPORT","WAIT_R_REPORT"},{"R_REPORT","WAIT_RR73"},{"RR73","WAIT_FINAL_73"},{"FINAL_73","COMPLETE"}};const QString next=states.value(kind);if(next.isEmpty())return;m_ftSequence.insert("state",next);m_ftSequence.insert("pendingKind",QJsonValue::Null);m_ftSequence.insert("pendingMessage",QJsonValue::Null);if(kind=="CQ")m_ftSequence.insert("cqTransmissions",m_ftSequence.value("cqTransmissions").toInt()+1);QJsonArray expected;if(next=="WAIT_CALLER")expected={"GRID","REPORT"};else if(next=="WAIT_REPORT")expected={"REPORT"};else if(next=="WAIT_R_REPORT")expected={"R_REPORT"};else if(next=="WAIT_RR73")expected={"RRR","RR73"};else if(next=="WAIT_FINAL_73")expected={"FINAL_73"};m_ftSequence.insert("expectedIncoming",expected);m_ftSequence.insert("holdReason",QJsonValue::Null);m_ftDeadlineMono=next.startsWith("WAIT_")?m_monotonic.elapsed()+periodMillis(m_mode,m_submode)*2+1'500:0;if(next=="COMPLETE")m_ftSequence.insert("completionReason","Standard exchange complete");}
 
 void AgentDigiController::checkFtSequenceTimeout(){
-  if(m_ftDeadlineMono<=0||m_monotonic.elapsed()<m_ftDeadlineMono)return;m_ftDeadlineMono=0;const QString state=m_ftSequence.value("state").toString();QString retryKind;
+  if(m_ftDeadlineMono<=0||m_monotonic.elapsed()<m_ftDeadlineMono) return;
+  m_ftDeadlineMono=0;const QString state=m_ftSequence.value("state").toString();QString retryKind;
   if(state=="WAIT_CALLER"){if(m_ftSequence.value("autoCq").toBool()&&m_ftSequence.value("cqTransmissions").toInt()<m_ftSequence.value("autoCqLimit").toInt())retryKind="CQ";else{m_ftSequence.insert("state","STOPPED");m_ftSequence.insert("completionReason","Unanswered CQ limit reached");}}
   else{const QHash<QString,QString> kinds{{"WAIT_REPORT","GRID"},{"WAIT_R_REPORT","REPORT"},{"WAIT_RR73","R_REPORT"},{"WAIT_FINAL_73","RR73"}};retryKind=kinds.value(state);const int retries=m_ftSequence.value("retryCount").toInt();if(!retryKind.isEmpty()&&retries>=m_ftSequence.value("retryLimit").toInt()){m_ftSequence.insert("state","FAILED");m_ftSequence.insert("completionReason","Retry limit reached");retryKind.clear();}else if(!retryKind.isEmpty())m_ftSequence.insert("retryCount",retries+1);}
   if(!retryKind.isEmpty()){QString error;if(!queueFtSequenceMessage(retryKind,&error)){m_ftSequence.insert("state","FAILED");m_ftSequence.insert("completionReason",error);}}emit snapshotChanged();
@@ -644,7 +649,8 @@ void AgentDigiController::finishRetainedSession() {
 bool AgentDigiController::deleteRetainedSession(const QString &sessionId,QString *error) {
   if(sessionId==m_sessionId&&m_source){if(error)*error="ACTIVE_SESSION_DELETE_PROHIBITED";return false;}
   for(qsizetype i=0;i<m_retainedSessions.size();++i)if(m_retainedSessions.at(i).toObject().value("id").toString()==sessionId){m_retainedSessions.removeAt(i);QFile::remove(retainedAudioPath(sessionId));persistRetainedSessions();emit snapshotChanged();return true;}
-  if(error)*error="RETAINED_SESSION_NOT_FOUND";return false;
+  if(error) *error="RETAINED_SESSION_NOT_FOUND";
+  return false;
 }
 
 bool AgentDigiController::redecodeRetainedSession(const QString &sessionId,QString *error) {
@@ -654,7 +660,9 @@ bool AgentDigiController::redecodeRetainedSession(const QString &sessionId,QStri
   QFile file(retainedAudioPath(sessionId));if(!file.open(QIODevice::ReadOnly)||file.size()>MaximumRetainedBytes){if(error)*error="RETAINED_AUDIO_UNAVAILABLE";return false;}const QByteArray bytes=file.readAll();QVector<float> samples(bytes.size()/2);const auto *pcm=reinterpret_cast<const uchar *>(bytes.constData());for(qsizetype i=0;i<samples.size();++i)samples[i]=float(qFromLittleEndian<qint16>(pcm+i*2))/32768.0f;
   const qsizetype slotSamples=std::max<qsizetype>(1,periodMillis(session.value("mode").toString(),session.value("submode").toString())*12);QJsonArray additions;
   for(qsizetype start=0;start+slotSamples<=samples.size()&&additions.size()<64;start+=slotSamples){std::array<char,64*1024> output{};const int size=shackcq_digi_decode_slot(index,samples.constData()+start,size_t(slotSamples),12'000,output.data(),output.size());QJsonParseError parse;const QJsonObject decoded=size>0?QJsonDocument::fromJson(QByteArray(output.data(),size),&parse).object():QJsonObject{};if(parse.error!=QJsonParseError::NoError)continue;for(const auto &value:decoded.value("decodes").toArray()){const QJsonObject source=value.toObject();additions.append(QJsonObject{{"id",QUuid::createUuid().toString(QUuid::WithoutBraces)},{"slotStartMillis",QDateTime::fromString(session.value("startedUtc").toString(),Qt::ISODateWithMs).toMSecsSinceEpoch()+start*1000/12'000},{"source","REFERENCE_RECORDING"},{"exactSlotTiming",false},{"snr",source.value("snr")},{"dt",source.value("dt")},{"audioHz",source.value("frequencyHz")},{"text",source.value("text").toString().left(512)}});}}
-  for(const auto &value:additions)m_decodes.prepend(value.toObject());while(m_decodes.size()>256)m_decodes.removeLast();for(qsizetype i=0;i<m_retainedSessions.size();++i){QJsonObject row=m_retainedSessions.at(i).toObject();if(row.value("id").toString()!=sessionId)continue;row.insert("decodes",additions);row.insert("decodeCount",additions.size());row.insert("lastRedecodedUtc",QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));m_retainedSessions.replace(i,row);break;}persistRetainedSessions();emit snapshotChanged();return true;
+  for(const auto &value:additions) m_decodes.prepend(value.toObject());
+  while(m_decodes.size()>256) m_decodes.removeLast();
+  for(qsizetype i=0;i<m_retainedSessions.size();++i){QJsonObject row=m_retainedSessions.at(i).toObject();if(row.value("id").toString()!=sessionId)continue;row.insert("decodes",additions);row.insert("decodeCount",additions.size());row.insert("lastRedecodedUtc",QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));m_retainedSessions.replace(i,row);break;}persistRetainedSessions();emit snapshotChanged();return true;
 #else
   Q_UNUSED(session);if(error)*error="DIGI_NOT_COMPILED";return false;
 #endif
