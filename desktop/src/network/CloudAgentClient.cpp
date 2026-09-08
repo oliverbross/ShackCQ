@@ -21,7 +21,7 @@
 namespace shackcq::desktop {
 namespace {
 constexpr qsizetype MaxControlBytes = 64 * 1024;
-QJsonObject protocol() { return {{"major", 1}, {"minor", 1}}; }
+QJsonObject protocol() { return {{"major", 1}, {"minor", 2}}; }
 QString compact(const QJsonObject &value) {
   return QString::fromUtf8(QJsonDocument(value).toJson(QJsonDocument::Compact));
 }

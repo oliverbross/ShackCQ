@@ -2,6 +2,7 @@
 #include "shackcq/desktop/AgentDigiController.hpp"
 #include "shackcq/desktop/DesktopRadioController.hpp"
 #include <QDateTime>
+#include <QTemporaryDir>
 #include <QtTest>
 
 using namespace shackcq::desktop;
@@ -10,7 +11,7 @@ class AgentDigiControllerTests final : public QObject {
   Q_OBJECT
   static QJsonObject frame(const QString &action,const QJsonObject &parameters={}) {
     static quint64 sequence=0;
-    return {{"type","digi.command"},{"protocol",QJsonObject{{"major",1},{"minor",1}}},
+    return {{"type","digi.command"},{"protocol",QJsonObject{{"major",1},{"minor",2}}},
       {"commandId",QStringLiteral("command-%1-%2").arg(action).arg(++sequence)},{"agentId","agent-1"},{"deviceId","hamlib:1"},
       {"expectedGeneration",1},{"browserSessionId","session-1"},{"controlInstanceId","tab-1"},
       {"validUntilUtc",QDateTime::currentDateTimeUtc().addSecs(30).toString(Qt::ISODateWithMs)},
@@ -19,7 +20,51 @@ class AgentDigiControllerTests final : public QObject {
   static QJsonObject run(AgentDigiController &digi,const QString &action,const QJsonObject &parameters={}) {
     return digi.processCommand(frame(action,parameters),"agent-1","hamlib:1",1);
   }
+  QTemporaryDir m_sessions;
 private slots:
+  void initTestCase() {
+    QVERIFY(m_sessions.isValid());
+    qputenv("SHACKCQ_DIGI_SESSION_DIR",m_sessions.path().toUtf8());
+  }
+
+  void retainedSessionsPersistExportAndDeleteWithoutRawAudio() {
+    {
+      DesktopRadioController radio;AgentDigiController digi(&radio);
+      digi.m_sessionId="retained-fixture";digi.m_mode="FT8";digi.beginRetainedSession();
+      digi.appendRetainedSamples(QVector<qint16>{100,-100,200,-200});
+      digi.appendRetainedDecode(QJsonObject{{"id","decode-fixture"},{"slotStartMillis",QDateTime::currentMSecsSinceEpoch()},{"source","LIVE_CAPTURE"},{"exactSlotTiming",true},{"snr",-8},{"dt",0.1},{"audioHz",1500},{"text","CQ TEST"}});
+      digi.finishRetainedSession();
+      QCOMPARE(digi.snapshot("agent-1","hamlib:1",1).value("retainedSessions").toArray().size(),1);
+    }
+    DesktopRadioController radio;AgentDigiController restored(&radio);
+    QCOMPARE(restored.snapshot("agent-1","hamlib:1",1).value("retainedSessions").toArray().size(),1);
+    QVERIFY(run(restored,"digi.control.acquire").value("ok").toBool());
+    const QJsonObject exported=run(restored,"digi.history.export",{{"sessionId","retained-fixture"}});
+    QVERIFY(exported.value("ok").toBool());QVERIFY(exported.value("exportJson").toString().contains("CQ TEST"));QVERIFY(!exported.value("exportJson").toString().contains(".pcm"));
+    QVERIFY(run(restored,"digi.history.delete",{{"sessionId","retained-fixture"},{"confirmed",true}}).value("ok").toBool());
+    QVERIFY(restored.snapshot("agent-1","hamlib:1",1).value("retainedSessions").toArray().isEmpty());
+  }
+
+  void ftSequenceUsesOnlyExactLiveRowsAndBuildsCanonicalExchangeMessages() {
+    DesktopRadioController radio;AgentDigiController digi(&radio);QString error;
+    QVERIFY(run(digi,"digi.control.acquire")["ok"].toBool());
+    QVERIFY(run(digi,"digi.configure",{{"mode","FT8"},{"submode",QJsonValue::Null},{"rxAudioHz",1500},{"txAudioHz",1500}})["ok"].toBool());
+    digi.setAudioReadyForTest();digi.m_sessionId="live-session";
+    digi.m_decodes.prepend(QJsonObject{{"id","live-cq"},{"slotStartMillis",15'000},{"source","LIVE_CAPTURE"},{"exactSlotTiming",true},{"snr",-12},{"dt",0.1},{"audioHz",1500},{"text","CQ K1ABC FN31"}});
+    const QJsonObject parameters{{"role","SEARCH_AND_POUNCE"},{"stationCallsign","OM0RX"},{"stationGrid","JN88TQ"},{"decodeId","live-cq"},{"autoCq",false},{"autoCqLimit",3},{"retryLimit",3}};
+    QVERIFY2(digi.startFtSequence(parameters,&error),qPrintable(error));
+    QCOMPARE(digi.m_ftSequence["state"].toString(),QString("CALL_TX_PENDING"));
+    QCOMPARE(digi.m_ftSequence["pendingMessage"].toString(),QString("K1ABC OM0RX JN88"));
+    QCOMPARE(digi.m_ftSequence["holdReason"].toString(),QString("CLOCK_QUALITY_UNVERIFIED"));
+
+    digi.resetPrepared();digi.m_state=AgentDigiController::State::RxVerified;digi.m_ftSequence["state"]="WAIT_REPORT";
+    digi.advanceFtSequence(QJsonObject{{"id","report"},{"slotStartMillis",45'000},{"source","REFERENCE_RECORDING"},{"exactSlotTiming",false},{"snr",-7},{"text","OM0RX K1ABC -07"}});
+    QCOMPARE(digi.m_ftSequence["state"].toString(),QString("WAIT_REPORT"));
+    digi.advanceFtSequence(QJsonObject{{"id","report-live"},{"slotStartMillis",45'000},{"source","LIVE_CAPTURE"},{"exactSlotTiming",true},{"snr",-7},{"text","OM0RX K1ABC -07"}});
+    QCOMPARE(digi.m_ftSequence["state"].toString(),QString("R_REPORT_TX_PENDING"));
+    QCOMPARE(digi.m_ftSequence["pendingMessage"].toString(),QString("K1ABC OM0RX R-12"));
+  }
+
   void defaultsAreInertAndRuntimeStateCannotRestore() {
     DesktopRadioController radio;AgentDigiController digi(&radio);QString error;
     QVERIFY(!digi.restoreConfiguration({{"schemaVersion",1},{"armed",true}},&error));
