@@ -13,6 +13,7 @@
 #include <QJsonArray>
 #include <QList>
 #include <QObject>
+#include <QSet>
 #include <QTimer>
 #include <QVariantMap>
 #include <functional>
@@ -64,6 +65,26 @@ private:
   void expireLease();
   void finishTransmit();
   bool scheduleTransmit(QString *error);
+  bool clockGood() const;
+  void resetClockEvidence();
+  void updateClockEvidence(qsizetype samples);
+  bool startFtSequence(const QJsonObject &parameters, QString *error);
+  void stopFtSequence(const QString &reason);
+  void advanceFtSequence(const QJsonObject &decode);
+  bool queueFtSequenceMessage(const QString &kind, QString *error = nullptr);
+  void noteFtTransmitComplete();
+  void checkFtSequenceTimeout();
+  void loadRetainedSessions();
+  void persistRetainedSessions();
+  void beginRetainedSession();
+  void appendRetainedSamples(const QVector<qint16> &samples);
+  void appendRetainedDecode(const QJsonObject &decode);
+  void finishRetainedSession();
+  QJsonObject retainedSession(const QString &sessionId) const;
+  QString retainedAudioPath(const QString &sessionId) const;
+  bool redecodeRetainedSession(const QString &sessionId, QString *error);
+  bool replayRetainedSession(const QString &sessionId, QString *error);
+  bool deleteRetainedSession(const QString &sessionId, QString *error);
   void processDisplayAndContinuous();
   bool applyReceiveEntry(const QJsonObject &entry, QString *error);
   void scannerStep();
@@ -92,7 +113,13 @@ private:
   QVector<float> m_continuousSamples;
   QVector<QJsonObject> m_waterfall;
   QVector<QJsonObject> m_decodes;
+  QJsonArray m_retainedSessions;
+  QJsonObject m_ftSequence;
+  QSet<QString> m_ftAcceptedDecodes;
   QJsonObject m_sstv;
+  QString m_retainedRoot;
+  QString m_sessionStartedUtc;
+  qint64 m_retainedSampleCount{};
   QString m_sessionId;
   QString m_mode{"FT8"};
   QString m_submode;
@@ -113,6 +140,12 @@ private:
   qint64 m_nextSlotEpoch{};
   qint64 m_captureSlotStart{};
   qint64 m_nextStopRetryMono{};
+  qint64 m_clockStartedMono{};
+  qint64 m_clockStartedWall{};
+  qint64 m_clockSamples{};
+  qint64 m_clockUtcUncertaintyMs{-1};
+  qint64 m_clockSampleUncertaintyMs{-1};
+  qint64 m_ftDeadlineMono{};
   int m_messageRevision{};
   int m_maxRepeats{1};
   int m_repeatsRemaining{};
@@ -128,6 +161,8 @@ private:
   float m_rms{};
   float m_peak{};
   double m_resamplePhase{};
+  double m_resampleSum{};
+  int m_resampleCount{};
   bool m_clipped{};
   bool m_serverTxPermitted{};
   bool m_localTxPermitted{};
