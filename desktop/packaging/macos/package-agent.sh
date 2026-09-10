@@ -39,7 +39,29 @@ mkdir -p "$dmg_stage"
 trap 'rm -rf "$temporary_root"' EXIT HUP INT TERM
 
 if [ -n "$signing_identity" ]; then
-  codesign --force --deep --options runtime --timestamp --sign "$signing_identity" "$app_bundle"
+  # Sign nested code from the inside out. Using --deep for signing can leave
+  # third-party framework layouts (notably Qt) with invalid or ambiguous seals.
+  for code_root in "$app_bundle/Contents/Frameworks" "$app_bundle/Contents/PlugIns"; do
+    if [ -d "$code_root" ]; then
+      find "$code_root" -type f -print | while IFS= read -r candidate; do
+        if file "$candidate" | grep -q 'Mach-O'; then
+          codesign --force --options runtime --timestamp --sign "$signing_identity" "$candidate"
+        fi
+      done
+    fi
+  done
+  if [ -d "$app_bundle/Contents/Frameworks" ]; then
+    find "$app_bundle/Contents/Frameworks" -type d -name '*.framework' -print | while IFS= read -r framework; do
+      codesign --force --options runtime --timestamp --sign "$signing_identity" "$framework"
+    done
+  fi
+  codesign --force --options runtime --timestamp --sign "$signing_identity" \
+    "$app_bundle/Contents/MacOS/shackcq-hamlib-helper"
+  codesign --force --options runtime --timestamp --sign "$signing_identity" \
+    "$app_bundle/Contents/MacOS/shackcq-stationd"
+  codesign --force --options runtime --timestamp --sign "$signing_identity" \
+    "$app_bundle/Contents/MacOS/ShackCQAgent"
+  codesign --force --options runtime --timestamp --sign "$signing_identity" "$app_bundle"
   codesign --verify --deep --strict --verbose=2 "$app_bundle"
 fi
 
