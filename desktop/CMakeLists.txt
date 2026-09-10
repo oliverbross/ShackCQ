@@ -56,6 +56,7 @@ set(SHACKCQ_DESKTOP_SERVICE_SOURCES
     src/network/WavelogSync.cpp
     src/network/ClusterController.cpp
     src/network/CloudAgentClient.cpp
+    src/network/LoggerIngestion.cpp
     src/network/AgentDigiController.cpp
     src/network/RemoteStationService.cpp
     src/network/RemoteStationClient.cpp

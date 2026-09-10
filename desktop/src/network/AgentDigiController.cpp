@@ -469,7 +469,9 @@ void AgentDigiController::consumeInput() {
   if (period && slot != m_captureSlotStart) {
     QVector<float> completed;
     completed.swap(m_capture);
+#ifdef SHACKCQ_HAVE_NATIVE_DIGI
     const qint64 completedSlot = m_captureSlotStart;
+#endif
     m_captureSlotStart = slot;
 #ifdef SHACKCQ_HAVE_NATIVE_DIGI
     if(m_slotDecodeInFlight)return;

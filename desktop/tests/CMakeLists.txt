@@ -34,6 +34,11 @@ target_compile_definitions(cloud_agent_client_tests PRIVATE
 shackcq_target_warnings(cloud_agent_client_tests)
 add_test(NAME cloud_agent_client_tests COMMAND cloud_agent_client_tests)
 
+qt_add_executable(logger_ingestion_tests unit/logger_ingestion_tests.cpp)
+target_link_libraries(logger_ingestion_tests PRIVATE ${SHACKCQ_TEST_LIBS})
+shackcq_target_warnings(logger_ingestion_tests)
+add_test(NAME logger_ingestion_tests COMMAND logger_ingestion_tests)
+
 qt_add_executable(agent_digi_controller_tests unit/agent_digi_controller_tests.cpp)
 target_link_libraries(agent_digi_controller_tests PRIVATE ${SHACKCQ_TEST_LIBS})
 shackcq_target_warnings(agent_digi_controller_tests)

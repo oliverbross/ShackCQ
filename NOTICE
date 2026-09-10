@@ -224,3 +224,14 @@ used under its BSD-style licence; its source licence and copyright text are
 included in the source/compliance bundle. Linux credential persistence uses the
 system libsecret/Secret Service library dynamically and fails closed when no
 service is available.
+
+Live logger protocol references
+-------------------------------
+
+The receive-only WSJT-X adapter was independently implemented from the official
+WSJT-X Network/NetworkMessage.hpp layout reviewed at commit
+ccdfaf3c1c109010d15399674ce278167cfde848. No WSJT-X source or binary is
+incorporated. N1MM+ ContactInfo, ContactReplace and ContactDelete behavior and
+10 Hz frequency units were reviewed from the official N1MM Logger+ external UDP
+broadcast documentation on 2026-09-11. No N1MM+ source, binary or asset is
+incorporated.

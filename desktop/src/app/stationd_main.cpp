@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shackcq/desktop/CloudAgentClient.hpp"
+#include "shackcq/desktop/LoggerIngestion.hpp"
 #include "shackcq/desktop/AgentDigiController.hpp"
 #include "shackcq/desktop/DesktopPanadapter.hpp"
 #include "shackcq/desktop/DesktopPlatform.hpp"
@@ -106,7 +107,8 @@ int main(int argc, char **argv) {
   SystemCredentialVault vault;
   DesktopRadioController radio;
   AgentDigiController digi(&radio);
-  CloudAgentClient cloudAgent(&vault, &radio, &digi);
+  LoggerIngestion logger(&vault, paths.databases() + "/logger-events-v1.json");
+  CloudAgentClient cloudAgent(&vault, &radio, &digi, &logger);
   DesktopRotatorController rotator;
   DesktopPanadapter panadapter;
   if (!radio.restoreConfiguration(configuration.section("radioProfiles"), &error) ||

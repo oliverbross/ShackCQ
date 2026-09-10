@@ -40,6 +40,12 @@ public:
         value = static_cast<std::int32_t>(raw);
         return true;
     }
+    bool i64(std::int64_t& value) {
+        std::uint64_t raw{};
+        if (!u64(raw)) return false;
+        value = static_cast<std::int64_t>(raw);
+        return true;
+    }
     bool u64(std::uint64_t& value) {
         std::uint32_t high{}, low{};
         if (!u32(high) || !u32(low)) return false;
@@ -169,6 +175,35 @@ bool parse_decode(Reader& reader, Decode& value) {
         reader.boolean(value.off_air) && reader.remaining() == 0;
 }
 
+bool qdatetime(Reader& reader, std::int64_t& utc_milliseconds) {
+    std::int64_t julian_day{};
+    std::uint32_t milliseconds{};
+    std::uint8_t specification{};
+    if (!reader.i64(julian_day) || !reader.u32(milliseconds) || milliseconds >= 86'400'000U ||
+        !reader.u8(specification)) return false;
+    std::int32_t offset_seconds{};
+    if (specification == 2 && !reader.i32(offset_seconds)) return false;
+    // WSJT-X sends UTC (1) or an explicit UTC offset (2). Reject local/time-zone
+    // forms because they are not deterministic on a headless Agent.
+    if (specification != 1 && specification != 2) return false;
+    constexpr std::int64_t UnixEpochJulianDay = 2'440'588;
+    if (julian_day < UnixEpochJulianDay || julian_day > 5'000'000) return false;
+    utc_milliseconds = (julian_day - UnixEpochJulianDay) * 86'400'000LL +
+                       milliseconds - static_cast<std::int64_t>(offset_seconds) * 1000LL;
+    return true;
+}
+
+bool parse_qso_logged(Reader& reader, QsoLogged& value) {
+    return qdatetime(reader, value.off_utc_milliseconds) &&
+        reader.bytes(value.dx_call, 32) && !value.dx_call.empty() &&
+        reader.bytes(value.dx_grid, 16) && reader.u64(value.tx_frequency_hz) &&
+        value.tx_frequency_hz <= 10'500'000'000ULL && reader.bytes(value.mode, 32) &&
+        reader.bytes(value.report_sent, 32) && reader.bytes(value.report_received, 32) &&
+        reader.bytes(value.tx_power, 32) && reader.bytes(value.comments, kMaxTextBytes) &&
+        reader.bytes(value.name, 128) && qdatetime(reader, value.on_utc_milliseconds) &&
+        reader.remaining() == 0;
+}
+
 bool parse_logged_adif(Reader& reader, LoggedAdif& value) {
     if (!reader.bytes(value.raw, kMaxAdifBytes, false) || reader.remaining() != 0 ||
         (value.raw.find("<EOR>") == std::string::npos && value.raw.find("<eor>") == std::string::npos))
@@ -223,6 +258,11 @@ std::optional<Message> parse_datagram(const std::uint8_t* data, std::size_t size
         message.header.type = MessageType::Decode;
         Decode value;
         if (!parse_decode(reader, value)) { set_error(error, ParseError::InvalidLength); return std::nullopt; }
+        message.payload = std::move(value);
+    } else if (raw_type == static_cast<std::uint32_t>(MessageType::QsoLogged)) {
+        message.header.type = MessageType::QsoLogged;
+        QsoLogged value;
+        if (!parse_qso_logged(reader, value)) { set_error(error, ParseError::InvalidLength); return std::nullopt; }
         message.payload = std::move(value);
     } else if (raw_type == static_cast<std::uint32_t>(MessageType::LoggedAdif)) {
         message.header.type = MessageType::LoggedAdif;
