@@ -18,12 +18,25 @@ test -x "$app_bundle/Contents/MacOS/ShackCQAgent"
 test -x "$app_bundle/Contents/MacOS/shackcq-stationd"
 test -x "$app_bundle/Contents/MacOS/shackcq-hamlib-helper"
 test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_bundle/Contents/Info.plist")" = "app.shackcq.agent"
+lipo "$app_bundle/Contents/MacOS/ShackCQAgent" -verify_arch arm64
+for executable in "$app_bundle/Contents/MacOS/ShackCQAgent" \
+                  "$app_bundle/Contents/MacOS/shackcq-stationd" \
+                  "$app_bundle/Contents/MacOS/shackcq-hamlib-helper"; do
+  if otool -L "$executable" | grep -Eq '^[[:space:]]+/(opt|usr/local)/'; then
+    echo "unbundled local dependency in $executable" >&2
+    exit 65
+  fi
+done
 
 mkdir -p "$output_directory"
 base_name="ShackCQAgent-macOS-arm64-$version"
 zip_path="$output_directory/$base_name.zip"
 dmg_path="$output_directory/$base_name.dmg"
-notary_zip="$output_directory/$base_name-notary.zip"
+temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/shackcq-agent-package.XXXXXX")
+notary_zip="$temporary_root/notary.zip"
+dmg_stage="$temporary_root/dmg"
+mkdir -p "$dmg_stage"
+trap 'rm -rf "$temporary_root"' EXIT HUP INT TERM
 
 if [ -n "$signing_identity" ]; then
   codesign --force --deep --options runtime --timestamp --sign "$signing_identity" "$app_bundle"
@@ -42,7 +55,6 @@ ditto -c -k --sequesterRsrc --keepParent "$app_bundle" "$zip_path"
 test "$(zipinfo -1 "$zip_path" | sed -n '1p')" = "ShackCQAgent.app/"
 test -n "$(zipinfo -1 "$zip_path" | grep '^ShackCQAgent.app/Contents/MacOS/ShackCQAgent$')"
 
-dmg_stage=$(mktemp -d "${TMPDIR:-/tmp}/shackcq-agent-dmg.XXXXXX")
 ditto "$app_bundle" "$dmg_stage/ShackCQAgent.app"
 ln -s /Applications "$dmg_stage/Applications"
 hdiutil create -quiet -volname "ShackCQ Agent" -srcfolder "$dmg_stage" -ov -format UDZO "$dmg_path"
