@@ -176,7 +176,17 @@ qt_add_executable(shackcq-stationd src/app/stationd_main.cpp)
 target_link_libraries(shackcq-stationd PRIVATE shackcq_desktop_services)
 shackcq_target_warnings(shackcq-stationd)
 
-qt_add_executable(ShackCQAgent src/app/stationd_main.cpp)
+if(APPLE)
+    qt_add_executable(ShackCQAgent MACOSX_BUNDLE src/app/agent_gui_main.cpp)
+    set_source_files_properties(resources/app-icon.icns PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources")
+    target_sources(ShackCQAgent PRIVATE resources/app-icon.icns)
+    set_target_properties(ShackCQAgent PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/packaging/macos/agent-Info.plist"
+        MACOSX_BUNDLE_ICON_FILE "app-icon.icns")
+else()
+    qt_add_executable(ShackCQAgent src/app/stationd_main.cpp)
+endif()
 target_link_libraries(ShackCQAgent PRIVATE shackcq_desktop_services)
 shackcq_target_warnings(ShackCQAgent)
 
@@ -216,12 +226,13 @@ install(TARGETS ShackCQDesktop
     RUNTIME DESTINATION .)
 if(WIN32)
     install(TARGETS shackcq-stationd ShackCQAgent shackcq-hamlib-helper RUNTIME DESTINATION .)
+elseif(APPLE)
+    install(TARGETS ShackCQAgent BUNDLE DESTINATION .)
+    install(TARGETS shackcq-stationd shackcq-hamlib-helper RUNTIME DESTINATION stationd)
+    install(TARGETS shackcq-hamlib-helper
+        RUNTIME DESTINATION ShackCQDesktop.app/Contents/MacOS)
 else()
     install(TARGETS shackcq-stationd ShackCQAgent shackcq-hamlib-helper RUNTIME DESTINATION stationd)
-    if(APPLE)
-        install(TARGETS shackcq-hamlib-helper
-            RUNTIME DESTINATION ShackCQDesktop.app/Contents/MacOS)
-    endif()
 endif()
 
 if(WIN32)

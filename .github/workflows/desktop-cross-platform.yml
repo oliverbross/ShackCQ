@@ -61,18 +61,24 @@ jobs:
           shasum -a 256 "artifacts/macos/ShackCQ-macOS-arm64-unsigned-v0.1.0-rc.1.zip" > artifacts/macos/SHA256SUMS.txt
       - name: Unsigned standalone ShackCQ Agent packaging proof
         run: |
-          mkdir -p artifacts/macos/ShackCQAgent.app/Contents/MacOS
-          cp build/macos/ShackCQAgent build/macos/shackcq-hamlib-helper artifacts/macos/ShackCQAgent.app/Contents/MacOS/
-          cp desktop/packaging/macos/agent-Info.plist artifacts/macos/ShackCQAgent.app/Contents/Info.plist
+          ditto build/macos/ShackCQAgent.app artifacts/macos/ShackCQAgent.app
+          cp build/macos/shackcq-stationd build/macos/shackcq-hamlib-helper artifacts/macos/ShackCQAgent.app/Contents/MacOS/
+          mkdir -p artifacts/macos/ShackCQAgent.app/Contents/PlugIns/platforms
+          cp "$(qtpaths --plugin-dir)/platforms/libqcocoa.dylib" artifacts/macos/ShackCQAgent.app/Contents/PlugIns/platforms/
           agent_deploy_log="$(mktemp)"
-          macdeployqt artifacts/macos/ShackCQAgent.app -no-plugins 2>&1 | tee "$agent_deploy_log"
+          macdeployqt artifacts/macos/ShackCQAgent.app -no-plugins \
+            -executable=artifacts/macos/ShackCQAgent.app/Contents/MacOS/shackcq-stationd \
+            -executable=artifacts/macos/ShackCQAgent.app/Contents/MacOS/shackcq-hamlib-helper \
+            -executable=artifacts/macos/ShackCQAgent.app/Contents/PlugIns/platforms/libqcocoa.dylib \
+            2>&1 | tee "$agent_deploy_log"
           ! grep -q 'ERROR:' "$agent_deploy_log"
-          test ! -d artifacts/macos/ShackCQAgent.app/Contents/PlugIns
           mkdir -p artifacts/macos/ShackCQAgent.app/Contents/Resources
           cp COPYING NOTICE artifacts/macos/ShackCQAgent.app/Contents/Resources/
+          codesign --force --deep --sign - artifacts/macos/ShackCQAgent.app
+          artifacts/macos/ShackCQAgent.app/Contents/MacOS/ShackCQAgent --ui-smoke
           ! find artifacts/macos/ShackCQAgent.app -type f | grep -Ei '(private|identity|\.pem$|rigctld)'
-          ditto -c -k --sequesterRsrc artifacts/macos/ShackCQAgent.app "artifacts/macos/ShackCQAgent-macOS-arm64-unsigned-${GITHUB_SHA}.zip"
-          shasum -a 256 "artifacts/macos/ShackCQAgent-macOS-arm64-unsigned-${GITHUB_SHA}.zip" >> artifacts/macos/SHA256SUMS.txt
+          chmod +x desktop/packaging/macos/package-agent.sh
+          desktop/packaging/macos/package-agent.sh artifacts/macos/ShackCQAgent.app artifacts/macos "unsigned-${GITHUB_SHA}"
       - name: Deterministic macOS UI gallery
         env:
           QT_QPA_PLATFORM: offscreen
