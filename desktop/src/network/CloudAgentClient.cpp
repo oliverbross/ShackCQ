@@ -124,7 +124,7 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
     return false;
   }
   QString code = rawCode;
-  code.remove('-');
+  code.remove(QRegularExpression(QStringLiteral("[\\s-]")));
   code = code.trimmed().toUpper();
   if (code.size() != 12 || name.trimmed().isEmpty() || name.size() > 80) {
     if (error)
