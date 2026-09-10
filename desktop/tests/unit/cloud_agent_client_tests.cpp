@@ -66,6 +66,39 @@ private slots:
     QVERIFY(!vault.read("shackcq-cloud-agent-v1").has_value());
   }
 
+  void pairedCredentialRestoresItsAccountAndStationAssociation() {
+    FakeCredentialVault vault;
+    const QJsonObject stored{
+        {"agentId", "agent-fixture"},
+        {"connectUrl", "wss://127.0.0.1/api/v1/agent/connect"},
+        {"credential", QString(48, QLatin1Char('s'))},
+        {"userId", "11111111-1111-4111-8111-111111111111"},
+        {"stationProfileId", "22222222-2222-4222-8222-222222222222"},
+        {"accountLabel", "Operator AA1A"},
+        {"stationLabel", "Home station · AA1A"}};
+    QString error;
+    QVERIFY(vault.write(
+        "shackcq-cloud-agent-v1", "ShackCQ cloud Agent",
+        QString::fromUtf8(QJsonDocument(stored).toJson(QJsonDocument::Compact)),
+        &error));
+
+    DesktopRadioController radio;
+    CloudAgentClient client(&vault, &radio);
+    QVERIFY(client.restoreConfiguration({{"enabled", true}}));
+    client.start();
+    const QVariantMap health = client.health();
+    QCOMPARE(health.value("paired").toBool(), true);
+    QCOMPARE(health.value("userId").toString(),
+             QString("11111111-1111-4111-8111-111111111111"));
+    QCOMPARE(health.value("stationProfileId").toString(),
+             QString("22222222-2222-4222-8222-222222222222"));
+    QCOMPARE(health.value("accountLabel").toString(),
+             QString("Operator AA1A"));
+    QCOMPARE(health.value("stationLabel").toString(),
+             QString("Home station · AA1A"));
+    client.stop();
+  }
+
   void staleAndProhibitedFramesFailClosed() {
     FakeCredentialVault vault;
     DesktopRadioController radio;

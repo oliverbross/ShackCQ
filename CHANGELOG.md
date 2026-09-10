@@ -1,5 +1,11 @@
 # Changelog
 
+## macOS Agent 1.0.2
+
+- Linked every new Agent credential to the signed-in ShackCQ account and selected station profile.
+- Displayed the linked account and station profile in Agent status without storing them in the general configuration file.
+- Opened the canonical authenticated Station Agents settings route directly from the macOS app.
+
 ## macOS Agent 1.0.1
 
 - Reworked the standalone Agent as a native macOS settings experience with a direct pairing-code handoff.
