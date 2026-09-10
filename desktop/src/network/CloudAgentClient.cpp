@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shackcq/desktop/CloudAgentClient.hpp"
+#include "shackcq/desktop/LoggerIngestion.hpp"
 
 #include <algorithm>
 #include <initializer_list>
@@ -35,8 +36,9 @@ bool boundedId(const QString &value) {
 CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
                                    DesktopRadioController *radio,
                                    AgentDigiController *digi,
+                                   LoggerIngestion *logger,
                                    QObject *parent)
-    : QObject(parent), m_vault(vault), m_radio(radio), m_digi(digi) {
+    : QObject(parent), m_vault(vault), m_radio(radio), m_digi(digi), m_logger(logger) {
   m_heartbeat.setInterval(15'000);
   m_reconnect.setSingleShot(true);
   connect(&m_heartbeat, &QTimer::timeout, this, [this] {
@@ -90,6 +92,10 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
   if (m_digi)
     connect(m_digi, &AgentDigiController::snapshotChanged, this, [this] {
       if (m_generation != 0) sendSnapshot();
+    });
+  if (m_logger)
+    connect(m_logger, &LoggerIngestion::eventsReady, this, [this] {
+      sendLoggerEvents();
     });
 }
 
@@ -268,6 +274,7 @@ void CloudAgentClient::sendHello() {
               {"platform", QSysInfo::productType().left(40)},
               {"version", QCoreApplication::applicationVersion().left(40)},
               {"build", QStringLiteral(SHACKCQ_BUILD_SHA).left(80)},
+              {"loggerSources", QJsonArray{"WSJTX", "N1MM"}},
               {"devices", devices}});
 }
 
@@ -299,10 +306,22 @@ void CloudAgentClient::receiveText(const QString &text) {
     m_heartbeat.start();
     setState("Live", "Cloud Agent connected; receive controls only");
     sendSnapshot();
+    sendLoggerEvents();
     return;
   }
   if (frame.value("type") == "agent.heartbeat.ack")
     return;
+  if(frame.value("type")=="logger.event.receipt"&&m_logger){
+    const QJsonArray receipts=frame.value("receipts").toArray();bool allAccepted=!receipts.isEmpty();
+    for(const QJsonValue &item:receipts)if(!item.toObject().value("accepted").toBool())allAccepted=false;
+    m_logger->acknowledge(receipts);if(allAccepted)sendLoggerEvents();return;
+  }
+  if(frame.value("type")=="logger.profile.apply"){
+    const QString commandId=frame.value("commandId").toString();QJsonObject result{{"type","logger.profile.result"},{"protocol",protocol()},{"commandId",commandId},{"agentId",m_agentId},{"deviceId","logger"},{"generation",QJsonValue::fromVariant(m_generation)}};
+    if(!m_logger||!boundedId(commandId)||frame.value("agentId").toString()!=m_agentId||frame.value("expectedGeneration").toVariant().toULongLong()!=m_generation||m_generation==0){result.insert("ok",false);result.insert("code","LOGGER_COMMAND_SCOPE_REJECTED");}
+    else {const QJsonObject applied=m_logger->applyProfile(frame.value("profile").toObject());result.insert("ok",applied.value("ok"));result.insert("code",applied.value("code"));}
+    sendObject(result);if(result.value("ok").toBool())sendLoggerEvents();return;
+  }
   if (frame.value("type") == "digi.command" && m_digi) {
     sendObject(m_digi->processCommand(frame, m_agentId, deviceId(), m_generation));
     sendSnapshot();
@@ -312,6 +331,13 @@ void CloudAgentClient::receiveText(const QString &text) {
     return;
   sendObject(processControlFrame(frame));
   sendSnapshot();
+}
+
+void CloudAgentClient::sendLoggerEvents() {
+  if (!m_logger || m_generation == 0) return;
+  const QJsonArray events=m_logger->pendingEvents();
+  if(!events.isEmpty())sendObject({{"type","logger.event.batch"},{"protocol",protocol()},
+    {"agentId",m_agentId},{"generation",QJsonValue::fromVariant(m_generation)},{"events",events}});
 }
 
 QJsonObject CloudAgentClient::processControlFrame(const QJsonObject &frame) {
@@ -528,6 +554,7 @@ QVariantMap CloudAgentClient::health() const {
           {"tune", false},
           {"txAudio", false},
           {"rotatorMovement", false},
+          {"logger", m_logger ? m_logger->health() : QVariantMap{}},
           {"digi", m_digi ? m_digi->snapshot(m_agentId, deviceId(), m_generation).toVariantMap() : QVariantMap{}}};
 }
 

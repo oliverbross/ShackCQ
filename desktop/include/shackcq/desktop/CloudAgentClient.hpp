@@ -12,12 +12,15 @@
 
 namespace shackcq::desktop {
 
+class LoggerIngestion;
+
 class CloudAgentClient final : public QObject {
   Q_OBJECT
 public:
   explicit CloudAgentClient(DesktopCredentialVault *vault,
                             DesktopRadioController *radio,
                             AgentDigiController *digi = nullptr,
+                            LoggerIngestion *logger = nullptr,
                             QObject *parent = nullptr);
   bool restoreConfiguration(const QVariantMap &section,
                             QString *error = nullptr);
@@ -39,6 +42,7 @@ private:
   void receiveText(const QString &text);
   void sendHello();
   void sendSnapshot();
+  void sendLoggerEvents();
   void sendObject(const QJsonObject &object);
   QJsonObject capabilityDescriptor() const;
   QString deviceId() const;
@@ -48,6 +52,7 @@ private:
   DesktopCredentialVault *m_vault{};
   DesktopRadioController *m_radio{};
   AgentDigiController *m_digi{};
+  LoggerIngestion *m_logger{};
   QWebSocket m_socket;
   QTimer m_heartbeat;
   QTimer m_reconnect;

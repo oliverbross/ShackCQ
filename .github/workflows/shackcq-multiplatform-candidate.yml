@@ -6,6 +6,7 @@ on:
   push:
     branches:
       - feature/digi-cloud-agent-v2
+      - feature/phase2-live-logger-ingestion
       - integration/android-hardened-windows-alpha-v1
       - feature/windows-desktop-full-parity-v1
       - feature/desktop-functional-parity-closure-v1

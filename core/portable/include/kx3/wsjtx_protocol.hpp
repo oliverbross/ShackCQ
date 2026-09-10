@@ -14,7 +14,7 @@ constexpr std::size_t kMaxIdentifierBytes = 64;
 constexpr std::size_t kMaxTextBytes = 512;
 constexpr std::size_t kMaxAdifBytes = 4096;
 
-enum class MessageType : std::uint32_t { Status = 1, Decode = 2, LoggedAdif = 12 };
+enum class MessageType : std::uint32_t { Status = 1, Decode = 2, QsoLogged = 5, LoggedAdif = 12 };
 enum class ParseError : std::uint8_t {
     None,
     Empty,
@@ -83,7 +83,21 @@ struct LoggedAdif {
     std::string time_on;
 };
 
-using Payload = std::variant<Status, Decode, LoggedAdif>;
+struct QsoLogged {
+    std::int64_t off_utc_milliseconds{};
+    std::string dx_call;
+    std::string dx_grid;
+    std::uint64_t tx_frequency_hz{};
+    std::string mode;
+    std::string report_sent;
+    std::string report_received;
+    std::string tx_power;
+    std::string comments;
+    std::string name;
+    std::int64_t on_utc_milliseconds{};
+};
+
+using Payload = std::variant<Status, Decode, QsoLogged, LoggedAdif>;
 
 struct Message {
     Header header;
