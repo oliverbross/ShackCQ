@@ -3,8 +3,10 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QCoreApplication>
+#include <QDesktopServices>
 #include <QFont>
 #include <QFormLayout>
+#include <QFrame>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHostInfo>
@@ -18,6 +20,8 @@
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <QPushButton>
+#include <QScrollArea>
+#include <QSizePolicy>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -26,48 +30,97 @@ namespace {
 struct CommandResult {
   int exitCode{-1};
   QByteArray output;
+  QByteArray error;
 };
 
 class AgentWindow final : public QMainWindow {
  public:
   explicit AgentWindow(bool smokeTest = false) {
     setWindowTitle(QStringLiteral("ShackCQ Agent"));
-    resize(680, 650);
+    resize(720, 720);
+    setMinimumSize(620, 600);
+    setUnifiedTitleAndToolBarOnMac(true);
 
     auto *root = new QWidget(this);
+    root->setObjectName(QStringLiteral("agentRoot"));
     auto *layout = new QVBoxLayout(root);
+    layout->setContentsMargins(28, 24, 28, 28);
+    layout->setSpacing(18);
     auto *heading = new QLabel(QStringLiteral("Connect this Mac to ShackCQ"), root);
+    heading->setObjectName(QStringLiteral("pageTitle"));
     QFont headingFont = heading->font();
-    headingFont.setPointSize(20);
-    headingFont.setBold(true);
+    headingFont.setPointSize(24);
+    headingFont.setWeight(QFont::DemiBold);
     heading->setFont(headingFont);
     layout->addWidget(heading);
     auto *intro = new QLabel(
-        QStringLiteral("Pair the Agent with ShackCQ, then choose the radio connected to this Mac. "
-                       "Setup never enables PTT, TUNE, or transmit."), root);
+        QStringLiteral("Pair your account, then choose the radio connected to this Mac. "
+                       "The Agent starts in receive-only mode and never enables transmit during setup."), root);
+    intro->setObjectName(QStringLiteral("secondaryText"));
     intro->setWordWrap(true);
     layout->addWidget(intro);
 
-    auto *cloudGroup = new QGroupBox(QStringLiteral("1. ShackCQ account"), root);
-    auto *cloudForm = new QFormLayout(cloudGroup);
+    auto *cloudGroup = new QFrame(root);
+    cloudGroup->setObjectName(QStringLiteral("settingsCard"));
+    auto *cloudLayout = new QVBoxLayout(cloudGroup);
+    cloudLayout->setContentsMargins(18, 16, 18, 18);
+    cloudLayout->setSpacing(12);
+    auto *cloudTitle = new QLabel(QStringLiteral("ShackCQ account"), cloudGroup);
+    cloudTitle->setObjectName(QStringLiteral("sectionTitle"));
+    cloudLayout->addWidget(cloudTitle);
+    auto *cloudHelp = new QLabel(
+        QStringLiteral("Create a one-time code in ShackCQ, then paste it below. Codes expire after 10 minutes."),
+        cloudGroup);
+    cloudHelp->setObjectName(QStringLiteral("secondaryText"));
+    cloudHelp->setWordWrap(true);
+    cloudLayout->addWidget(cloudHelp);
+    auto *cloudForm = new QFormLayout;
+    cloudForm->setHorizontalSpacing(16);
+    cloudForm->setVerticalSpacing(10);
+    cloudForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     m_origin = new QLineEdit(QStringLiteral("https://shackcq.com"), cloudGroup);
     m_agentName = new QLineEdit(QHostInfo::localHostName(), cloudGroup);
     m_pairingCode = new QLineEdit(cloudGroup);
-    m_pairingCode->setPlaceholderText(QStringLiteral("One-time code shown in ShackCQ"));
+    m_pairingCode->setPlaceholderText(QStringLiteral("XXXX XXXX XXXX"));
     m_pairingCode->setClearButtonEnabled(true);
+    m_pairingCode->setAccessibleName(QStringLiteral("One-time ShackCQ pairing code"));
     cloudForm->addRow(QStringLiteral("ShackCQ address"), m_origin);
     cloudForm->addRow(QStringLiteral("Agent name"), m_agentName);
     cloudForm->addRow(QStringLiteral("Pairing code"), m_pairingCode);
+    cloudLayout->addLayout(cloudForm);
     auto *cloudButtons = new QHBoxLayout;
-    auto *pairButton = new QPushButton(QStringLiteral("Pair with ShackCQ"), cloudGroup);
+    cloudButtons->setSpacing(8);
+    auto *openPairing = new QPushButton(QStringLiteral("Get pairing code…"), cloudGroup);
+    openPairing->setObjectName(QStringLiteral("linkButton"));
+    auto *pairButton = new QPushButton(QStringLiteral("Pair this Mac"), cloudGroup);
+    pairButton->setObjectName(QStringLiteral("primaryButton"));
+    pairButton->setDefault(true);
     auto *unpairButton = new QPushButton(QStringLiteral("Unpair"), cloudGroup);
-    cloudButtons->addWidget(pairButton);
+    cloudButtons->addWidget(openPairing);
+    cloudButtons->addStretch();
     cloudButtons->addWidget(unpairButton);
-    cloudForm->addRow(QString(), cloudButtons);
+    cloudButtons->addWidget(pairButton);
+    cloudLayout->addLayout(cloudButtons);
     layout->addWidget(cloudGroup);
 
-    auto *radioGroup = new QGroupBox(QStringLiteral("2. Radio"), root);
-    auto *radioForm = new QFormLayout(radioGroup);
+    auto *radioGroup = new QFrame(root);
+    radioGroup->setObjectName(QStringLiteral("settingsCard"));
+    auto *radioLayout = new QVBoxLayout(radioGroup);
+    radioLayout->setContentsMargins(18, 16, 18, 18);
+    radioLayout->setSpacing(12);
+    auto *radioTitle = new QLabel(QStringLiteral("Radio connection"), radioGroup);
+    radioTitle->setObjectName(QStringLiteral("sectionTitle"));
+    radioLayout->addWidget(radioTitle);
+    auto *radioHelp = new QLabel(
+        QStringLiteral("USB serial radios appear automatically. You can also enter a supported network route."),
+        radioGroup);
+    radioHelp->setObjectName(QStringLiteral("secondaryText"));
+    radioHelp->setWordWrap(true);
+    radioLayout->addWidget(radioHelp);
+    auto *radioForm = new QFormLayout;
+    radioForm->setHorizontalSpacing(16);
+    radioForm->setVerticalSpacing(10);
+    radioForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
     m_model = new QComboBox(radioGroup);
     m_model->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
     m_model->setMinimumContentsLength(35);
@@ -87,24 +140,37 @@ class AgentWindow final : public QMainWindow {
     radioForm->addRow(QStringLiteral("Connection"), m_route);
     radioForm->addRow(QStringLiteral("Baud rate"), m_baud);
     radioForm->addRow(QString(), m_autoConnect);
+    radioLayout->addLayout(radioForm);
     auto *radioButtons = new QHBoxLayout;
-    auto *refreshDevices = new QPushButton(QStringLiteral("Refresh radios and ports"), radioGroup);
-    auto *saveRadio = new QPushButton(QStringLiteral("Save and test connection"), radioGroup);
+    radioButtons->setSpacing(8);
+    auto *refreshDevices = new QPushButton(QStringLiteral("Refresh devices"), radioGroup);
+    auto *saveRadio = new QPushButton(QStringLiteral("Save and test"), radioGroup);
+    saveRadio->setObjectName(QStringLiteral("primaryButton"));
     auto *clearRadio = new QPushButton(QStringLiteral("Remove profile"), radioGroup);
     radioButtons->addWidget(refreshDevices);
-    radioButtons->addWidget(saveRadio);
+    radioButtons->addStretch();
     radioButtons->addWidget(clearRadio);
-    radioForm->addRow(QString(), radioButtons);
+    radioButtons->addWidget(saveRadio);
+    radioLayout->addLayout(radioButtons);
     layout->addWidget(radioGroup);
 
-    auto *statusGroup = new QGroupBox(QStringLiteral("Agent status"), root);
+    auto *statusGroup = new QFrame(root);
+    statusGroup->setObjectName(QStringLiteral("settingsCard"));
     auto *statusLayout = new QVBoxLayout(statusGroup);
-    m_status = new QLabel(QStringLiteral("Starting…"), statusGroup);
+    statusLayout->setContentsMargins(18, 16, 18, 18);
+    statusLayout->setSpacing(10);
+    auto *statusTitle = new QLabel(QStringLiteral("Agent status"), statusGroup);
+    statusTitle->setObjectName(QStringLiteral("sectionTitle"));
+    statusLayout->addWidget(statusTitle);
+    m_status = new QLabel(QStringLiteral("Starting Agent…"), statusGroup);
+    m_status->setObjectName(QStringLiteral("statusText"));
     m_status->setWordWrap(true);
     m_details = new QPlainTextEdit(statusGroup);
     m_details->setReadOnly(true);
     m_details->setMaximumBlockCount(200);
-    m_details->setMinimumHeight(120);
+    m_details->setMinimumHeight(92);
+    m_details->setMaximumHeight(140);
+    m_details->setPlaceholderText(QStringLiteral("Connection details will appear here."));
     auto *statusButtons = new QHBoxLayout;
     auto *refreshStatus = new QPushButton(QStringLiteral("Refresh status"), statusGroup);
     auto *startAgent = new QPushButton(QStringLiteral("Start Agent"), statusGroup);
@@ -118,9 +184,44 @@ class AgentWindow final : public QMainWindow {
     statusLayout->addLayout(statusButtons);
     layout->addWidget(statusGroup);
 
-    setCentralWidget(root);
+    layout->addStretch();
+    auto *scroll = new QScrollArea(this);
+    scroll->setFrameShape(QFrame::NoFrame);
+    scroll->setWidgetResizable(true);
+    scroll->setWidget(root);
+    setCentralWidget(scroll);
+    const bool dark = palette().color(QPalette::Window).lightness() < 128;
+    const QString windowColor = dark ? QStringLiteral("#1c1c1e") : QStringLiteral("#f5f5f7");
+    const QString cardColor = dark ? QStringLiteral("#2c2c2e") : QStringLiteral("#ffffff");
+    const QString fieldColor = dark ? QStringLiteral("#1f1f21") : QStringLiteral("#ffffff");
+    const QString borderColor = dark ? QStringLiteral("#4a4a4e") : QStringLiteral("#d1d1d6");
+    const QString textColor = dark ? QStringLiteral("#f5f5f7") : QStringLiteral("#1d1d1f");
+    const QString secondaryColor = dark ? QStringLiteral("#b7b7bd") : QStringLiteral("#5f5f66");
+    root->setStyleSheet(QStringLiteral(
+        "QWidget#agentRoot { background: %1; color: %5; }"
+        "QFrame#settingsCard { background: %2; border: 1px solid %4; border-radius: 12px; }"
+        "QLabel#sectionTitle { font-size: 15px; font-weight: 600; border: none; }"
+        "QLabel#secondaryText { color: %6; border: none; }"
+        "QLabel#statusText { font-size: 14px; font-weight: 600; border: none; }"
+        "QLineEdit, QComboBox { min-height: 30px; padding: 0 8px; background: %3; color: %5; "
+        "border: 1px solid %4; border-radius: 7px; selection-background-color: #0a84ff; }"
+        "QLineEdit:focus, QComboBox:focus { border: 2px solid #0a84ff; }"
+        "QPushButton { min-height: 30px; padding: 0 14px; background: %2; color: %5; "
+        "border: 1px solid %4; border-radius: 7px; }"
+        "QPushButton:hover { border-color: #0a84ff; }"
+        "QPushButton:pressed { background: %3; }"
+        "QPushButton#primaryButton { background: #0a84ff; color: white; border: 1px solid #0a84ff; font-weight: 600; }"
+        "QPushButton#primaryButton:pressed { background: #006edb; }"
+        "QPushButton#linkButton { color: #0a84ff; border-color: transparent; background: transparent; padding-left: 0; }"
+        "QPlainTextEdit { background: %3; color: %5; border: 1px solid %4; border-radius: 8px; padding: 8px; }"
+        "QCheckBox { spacing: 8px; border: none; }"
+        "QToolTip { background: %2; color: %5; border: 1px solid %4; }")
+        .arg(windowColor, cardColor, fieldColor, borderColor, textColor, secondaryColor));
     connect(pairButton, &QPushButton::clicked, this, [this] { pair(); });
     connect(unpairButton, &QPushButton::clicked, this, [this] { unpair(); });
+    connect(openPairing, &QPushButton::clicked, this, [] {
+      QDesktopServices::openUrl(QUrl(QStringLiteral("https://shackcq.com/agents")));
+    });
     connect(refreshDevices, &QPushButton::clicked, this, [this] { loadDevices(); });
     connect(saveRadio, &QPushButton::clicked, this, [this] { saveRadioProfile(); });
     connect(clearRadio, &QPushButton::clicked, this, [this] { clearRadioProfile(); });
@@ -128,13 +229,22 @@ class AgentWindow final : public QMainWindow {
     connect(startAgent, &QPushButton::clicked, this, [this] { ensureAgentRunning(); });
     connect(stopAgent, &QPushButton::clicked, this, [this] { stopAgentService(true); });
 
-    if (smokeTest) return;
+    if (smokeTest) {
+      loadDevices();
+      if (m_model->count() == 0)
+        qFatal("The bundled Agent helper returned no Hamlib radio models");
+      return;
+    }
     loadDevices();
     ensureAgentRunning();
     auto *monitor = new QTimer(this);
     monitor->setInterval(5'000);
     connect(monitor, &QTimer::timeout, this, [this] { refreshStatusView(false); });
     monitor->start();
+    auto *deviceMonitor = new QTimer(this);
+    deviceMonitor->setInterval(3'000);
+    connect(deviceMonitor, &QTimer::timeout, this, [this] { loadSerialPorts(false); });
+    deviceMonitor->start();
   }
 
  private:
@@ -144,28 +254,39 @@ class AgentWindow final : public QMainWindow {
 
   CommandResult run(const QStringList &arguments, int timeout = 30'000) const {
     QProcess process;
-    process.setProcessChannelMode(QProcess::MergedChannels);
+    process.setProcessChannelMode(QProcess::SeparateChannels);
     process.start(helperPath(), arguments);
-    if (!process.waitForStarted(5'000)) return {-1, process.errorString().toUtf8()};
+    if (!process.waitForStarted(5'000)) return {-1, {}, process.errorString().toUtf8()};
     if (!process.waitForFinished(timeout)) {
       process.kill();
       process.waitForFinished(2'000);
-      return {-1, QByteArrayLiteral("The Agent command timed out")};
+      return {-1, {}, QByteArrayLiteral("The Agent command timed out")};
     }
-    return {process.exitCode(), process.readAll()};
+    return {process.exitCode(), process.readAllStandardOutput(),
+            process.readAllStandardError()};
   }
 
   void appendResult(const CommandResult &result) {
-    const QString message = QString::fromUtf8(result.output).trimmed();
+    const QString message = resultText(result);
     if (!message.isEmpty()) m_details->appendPlainText(message);
   }
 
+  QString resultText(const CommandResult &result) const {
+    QString message = QString::fromUtf8(result.output).trimmed();
+    const QString error = QString::fromUtf8(result.error).trimmed();
+    if (!error.isEmpty()) {
+      if (!message.isEmpty()) message += QLatin1Char('\n');
+      message += error;
+    }
+    return message;
+  }
+
   void ensureAgentRunning() {
-    const CommandResult result = run({QStringLiteral("--status")}, 5'000);
+    const CommandResult result = run({QStringLiteral("--status")}, 8'000);
     if (result.exitCode != 0) {
       if (!QProcess::startDetached(helperPath(), {QStringLiteral("--foreground")})) {
         m_status->setText(QStringLiteral("Agent could not start."));
-        appendResult({-1, QByteArrayLiteral("Could not launch the bundled Agent service")});
+        appendResult({-1, {}, QByteArrayLiteral("Could not launch the bundled Agent service")});
         return;
       }
       m_status->setText(QStringLiteral("Agent is starting in the background."));
@@ -175,7 +296,7 @@ class AgentWindow final : public QMainWindow {
   }
 
   void refreshStatusView(bool reportFailure) {
-    const CommandResult result = run({QStringLiteral("--status")}, 5'000);
+    const CommandResult result = run({QStringLiteral("--status")}, 8'000);
     if (result.exitCode != 0) {
       m_status->setText(QStringLiteral("Agent is not running."));
       if (reportFailure) appendResult(result);
@@ -193,7 +314,13 @@ class AgentWindow final : public QMainWindow {
     const QString radioState = radio.value(QStringLiteral("state")).toString(QStringLiteral("DISCONNECTED"));
     m_status->setText(QStringLiteral("Agent running · ShackCQ %1 · Radio %2")
                           .arg(cloudState, radioState));
-    m_details->setPlainText(QString::fromUtf8(QJsonDocument(status).toJson(QJsonDocument::Indented)));
+    const QString cloudDetail = cloud.value(QStringLiteral("detail")).toString();
+    const QString radioError = radio.value(QStringLiteral("lastSanitizedError")).toString();
+    QStringList details{
+        QStringLiteral("ShackCQ: %1").arg(cloudDetail.isEmpty() ? cloudState : cloudDetail),
+        QStringLiteral("Radio: %1").arg(radioState)};
+    if (!radioError.isEmpty()) details << QStringLiteral("Radio detail: %1").arg(radioError);
+    m_details->setPlainText(details.join(QLatin1Char('\n')));
   }
 
   bool stopAgentService(bool report) {
@@ -241,7 +368,7 @@ class AgentWindow final : public QMainWindow {
     appendResult(result);
     if (result.exitCode != 0) {
       QMessageBox::critical(this, QStringLiteral("Pairing failed"),
-                            QString::fromUtf8(result.output).trimmed());
+                            resultText(result));
       restartAfterConfiguration();
       return;
     }
@@ -283,6 +410,10 @@ class AgentWindow final : public QMainWindow {
     if (previous >= 0) m_model->setCurrentIndex(previous);
     if (models.exitCode != 0) appendResult(models);
 
+    loadSerialPorts(true);
+  }
+
+  void loadSerialPorts(bool reportFailure) {
     const QString selectedRoute = m_route->currentText();
     m_route->clear();
     const CommandResult ports = run({QStringLiteral("--list-serial-ports")}, 10'000);
@@ -291,10 +422,22 @@ class AgentWindow final : public QMainWindow {
       const QJsonObject port = value.toObject();
       const QString route = port.value(QStringLiteral("systemLocation")).toString();
       const QString description = port.value(QStringLiteral("description")).toString();
+      const QString lowered = route.toLower();
+      if (!route.startsWith(QStringLiteral("/dev/cu.")) ||
+          lowered.contains(QStringLiteral("bluetooth")) ||
+          lowered.contains(QStringLiteral("debug")) ||
+          lowered.contains(QStringLiteral("wlan")))
+        continue;
       m_route->addItem(description.isEmpty() ? route : QStringLiteral("%1 — %2").arg(route, description), route);
     }
-    if (!selectedRoute.isEmpty()) m_route->setEditText(selectedRoute);
-    if (ports.exitCode != 0) appendResult(ports);
+    const int previous = m_route->findData(selectedRoute);
+    if (previous >= 0)
+      m_route->setCurrentIndex(previous);
+    else if (!selectedRoute.isEmpty())
+      m_route->setEditText(selectedRoute);
+    else if (m_route->count() > 0)
+      m_route->setCurrentIndex(0);
+    if (reportFailure && ports.exitCode != 0) appendResult(ports);
   }
 
   void saveRadioProfile() {
@@ -319,7 +462,7 @@ class AgentWindow final : public QMainWindow {
                                QStringLiteral("The receive-only radio profile was saved and verified."));
     } else {
       QMessageBox::critical(this, QStringLiteral("Radio connection failed"),
-                            QString::fromUtf8(result.output).trimmed());
+                            resultText(result));
     }
   }
 
@@ -334,7 +477,7 @@ class AgentWindow final : public QMainWindow {
     restartAfterConfiguration();
     if (result.exitCode != 0)
       QMessageBox::critical(this, QStringLiteral("Could not remove profile"),
-                            QString::fromUtf8(result.output).trimmed());
+                            resultText(result));
   }
 
   QLineEdit *m_origin{};
@@ -352,7 +495,7 @@ class AgentWindow final : public QMainWindow {
 int main(int argc, char **argv) {
   QApplication application(argc, argv);
   QCoreApplication::setApplicationName(QStringLiteral("ShackCQ Agent"));
-  QCoreApplication::setApplicationVersion(QStringLiteral("1.0.0"));
+  QCoreApplication::setApplicationVersion(QStringLiteral("1.0.1"));
   const bool smokeTest = QCoreApplication::arguments().contains(QStringLiteral("--ui-smoke"));
   const bool preview = QCoreApplication::arguments().contains(QStringLiteral("--ui-preview"));
   AgentWindow window(smokeTest || preview);

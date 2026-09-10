@@ -63,13 +63,19 @@ jobs:
         run: |
           ditto build/macos/ShackCQAgent.app artifacts/macos/ShackCQAgent.app
           cp build/macos/shackcq-stationd build/macos/shackcq-hamlib-helper artifacts/macos/ShackCQAgent.app/Contents/MacOS/
-          mkdir -p artifacts/macos/ShackCQAgent.app/Contents/PlugIns/platforms
+          mkdir -p artifacts/macos/ShackCQAgent.app/Contents/PlugIns/platforms \
+                   artifacts/macos/ShackCQAgent.app/Contents/PlugIns/tls
           cp "$(qtpaths --plugin-dir)/platforms/libqcocoa.dylib" artifacts/macos/ShackCQAgent.app/Contents/PlugIns/platforms/
+          cp "$(qtpaths --plugin-dir)/tls/libqcertonlybackend.dylib" \
+             "$(qtpaths --plugin-dir)/tls/libqsecuretransportbackend.dylib" \
+             artifacts/macos/ShackCQAgent.app/Contents/PlugIns/tls/
           agent_deploy_log="$(mktemp)"
           macdeployqt artifacts/macos/ShackCQAgent.app -no-plugins \
             -executable=artifacts/macos/ShackCQAgent.app/Contents/MacOS/shackcq-stationd \
             -executable=artifacts/macos/ShackCQAgent.app/Contents/MacOS/shackcq-hamlib-helper \
             -executable=artifacts/macos/ShackCQAgent.app/Contents/PlugIns/platforms/libqcocoa.dylib \
+            -executable=artifacts/macos/ShackCQAgent.app/Contents/PlugIns/tls/libqcertonlybackend.dylib \
+            -executable=artifacts/macos/ShackCQAgent.app/Contents/PlugIns/tls/libqsecuretransportbackend.dylib \
             2>&1 | tee "$agent_deploy_log"
           ! grep -q 'ERROR:' "$agent_deploy_log"
           mkdir -p artifacts/macos/ShackCQAgent.app/Contents/Resources
