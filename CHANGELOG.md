@@ -1,5 +1,12 @@
 # Changelog
 
+## macOS Agent 1.0.1
+
+- Reworked the standalone Agent as a native macOS settings experience with a direct pairing-code handoff.
+- Fixed automatic Hamlib model and USB serial-port discovery when Qt diagnostics are present.
+- Bundled the macOS TLS backend required for secure ShackCQ pairing and monitoring.
+- Kept the Agent supervisor running when the separate inbound Remote Station service is disabled.
+
 ## 0.1.0-rc.1
 
 - Consolidated accepted Android, iPhone/iPad, macOS, Windows, Linux, and station-service lineages.

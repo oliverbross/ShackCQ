@@ -17,6 +17,7 @@ test -d "$app_bundle/Contents/MacOS"
 test -x "$app_bundle/Contents/MacOS/ShackCQAgent"
 test -x "$app_bundle/Contents/MacOS/shackcq-stationd"
 test -x "$app_bundle/Contents/MacOS/shackcq-hamlib-helper"
+test -f "$app_bundle/Contents/PlugIns/tls/libqsecuretransportbackend.dylib"
 test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app_bundle/Contents/Info.plist")" = "app.shackcq.agent"
 lipo "$app_bundle/Contents/MacOS/ShackCQAgent" -verify_arch arm64
 for executable in "$app_bundle/Contents/MacOS/ShackCQAgent" \

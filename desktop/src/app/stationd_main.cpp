@@ -36,10 +36,13 @@ QJsonObject adminRequest(const QCommandLineParser &parser) {
 int sendAdminRequest(const QJsonObject &request) {
   QLocalSocket socket;
   socket.connectToServer(AdminSocket, QIODevice::ReadWrite);
-  if (!socket.waitForConnected(2'000)) return 5;
+  if (!socket.waitForConnected(5'000)) return 5;
   socket.write(QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n');
-  if (!socket.waitForBytesWritten(2'000) || !socket.waitForReadyRead(3'000)) return 6;
-  const QByteArray response = socket.readAll();
+  if (!socket.waitForBytesWritten(2'000)) return 6;
+  while (!socket.canReadLine()) {
+    if (!socket.waitForReadyRead(3'000)) return 6;
+  }
+  const QByteArray response = socket.readLine(256 * 1024);
   QTextStream(stdout) << response;
   QJsonParseError parse;
   const QJsonObject envelope = QJsonDocument::fromJson(response, &parse).object();
@@ -53,7 +56,7 @@ int sendAdminRequest(const QJsonObject &request) {
 int main(int argc, char **argv) {
   QCoreApplication application(argc, argv);
   QCoreApplication::setApplicationName("shackcq-stationd");
-  QCoreApplication::setApplicationVersion("1.0");
+  QCoreApplication::setApplicationVersion("1.0.1");
   QCommandLineParser parser;
   parser.setApplicationDescription("ShackCQ Remote Station Service v1");
   parser.addHelpOption(); parser.addVersionOption();
@@ -233,7 +236,11 @@ int main(int argc, char **argv) {
   }
   QLocalServer::removeServer(AdminSocket);
   if (!admin.listen(AdminSocket)) { QTextStream(stderr) << admin.errorString() << '\n'; return 4; }
-  if (!service.start(&error)) { QTextStream(stderr) << error << '\n'; return 3; }
+  const bool remoteStationEnabled = service.configuration().value("enabled").toBool();
+  if (remoteStationEnabled && !service.start(&error)) {
+    QTextStream(stderr) << error << '\n';
+    return 3;
+  }
   radio.startConfiguredAutoConnect();
   cloudAgent.start();
   QObject::connect(&admin, &QLocalServer::newConnection, &application, [&] {
@@ -254,7 +261,9 @@ int main(int argc, char **argv) {
         else if (action == "stop") { const bool stopped = service.globalStop(); ok = stopped; response = QVariantMap{{"stopped", stopped}, {"code", stopped ? "GLOBAL_STOPPED" : "RX_UNCONFIRMED"}}; }
         else if (action == "digi-stop") { const auto outcome = digi.stop("local operator STOP"); const bool stopped = outcome == AgentDigiController::StopOutcome::RxVerified; ok = stopped; const QString code = stopped ? "STOPPED_RX_VERIFIED" : outcome == AgentDigiController::StopOutcome::InProgress ? "STOP_IN_PROGRESS_RX_UNCONFIRMED" : "RX_UNCONFIRMED"; response = QVariantMap{{"stopped", stopped}, {"code", code}}; }
         else { ok = false; response = QVariantMap{{"error", "unknown admin action"}}; }
-        socket->write(QJsonDocument(QJsonObject{{"ok", ok}, {"result", QJsonValue::fromVariant(response)}}).toJson(QJsonDocument::Indented));
+        socket->write(QJsonDocument(QJsonObject{{"ok", ok}, {"result", QJsonValue::fromVariant(response)}})
+                          .toJson(QJsonDocument::Compact) +
+                      '\n');
         socket->flush(); socket->disconnectFromServer();
         if (action == "stop" && ok) QMetaObject::invokeMethod(&application, "quit", Qt::QueuedConnection);
       });
