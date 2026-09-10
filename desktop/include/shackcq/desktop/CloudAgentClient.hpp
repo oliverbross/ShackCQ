@@ -54,6 +54,10 @@ private:
   QUrl m_connectUrl;
   QString m_agentId;
   QString m_credential;
+  QString m_userId;
+  QString m_stationProfileId;
+  QString m_accountLabel;
+  QString m_stationLabel;
   QString m_announcedDeviceId;
   QString m_state{"Unpaired"};
   QString m_detail{"No cloud Agent credential"};

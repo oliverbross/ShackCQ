@@ -156,11 +156,18 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
   const QUrl connectUrl(result.value("connectUrl").toString());
   const QString agentId = result.value("agentId").toString();
   const QString credential = result.value("credential").toString();
+  const QString userId = result.value("userId").toString();
+  const QString stationProfileId = result.value("stationProfileId").toString();
+  const QString accountLabel = result.value("accountLabel").toString().trimmed();
+  const QString stationLabel = result.value("stationLabel").toString().trimmed();
   if (failure != QNetworkReply::NoError || status != 201 ||
       parse.error != QJsonParseError::NoError || connectUrl.scheme() != "wss" ||
       connectUrl.host() != origin.host() ||
       connectUrl.port(443) != origin.port(443) ||
       connectUrl.path() != "/api/v1/agent/connect" || !boundedId(agentId) ||
+      !boundedId(userId) || !boundedId(stationProfileId) ||
+      accountLabel.isEmpty() || accountLabel.size() > 160 ||
+      stationLabel.isEmpty() || stationLabel.size() > 200 ||
       credential.size() < 32 || credential.size() > 256) {
     if (error)
       *error = status == 401 ? "Pairing code is invalid or expired"
@@ -169,7 +176,11 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
   }
   const QJsonObject stored{{"agentId", agentId},
                            {"connectUrl", connectUrl.toString()},
-                           {"credential", credential}};
+                           {"credential", credential},
+                           {"userId", userId},
+                           {"stationProfileId", stationProfileId},
+                           {"accountLabel", accountLabel},
+                           {"stationLabel", stationLabel}};
   QString vaultError;
   if (!m_vault ||
       !m_vault->write(CredentialAlias, "ShackCQ cloud Agent",
@@ -181,8 +192,12 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
   m_agentId = agentId;
   m_connectUrl = connectUrl;
   m_credential = credential;
+  m_userId = userId;
+  m_stationProfileId = stationProfileId;
+  m_accountLabel = accountLabel;
+  m_stationLabel = stationLabel;
   m_enabled = true;
-  setState("Paired", "Credential stored in the operating-system vault");
+  setState("Paired", QStringLiteral("Linked to %1 · %2").arg(m_accountLabel, m_stationLabel));
   return true;
 }
 
@@ -192,6 +207,10 @@ bool CloudAgentClient::unpair(QString *error) {
     return false;
   m_agentId.clear();
   m_credential.clear();
+  m_userId.clear();
+  m_stationProfileId.clear();
+  m_accountLabel.clear();
+  m_stationLabel.clear();
   m_connectUrl = QUrl{};
   m_enabled = false;
   setState("Unpaired",
@@ -213,6 +232,17 @@ void CloudAgentClient::start() {
   m_agentId = stored.value("agentId").toString();
   m_connectUrl = QUrl(stored.value("connectUrl").toString());
   m_credential = stored.value("credential").toString();
+  m_userId = stored.value("userId").toString();
+  m_stationProfileId = stored.value("stationProfileId").toString();
+  m_accountLabel = stored.value("accountLabel").toString().trimmed().left(160);
+  m_stationLabel = stored.value("stationLabel").toString().trimmed().left(200);
+  if ((!m_userId.isEmpty() && !boundedId(m_userId)) ||
+      (!m_stationProfileId.isEmpty() && !boundedId(m_stationProfileId))) {
+    m_userId.clear();
+    m_stationProfileId.clear();
+    m_accountLabel.clear();
+    m_stationLabel.clear();
+  }
   if (parse.error != QJsonParseError::NoError || !boundedId(m_agentId) ||
       m_connectUrl.scheme() != "wss" || m_connectUrl.host().isEmpty() ||
       m_credential.size() < 32 || m_credential.size() > 256) {
@@ -520,6 +550,10 @@ QVariantMap CloudAgentClient::health() const {
   return {{"state", m_state},
           {"detail", m_detail},
           {"paired", !m_agentId.isEmpty()},
+          {"userId", m_userId},
+          {"stationProfileId", m_stationProfileId},
+          {"accountLabel", m_accountLabel},
+          {"stationLabel", m_stationLabel},
           {"enabled", m_enabled},
           {"generation", m_generation},
           {"offlineQueue", false},

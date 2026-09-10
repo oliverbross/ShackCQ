@@ -220,7 +220,7 @@ class AgentWindow final : public QMainWindow {
     connect(pairButton, &QPushButton::clicked, this, [this] { pair(); });
     connect(unpairButton, &QPushButton::clicked, this, [this] { unpair(); });
     connect(openPairing, &QPushButton::clicked, this, [] {
-      QDesktopServices::openUrl(QUrl(QStringLiteral("https://shackcq.com/agents")));
+      QDesktopServices::openUrl(QUrl(QStringLiteral("https://shackcq.com/app/settings/agents")));
     });
     connect(refreshDevices, &QPushButton::clicked, this, [this] { loadDevices(); });
     connect(saveRadio, &QPushButton::clicked, this, [this] { saveRadioProfile(); });
@@ -315,10 +315,17 @@ class AgentWindow final : public QMainWindow {
     m_status->setText(QStringLiteral("Agent running · ShackCQ %1 · Radio %2")
                           .arg(cloudState, radioState));
     const QString cloudDetail = cloud.value(QStringLiteral("detail")).toString();
+    const QString accountLabel = cloud.value(QStringLiteral("accountLabel")).toString();
+    const QString stationLabel = cloud.value(QStringLiteral("stationLabel")).toString();
     const QString radioError = radio.value(QStringLiteral("lastSanitizedError")).toString();
     QStringList details{
         QStringLiteral("ShackCQ: %1").arg(cloudDetail.isEmpty() ? cloudState : cloudDetail),
         QStringLiteral("Radio: %1").arg(radioState)};
+    if (!accountLabel.isEmpty())
+      details.insert(1, QStringLiteral("Linked account: %1").arg(accountLabel));
+    if (!stationLabel.isEmpty())
+      details.insert(accountLabel.isEmpty() ? 1 : 2,
+                     QStringLiteral("Station profile: %1").arg(stationLabel));
     if (!radioError.isEmpty()) details << QStringLiteral("Radio detail: %1").arg(radioError);
     m_details->setPlainText(details.join(QLatin1Char('\n')));
   }
@@ -375,7 +382,7 @@ class AgentWindow final : public QMainWindow {
     restartAfterConfiguration();
     QMessageBox::information(
         this, QStringLiteral("Paired"),
-        QStringLiteral("This Mac is paired with ShackCQ. The credential is stored in macOS Keychain."));
+        QStringLiteral("This Mac is paired with your ShackCQ account and selected station profile. The credential and association are stored in macOS Keychain."));
   }
 
   void unpair() {
@@ -495,7 +502,7 @@ class AgentWindow final : public QMainWindow {
 int main(int argc, char **argv) {
   QApplication application(argc, argv);
   QCoreApplication::setApplicationName(QStringLiteral("ShackCQ Agent"));
-  QCoreApplication::setApplicationVersion(QStringLiteral("1.0.1"));
+  QCoreApplication::setApplicationVersion(QStringLiteral("1.0.2"));
   const bool smokeTest = QCoreApplication::arguments().contains(QStringLiteral("--ui-smoke"));
   const bool preview = QCoreApplication::arguments().contains(QStringLiteral("--ui-preview"));
   AgentWindow window(smokeTest || preview);
