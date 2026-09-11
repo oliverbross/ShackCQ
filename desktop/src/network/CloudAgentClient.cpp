@@ -56,15 +56,16 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
   connect(&m_reconnect, &QTimer::timeout, this,
           &CloudAgentClient::connectNow);
   connect(&m_radioCommandRetry, &QTimer::timeout, this, [this] {
-    if (m_pendingRadioCommand.isEmpty())
+    if (m_pendingRadioCommands.isEmpty())
       return;
     if (m_radio->radioOperationActive()) {
       m_radioCommandRetry.start();
       return;
     }
-    const QJsonObject pending = m_pendingRadioCommand;
-    m_pendingRadioCommand = {};
+    const QJsonObject pending = m_pendingRadioCommands.dequeue();
     completeRadioCommand(pending);
+    if (!m_pendingRadioCommands.isEmpty())
+      m_radioCommandRetry.start();
   });
   connect(&m_socket, &QWebSocket::connected, this, [this] {
     m_reconnectAttempt = 0;
@@ -88,7 +89,7 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
     m_generation = 0;
     m_announcedDeviceId.clear();
     m_radioCommandRetry.stop();
-    m_pendingRadioCommand = {};
+    m_pendingRadioCommands.clear();
     if (m_digi) {
       m_digi->setServerTxPermitted(false);
       m_digi->stop("cloud transport disconnected", false);
@@ -396,17 +397,31 @@ void CloudAgentClient::receiveText(const QString &text) {
     sendObject(result);if(result.value("ok").toBool())sendLoggerEvents();return;
   }
   if (frame.value("type") == "digi.command" && m_digi) {
+    if (frame.value("action") == "digi.stop") {
+      m_radioCommandRetry.stop();
+      m_pendingRadioCommands.clear();
+    }
     sendObject(m_digi->processCommand(frame, m_agentId, deviceId(), m_generation));
     sendSnapshot();
     return;
   }
   if (frame.value("type") != "radio.command")
     return;
-  if (m_radio->radioOperationActive()) {
-    if (m_pendingRadioCommand.isEmpty()) {
-      m_pendingRadioCommand = frame;
-      m_radioCommandRetry.start();
+  if (m_radio->radioOperationActive() || !m_pendingRadioCommands.isEmpty()) {
+    if (m_pendingRadioCommands.size() >= 16) {
+      sendObject({{"type", "radio.command.result"},
+                  {"protocol", protocol()},
+                  {"commandId", frame.value("commandId")},
+                  {"agentId", m_agentId},
+                  {"deviceId", deviceId()},
+                  {"generation", QJsonValue::fromVariant(m_generation)},
+                  {"ok", false},
+                  {"code", "AGENT_QUEUE_FULL"}});
+      return;
     }
+    m_pendingRadioCommands.enqueue(frame);
+    if (!m_radioCommandRetry.isActive())
+      m_radioCommandRetry.start();
     return;
   }
   completeRadioCommand(frame);

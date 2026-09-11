@@ -71,11 +71,13 @@ int main(int argc, char **argv) {
     } else if (operation == "snapshot") {
       if (mode == "slow-snapshot")
         QThread::msleep(80);
-      reply(request, true, "OBSERVED",
-            {{"frequencyHz", QJsonValue(double(frequency))},
-             {"mode", radioMode}, {"filterHz", filter},
-             {"meters", QJsonObject{{"signal", -73}}},
-             {"transmitting", false}});
+      QJsonObject observed{{"frequencyHz", QJsonValue(double(frequency))},
+                           {"mode", radioMode},
+                           {"filterHz", filter},
+                           {"transmitting", false}};
+      if (request.value("parameters").toObject().value("full").toBool(true))
+        observed.insert("meters", QJsonObject{{"signal", -73}});
+      reply(request, true, "OBSERVED", observed);
     } else if (operation == "mutate") {
       if (mode == "block")
         QThread::msleep(10'000);
@@ -90,11 +92,17 @@ int main(int argc, char **argv) {
         radioMode = values.value("mode").toString();
       else if (action == "radio.set.filter")
         filter = values.value("filterHz").toInt();
-      reply(request, true, "MUTATION_OBSERVED",
-            {{"frequencyHz", QJsonValue(double(frequency))},
-             {"mode", radioMode}, {"filterHz", filter},
-             {"meters", QJsonObject{{"signal", -73}}},
-             {"transmitting", false}});
+      QJsonObject readback;
+      if (action == "radio.set.frequency")
+        readback.insert("frequencyHz", QJsonValue(double(frequency)));
+      else if (action == "radio.set.mode" || action == "radio.set.filter") {
+        readback.insert("mode", radioMode);
+        readback.insert("filterHz", filter);
+      }
+      reply(request, !readback.isEmpty(),
+            readback.isEmpty() ? "MUTATION_READBACK_FAILED"
+                               : "MUTATION_OBSERVED",
+            readback);
     }
   }
   return 0;

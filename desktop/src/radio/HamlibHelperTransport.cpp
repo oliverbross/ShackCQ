@@ -290,14 +290,15 @@ QJsonObject HamlibHelperTransport::mutate(const QString &action,
   return response;
 }
 
-QJsonObject HamlibHelperTransport::snapshot() {
+QJsonObject HamlibHelperTransport::snapshot(bool full) {
   if (m_operationActive)
     return {{"ok", false}, {"code", "OPERATION_BUSY"}};
   if (m_process.state() == QProcess::NotRunning)
     return {{"ok", false}, {"code", "HELPER_QUARANTINED"}};
   m_operationActive = true;
-  const QJsonObject response =
-      request(QStringLiteral("snapshot"), {}, m_operationTimeoutMillis, true);
+  const QJsonObject response = request(QStringLiteral("snapshot"),
+                                       {{"full", full}},
+                                       m_operationTimeoutMillis, true);
   m_operationActive = false;
   return response;
 }
