@@ -16,6 +16,7 @@ private slots:
   void shellUsesCanonicalCommandsAndNativeMenus();
   void routedWorkspacesUseOfficialLayoutsWithExplicitEditing();
   void originalIconFamilyCoversEveryWorkspaceDestination();
+  void macosAgentUsesUnambiguousRuntimeAndRadioStates();
 };
 
 void DesktopUiContractTests::commandRegistryIsCompleteAndUnique() {
@@ -158,6 +159,29 @@ void DesktopUiContractTests::originalIconFamilyCoversEveryWorkspaceDestination()
     QVERIFY(svg.contains("viewBox=\"0 0 24 24\""));
     QVERIFY(!svg.contains("emoji"));
   }
+}
+
+void DesktopUiContractTests::macosAgentUsesUnambiguousRuntimeAndRadioStates() {
+  QFile gui(QStringLiteral(SHACKCQ_DESKTOP_APP_DIR "/agent_gui_main.cpp"));
+  QVERIFY(gui.open(QIODevice::ReadOnly));
+  const QByteArray source = gui.readAll();
+  QVERIFY(source.contains("agentStateBadge"));
+  QVERIFY(source.contains("radioConnectionSummary"));
+  QVERIFY(source.contains("setAgentRuntimeState"));
+  QVERIFY(source.contains("Radio not connected"));
+  QVERIFY(source.contains("Check that the radio is powered on"));
+  QCOMPARE(source.count("new QPushButton(QStringLiteral(\"Starting…\")"), 1);
+  QVERIFY(!source.contains("new QPushButton(QStringLiteral(\"Start Agent\")"));
+  QVERIFY(!source.contains("new QPushButton(QStringLiteral(\"Stop Agent\")"));
+
+  QFile cloud(QStringLiteral(SHACKCQ_DESKTOP_APP_DIR
+                             "/../network/CloudAgentClient.cpp"));
+  QVERIFY(cloud.open(QIODevice::ReadOnly));
+  const QByteArray cloudSource = cloud.readAll();
+  const qsizetype snapshot = cloudSource.indexOf("sendSnapshot();", cloudSource.indexOf("const QJsonObject result = processControlFrame"));
+  const qsizetype result = cloudSource.indexOf("sendObject(result);", snapshot);
+  QVERIFY(snapshot >= 0);
+  QVERIFY(result > snapshot);
 }
 
 QTEST_GUILESS_MAIN(DesktopUiContractTests)

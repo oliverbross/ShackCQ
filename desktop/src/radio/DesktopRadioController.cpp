@@ -230,6 +230,7 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
                              QStringLiteral("modes"),
                              QStringLiteral("filtersHz"),
                              QStringLiteral("setters"),
+                             QStringLiteral("agcModes"),
                              QStringLiteral("meters")})
     m_backendCapabilities.insert(key,
                                  description.value(key).toArray().toVariantList());
@@ -468,6 +469,7 @@ void DesktopRadioController::disconnectRadio() {
   m_transmitReceiverId.clear();
   m_backendCapabilities.clear();
   m_meters.clear();
+  m_receiveControls.clear();
   m_transmitting.reset();
   m_digiPttSupported = false;
   m_receivers.clear();
@@ -646,6 +648,70 @@ bool DesktopRadioController::requestFilter(int filterHz) {
 #endif
 }
 
+bool DesktopRadioController::requestReceiveControl(
+    const QString &action, const QVariantMap &parameters) {
+#ifdef SHACKCQ_HAVE_HAMLIB
+  static const QStringList allowed{
+      QStringLiteral("radio.set.rfGain"),
+      QStringLiteral("radio.set.afGain"),
+      QStringLiteral("radio.set.squelch"),
+      QStringLiteral("radio.set.noiseBlanker"),
+      QStringLiteral("radio.set.notch"),
+      QStringLiteral("radio.set.noiseReduction"),
+      QStringLiteral("radio.set.agc"),
+      QStringLiteral("radio.set.rit")};
+  if (m_backend != "hamlib" || !allowed.contains(action) ||
+      !m_backendCapabilities.value("setters").toStringList().contains(action))
+    return false;
+  const QJsonObject response =
+      m_hamlibHelper.mutate(action, QJsonObject::fromVariantMap(parameters));
+  if (!response.value("ok").toBool())
+    return false;
+  for (const QString &key : {QStringLiteral("rfGain"),
+                             QStringLiteral("afGain"),
+                             QStringLiteral("squelch"),
+                             QStringLiteral("noiseBlanker"),
+                             QStringLiteral("notch"),
+                             QStringLiteral("noiseReduction"),
+                             QStringLiteral("agc"),
+                             QStringLiteral("ritHz"),
+                             QStringLiteral("ritEnabled")}) {
+    if (response.contains(key) && !response.value(key).isNull())
+      m_receiveControls.insert(key, response.value(key).toVariant());
+  }
+  if (action == "radio.set.rfGain" || action == "radio.set.afGain" ||
+      action == "radio.set.squelch") {
+    const QString key = action == "radio.set.rfGain"
+                            ? QStringLiteral("rfGain")
+                            : action == "radio.set.afGain"
+                                  ? QStringLiteral("afGain")
+                                  : QStringLiteral("squelch");
+    return qAbs(m_receiveControls.value(key).toDouble() -
+                parameters.value("value").toDouble()) <= 1.0;
+  }
+  if (action == "radio.set.agc")
+    return m_receiveControls.value("agc").toString().compare(
+               parameters.value("mode").toString(), Qt::CaseInsensitive) == 0;
+  if (action == "radio.set.rit") {
+    const int expected = parameters.value("enabled", true).toBool()
+                             ? parameters.value("valueHz").toInt()
+                             : 0;
+    return m_receiveControls.value("ritHz").toInt() == expected;
+  }
+  const QString key = action == "radio.set.noiseBlanker"
+                          ? QStringLiteral("noiseBlanker")
+                          : action == "radio.set.notch"
+                                ? QStringLiteral("notch")
+                                : QStringLiteral("noiseReduction");
+  return m_receiveControls.value(key).toBool() ==
+         parameters.value("enabled").toBool();
+#else
+  Q_UNUSED(action);
+  Q_UNUSED(parameters);
+  return false;
+#endif
+}
+
 void DesktopRadioController::poll() {
   if (m_backend == "native") {
     pollNative();
@@ -668,6 +734,20 @@ void DesktopRadioController::poll() {
   m_mode = observed.value("mode").toString();
   m_filterHz = observed.value("filterHz").toInt();
   m_meters = observed.value("meters").toObject().toVariantMap();
+  for (const QString &key : {QStringLiteral("rfGain"),
+                             QStringLiteral("afGain"),
+                             QStringLiteral("squelch"),
+                             QStringLiteral("noiseBlanker"),
+                             QStringLiteral("notch"),
+                             QStringLiteral("noiseReduction"),
+                             QStringLiteral("agc"),
+                             QStringLiteral("ritHz"),
+                             QStringLiteral("ritEnabled")}) {
+    if (observed.contains(key) && !observed.value(key).isNull())
+      m_receiveControls.insert(key, observed.value(key).toVariant());
+    else
+      m_receiveControls.remove(key);
+  }
   m_transmitting = observed.value("transmitting").isBool()
                        ? std::optional<bool>(observed.value("transmitting").toBool())
                        : std::nullopt;

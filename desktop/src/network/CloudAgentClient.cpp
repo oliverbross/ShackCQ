@@ -382,8 +382,12 @@ void CloudAgentClient::receiveText(const QString &text) {
   }
   if (frame.value("type") != "radio.command")
     return;
-  sendObject(processControlFrame(frame));
+  const QJsonObject result = processControlFrame(frame);
+  // Publish the fresh readback before the result. The hosted command path
+  // resolves when it receives the result and must validate against this exact
+  // post-mutation snapshot, not the preceding poll.
   sendSnapshot();
+  sendObject(result);
 }
 
 void CloudAgentClient::sendLoggerEvents() {
@@ -454,6 +458,46 @@ QJsonObject CloudAgentClient::processControlFrame(const QJsonObject &frame) {
     accepted = value >= 50 && value <= 20'000 &&
                m_radio->requestFilter(value) &&
                m_radio->filterHz() == value;
+  } else if (action == "radio.set.rfGain" ||
+             action == "radio.set.afGain" ||
+             action == "radio.set.squelch") {
+    if (!exactParameters({"value"}) || !parameters.value("value").isDouble())
+      return result(false, "INVALID_PARAMETERS");
+    const double value = parameters.value("value").toDouble(-1.0);
+    accepted = value >= 0.0 && value <= 100.0 &&
+               m_radio->requestReceiveControl(action,
+                                               parameters.toVariantMap());
+  } else if (action == "radio.set.noiseBlanker" ||
+             action == "radio.set.notch" ||
+             action == "radio.set.noiseReduction") {
+    if (!exactParameters({"enabled"}) ||
+        !parameters.value("enabled").isBool())
+      return result(false, "INVALID_PARAMETERS");
+    accepted = m_radio->requestReceiveControl(action,
+                                               parameters.toVariantMap());
+  } else if (action == "radio.set.agc") {
+    if (!exactParameters({"mode"}) || !parameters.value("mode").isString() ||
+        parameters.value("mode").toString().isEmpty() ||
+        parameters.value("mode").toString().size() > 20)
+      return result(false, "INVALID_PARAMETERS");
+    accepted = m_radio->requestReceiveControl(action,
+                                               parameters.toVariantMap());
+  } else if (action == "radio.set.rit") {
+    bool allowedKeys = parameters.size() >= 1 && parameters.size() <= 2;
+    for (const QString &key : parameters.keys())
+      allowedKeys = allowedKeys &&
+                    (key == QStringLiteral("enabled") ||
+                     key == QStringLiteral("valueHz"));
+    const bool enabledValid = !parameters.contains("enabled") ||
+                              parameters.value("enabled").isBool();
+    const bool valueValid = !parameters.contains("valueHz") ||
+                            parameters.value("valueHz").isDouble();
+    const int value = parameters.value("valueHz").toInt();
+    if (!allowedKeys || !enabledValid || !valueValid || value < -100'000 ||
+        value > 100'000)
+      return result(false, "INVALID_PARAMETERS");
+    accepted = m_radio->requestReceiveControl(action,
+                                               parameters.toVariantMap());
   } else if (action == "preset.recall") {
     if (!exactParameters({"frequencyHz", "mode", "filterHz"}) ||
         !parameters.value("frequencyHz").isDouble() ||
@@ -517,6 +561,8 @@ QJsonObject CloudAgentClient::capabilityDescriptor() const {
                             capabilities.value("filtersHz").toList())},
           {"setters", QJsonArray::fromStringList(
                           capabilities.value("setters").toStringList())},
+          {"agcModes", QJsonArray::fromStringList(
+                           capabilities.value("agcModes").toStringList())},
           {"meters", QJsonArray::fromStringList(
                          capabilities.value("meters").toStringList())},
           {"readOnlyTxState", true},
@@ -536,7 +582,7 @@ void CloudAgentClient::sendSnapshot() {
       deviceId().isEmpty())
     return;
   ++m_sequence;
-  sendObject({{"type", "radio.snapshot"},
+  QJsonObject snapshot{{"type", "radio.snapshot"},
               {"protocol", protocol()},
               {"agentId", m_agentId},
               {"deviceId", deviceId()},
@@ -561,7 +607,11 @@ void CloudAgentClient::sendSnapshot() {
                m_radio->transmitting()
                    ? QJsonValue(*m_radio->transmitting())
                    : QJsonValue::Null},
-              {"capabilities", capabilityDescriptor()}});
+              {"capabilities", capabilityDescriptor()}};
+  const QVariantMap receiveControls = m_radio->receiveControls();
+  for (auto it = receiveControls.cbegin(); it != receiveControls.cend(); ++it)
+    snapshot.insert(it.key(), QJsonValue::fromVariant(it.value()));
+  sendObject(snapshot);
   if (m_digi)
     sendObject(m_digi->snapshot(m_agentId, deviceId(), m_generation));
 }
