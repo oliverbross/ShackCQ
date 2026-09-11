@@ -40,6 +40,7 @@ private:
   static constexpr auto CredentialAlias = "shackcq-cloud-agent-v1";
   void connectNow();
   void receiveText(const QString &text);
+  void completeRadioCommand(const QJsonObject &frame);
   void sendHello();
   void sendSnapshot();
   void sendLoggerEvents();
@@ -56,6 +57,7 @@ private:
   QWebSocket m_socket;
   QTimer m_heartbeat;
   QTimer m_reconnect;
+  QTimer m_radioCommandRetry;
   QUrl m_connectUrl;
   QString m_agentId;
   QString m_credential;
@@ -66,6 +68,7 @@ private:
   QString m_announcedDeviceId;
   QString m_state{"Unpaired"};
   QString m_detail{"No cloud Agent credential"};
+  QJsonObject m_pendingRadioCommand;
   quint64 m_generation{};
   quint64 m_sequence{};
   int m_reconnectAttempt{};
