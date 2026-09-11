@@ -356,7 +356,7 @@ QJsonObject AgentDigiController::processCommand(const QJsonObject &frame,const Q
   if(action=="digi.history.replay"){
     QString error;const bool ok=replayRetainedSession(p.value("sessionId").toString(),&error);return result(frame,agentId,deviceId,generation,ok,ok?"LOCAL_REPLAY_STARTED":error);
   }
-  if(action=="digi.sequence.stop"){const StopOutcome stopped=stop("FT sequence stopped by operator");return result(frame,agentId,deviceId,generation,stopped==StopOutcome::RxVerified,stopped==StopOutcome::RxVerified?"FT_SEQUENCE_STOPPED_RX_VERIFIED":"RX_UNCONFIRMED");}
+  if(action=="digi.sequence.stop"){const StopOutcome stopped=stop("FT sequence stopped by operator",false);return result(frame,agentId,deviceId,generation,stopped==StopOutcome::RxVerified,stopped==StopOutcome::RxVerified?"FT_SEQUENCE_STOPPED_RX_VERIFIED":"RX_UNCONFIRMED");}
   if(m_state==State::RxUnconfirmed)return result(frame,agentId,deviceId,generation,false,"RX_UNCONFIRMED_LATCHED");
   if(action=="digi.configure"){
     const QString mode=p.value("mode").toString(),submode=p.value("submode").toString();const int index=modeIndex(mode,submode);
@@ -375,7 +375,7 @@ QJsonObject AgentDigiController::processCommand(const QJsonObject &frame,const Q
     return result(frame,agentId,deviceId,generation,true,"RX_STARTED");
   }
   if(action=="digi.rx.stop"){
-    stop("RX stop requested");
+    stop("RX stop requested",false);
     if(m_state==State::RxUnconfirmed)return result(frame,agentId,deviceId,generation,false,"RX_UNCONFIRMED");
     if(m_source){m_source->stop();m_source->deleteLater();m_source=nullptr;m_input=nullptr;}finishRetainedSession();
     stopFtSequence("RX stopped");m_state=State::Safe;m_audioState="STOPPED";m_lastInputMono=0;emit snapshotChanged();return result(frame,agentId,deviceId,generation,true,"RX_STOPPED");

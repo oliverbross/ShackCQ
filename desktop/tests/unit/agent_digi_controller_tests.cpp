@@ -108,6 +108,17 @@ private slots:
     QVERIFY(radio.state().startsWith("Connected"));
   }
 
+  void idleRxAndSequenceCleanupKeepReceiveRadioConnected() {
+    DesktopRadioController radio;
+    radio.setHamlibSnapshotForTest(14'280'580, "CW", false);
+    AgentDigiController digi(&radio);
+    QVERIFY(run(digi, "digi.control.acquire").value("ok").toBool());
+    QVERIFY(run(digi, "digi.rx.stop").value("ok").toBool());
+    QVERIFY(radio.state().startsWith("Connected"));
+    QVERIFY(run(digi, "digi.sequence.stop").value("ok").toBool());
+    QVERIFY(radio.state().startsWith("Connected"));
+  }
+
   void idleLeaseExpiryDoesNotQuarantineReceiveOnlyRadio() {
     DesktopRadioController radio;
     radio.setHamlibSnapshotForTest(14'280'580, "CW");
