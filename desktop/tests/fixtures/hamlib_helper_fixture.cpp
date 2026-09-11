@@ -44,6 +44,8 @@ int main(int argc, char **argv) {
     if (operation == "close")
       return 0;
     if (operation == "open") {
+      if (mode == "slow-open")
+        QThread::msleep(2'200);
       reply(request, true, "OPENED",
             {{"model", "Fixture"},
              {"manufacturer", "ShackCQ"},

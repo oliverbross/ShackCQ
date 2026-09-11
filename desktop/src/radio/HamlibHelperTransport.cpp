@@ -250,7 +250,8 @@ bool HamlibHelperTransport::open(int modelId, const QString &route, int baudRate
       {{"modelId", modelId}, {"route", route}, {"baudRate", baudRate}},
       m_operationTimeoutMillis, true);
   if (!opened.value("ok").toBool()) {
-    quarantine(QStringLiteral("Hamlib helper could not open the radio"));
+    quarantine(QStringLiteral("Hamlib helper could not open the radio (%1)")
+                   .arg(opened.value("code").toString("UNKNOWN")));
     return false;
   }
   m_modelId = modelId;
@@ -263,7 +264,8 @@ bool HamlibHelperTransport::open(int modelId, const QString &route, int baudRate
                                       m_stopTimeoutMillis, true);
   if (!stopped.value("ok").toBool() ||
       stopped.value("transmitting").toBool(true)) {
-    quarantine(QStringLiteral("Hamlib helper could not verify RX"));
+    quarantine(QStringLiteral("Hamlib helper could not verify RX (%1)")
+                   .arg(stopped.value("code").toString("UNKNOWN")));
     return false;
   }
   m_quarantined = false;

@@ -48,6 +48,27 @@ private slots:
     QVERIFY(!bytes.contains("networkArmed"));
     QVERIFY(!bytes.contains("ptt"));
   }
+  void configurationPersistsOwnedAgentSections() {
+    QTemporaryDir dir;
+    const QString path = dir.filePath("config.json");
+    DesktopConfigurationManager config(path);
+    QString error;
+    QVERIFY(config.load(&error));
+    config.setSection("cloudAgent", {{"enabled", true}});
+    config.setSection("digiAgent",
+                      {{"schemaVersion", 1},
+                       {"localTxPermitted", false},
+                       {"hardwareAccepted", false}});
+
+    DesktopConfigurationManager restored(path);
+    QVERIFY(restored.load(&error));
+    QCOMPARE(restored.section("cloudAgent").value("enabled").toBool(), true);
+    QCOMPARE(restored.section("digiAgent").value("schemaVersion").toInt(), 1);
+    QCOMPARE(restored.section("digiAgent").value("localTxPermitted").toBool(),
+             false);
+    QCOMPARE(restored.section("digiAgent").value("hardwareAccepted").toBool(),
+             false);
+  }
   void unknownConfigurationSectionsRequireExplicitReview() {
     QTemporaryDir dir;
     DesktopConfigurationManager config(dir.filePath("config.json"));

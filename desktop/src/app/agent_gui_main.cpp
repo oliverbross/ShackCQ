@@ -418,10 +418,13 @@ class AgentWindow final : public QMainWindow {
     if (models.exitCode != 0) appendResult(models);
 
     loadSerialPorts(true);
+    loadSavedRadioProfile();
   }
 
   void loadSerialPorts(bool reportFailure) {
-    const QString selectedRoute = m_route->currentText();
+    const QString selectedData = m_route->currentData().toString();
+    const QString selectedRoute =
+        selectedData.isEmpty() ? m_route->currentText() : selectedData;
     m_route->clear();
     const CommandResult ports = run({QStringLiteral("--list-serial-ports")}, 10'000);
     const QJsonArray portRows = QJsonDocument::fromJson(ports.output).array();
@@ -445,6 +448,32 @@ class AgentWindow final : public QMainWindow {
     else if (m_route->count() > 0)
       m_route->setCurrentIndex(0);
     if (reportFailure && ports.exitCode != 0) appendResult(ports);
+  }
+
+  void loadSavedRadioProfile() {
+    const CommandResult result =
+        run({QStringLiteral("--show-radio-profile")}, 10'000);
+    if (result.exitCode != 0) {
+      appendResult(result);
+      return;
+    }
+    const QJsonObject profile = QJsonDocument::fromJson(result.output).object();
+    if (profile.isEmpty())
+      return;
+    const int modelIndex =
+        m_model->findData(profile.value(QStringLiteral("modelId")).toInt());
+    if (modelIndex >= 0)
+      m_model->setCurrentIndex(modelIndex);
+    const QString route = profile.value(QStringLiteral("route")).toString();
+    const int routeIndex = m_route->findData(route);
+    if (routeIndex >= 0)
+      m_route->setCurrentIndex(routeIndex);
+    else if (!route.isEmpty())
+      m_route->setEditText(route);
+    m_baud->setCurrentText(
+        QString::number(profile.value(QStringLiteral("baudRate")).toInt(38'400)));
+    m_autoConnect->setChecked(
+        profile.value(QStringLiteral("autoConnect")).toBool(true));
   }
 
   void saveRadioProfile() {
@@ -502,7 +531,7 @@ class AgentWindow final : public QMainWindow {
 int main(int argc, char **argv) {
   QApplication application(argc, argv);
   QCoreApplication::setApplicationName(QStringLiteral("ShackCQ Agent"));
-  QCoreApplication::setApplicationVersion(QStringLiteral("1.0.2"));
+  QCoreApplication::setApplicationVersion(QStringLiteral("1.0.3"));
   const bool smokeTest = QCoreApplication::arguments().contains(QStringLiteral("--ui-smoke"));
   const bool preview = QCoreApplication::arguments().contains(QStringLiteral("--ui-preview"));
   AgentWindow window(smokeTest || preview);

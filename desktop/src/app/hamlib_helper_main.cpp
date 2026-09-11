@@ -78,13 +78,15 @@ QJsonObject observe(RIG *rig) {
 
 bool forceRx(RIG *rig, bool *transmitting = nullptr) {
   ptt_t observed = RIG_PTT_ON;
-  const bool ok = rig &&
-                  rig_set_ptt(rig, RIG_VFO_CURR, RIG_PTT_OFF) == RIG_OK &&
-                  rig_get_ptt(rig, RIG_VFO_CURR, &observed) == RIG_OK &&
-                  observed == RIG_PTT_OFF;
+  bool ok = rig && rig_get_ptt(rig, RIG_VFO_CURR, &observed) == RIG_OK;
+  if (ok && observed != RIG_PTT_OFF) {
+    ok = rig_set_ptt(rig, RIG_VFO_CURR, RIG_PTT_OFF) == RIG_OK &&
+         rig_get_ptt(rig, RIG_VFO_CURR, &observed) == RIG_OK &&
+         observed == RIG_PTT_OFF;
+  }
   if (transmitting)
     *transmitting = observed != RIG_PTT_OFF;
-  return ok;
+  return ok && observed == RIG_PTT_OFF;
 }
 #endif
 } // namespace

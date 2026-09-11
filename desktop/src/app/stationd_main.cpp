@@ -57,7 +57,7 @@ int sendAdminRequest(const QJsonObject &request) {
 int main(int argc, char **argv) {
   QCoreApplication application(argc, argv);
   QCoreApplication::setApplicationName("shackcq-stationd");
-  QCoreApplication::setApplicationVersion("1.0.2");
+  QCoreApplication::setApplicationVersion("1.0.3");
   QCommandLineParser parser;
   parser.setApplicationDescription("ShackCQ Remote Station Service v1");
   parser.addHelpOption(); parser.addVersionOption();
@@ -73,6 +73,7 @@ int main(int argc, char **argv) {
   parser.addOption(QCommandLineOption(QStringLiteral("agent-name"), "Public name for this Agent", "name", QSysInfo::machineHostName()));
   parser.addOption(QCommandLineOption(QStringLiteral("list-hamlib-models"), "List compiled Hamlib radio models as JSON"));
   parser.addOption(QCommandLineOption(QStringLiteral("list-serial-ports"), "List local serial routes as JSON"));
+  parser.addOption(QCommandLineOption(QStringLiteral("show-radio-profile"), "Show the saved non-secret radio profile as JSON"));
   parser.addOption(QCommandLineOption(QStringLiteral("configure-hamlib"), "Persist a Hamlib model id for safe startup autoconnect", "model-id"));
   parser.addOption(QCommandLineOption(QStringLiteral("radio-route"), "Explicit local serial/network route used with --configure-hamlib", "route"));
   parser.addOption(QCommandLineOption(QStringLiteral("radio-baud"), "Serial speed used with --configure-hamlib", "baud", "38400"));
@@ -93,6 +94,7 @@ int main(int argc, char **argv) {
   if (!parser.isSet("foreground") && !requestedAdminAction.isEmpty()) return sendAdminRequest(requestedAdminAction);
   const bool setupAction = parser.isSet("pair-with-shackcq") ||
       parser.isSet("list-hamlib-models") || parser.isSet("list-serial-ports") ||
+      parser.isSet("show-radio-profile") ||
       parser.isSet("configure-hamlib") || parser.isSet("clear-hamlib-profile") ||
       parser.isSet("unpair-shackcq") || parser.isSet("list-audio-devices") ||
       parser.isSet("configure-digi-audio") || parser.isSet("authorize-digi-tx") ||
@@ -161,6 +163,13 @@ int main(int argc, char **argv) {
     QTextStream(stdout) << QJsonDocument(rows).toJson(QJsonDocument::Indented);
     return 0;
   }
+  if (parser.isSet("show-radio-profile")) {
+    const QVariantMap profile =
+        radio.configuration().value("hamlibProfile").toMap();
+    QTextStream(stdout)
+        << QJsonDocument::fromVariant(profile).toJson(QJsonDocument::Indented);
+    return 0;
+  }
   if (parser.isSet("configure-hamlib")) {
     bool modelOk = false, baudOk = false;
     const int modelId = parser.value("configure-hamlib").toInt(&modelOk);
@@ -172,8 +181,12 @@ int main(int argc, char **argv) {
       return 8;
     }
     if (parser.isSet("test-radio-connection")) {
-      if (!radio.connectRadio(modelId, parser.value("radio-route"), baudRate))
+      if (!radio.connectRadio(modelId, parser.value("radio-route"), baudRate)) {
+        QTextStream(stderr)
+            << QJsonDocument::fromVariant(radio.health())
+                   .toJson(QJsonDocument::Indented);
         return 9;
+      }
       QTextStream(stdout) << QJsonDocument::fromVariant(radio.health()).toJson(QJsonDocument::Indented);
       radio.disconnectRadio();
     }
