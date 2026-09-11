@@ -13,8 +13,15 @@ private slots:
     HamlibHelperTransport transport;
     transport.setProgramForTest(QStringLiteral(SHACKCQ_HAMLIB_FIXTURE),
                                 {QStringLiteral("slow-open")});
-    QVERIFY(transport.open(1, "fixture", 0));
+    QJsonObject description;
+    QVERIFY(transport.open(1, "fixture", 0, &description));
     QVERIFY(!transport.quarantined());
+    QCOMPARE(description.value("model").toString(), QString("Fixture"));
+    QVERIFY(description.value("setters").toArray().contains("radio.set.frequency"));
+    QVERIFY(description.value("modes").toArray().contains("USB"));
+    QVERIFY(description.value("filtersHz").toArray().contains(2'400));
+    QCOMPARE(description.value("frequencyRangesHz").toArray().size(), 1);
+    QVERIFY(description.value("meters").toArray().contains("signal"));
   }
 
   void blockedOperationIsPreemptedAndQuarantined() {

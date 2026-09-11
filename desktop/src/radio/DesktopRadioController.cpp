@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <iterator>
+#include <QJsonArray>
 #include <QRegularExpression>
 #include <QSet>
 #include <QUrl>
@@ -225,71 +226,13 @@ bool DesktopRadioController::connectRadio(int modelId, const QString &port,
                            {"rxAudioStreaming", false},
                            {"ptt", false},
                            {"tune", false}};
-  if (const struct rig_caps *caps = rig_get_caps(modelId)) {
-    QVariantList ranges, filters, modes, setters, meters;
-    auto appendRanges = [&ranges](const freq_range_t *source) {
-      for (int index = 0; index < HAMLIB_FRQRANGESIZ; ++index) {
-        const auto &range = source[index];
-        if (RIG_IS_FRNG_END(range))
-          break;
-        if (range.startf > 0 && range.endf >= range.startf)
-          ranges << QVariantMap{
-              {"min", QVariant::fromValue<qulonglong>(
-                          static_cast<quint64>(range.startf))},
-              {"max", QVariant::fromValue<qulonglong>(
-                          static_cast<quint64>(range.endf))}};
-      }
-    };
-    appendRanges(caps->rx_range_list1);
-    appendRanges(caps->rx_range_list2);
-    appendRanges(caps->rx_range_list3);
-    appendRanges(caps->rx_range_list4);
-    appendRanges(caps->rx_range_list5);
-    struct CloudMode {
-      rmode_t hamlib;
-      const char *name;
-    };
-    static constexpr std::array<CloudMode, 6> knownModes{{
-        {RIG_MODE_CW | RIG_MODE_CWR, "CW"},
-        {RIG_MODE_USB, "USB"},
-        {RIG_MODE_LSB, "LSB"},
-        {RIG_MODE_AM, "AM"},
-        {RIG_MODE_FM, "FM"},
-        {RIG_MODE_PKTUSB | RIG_MODE_PKTLSB, "DATA"},
-    }};
-    for (int index = 0; index < HAMLIB_FLTLSTSIZ; ++index) {
-      const auto &filter = caps->filters[index];
-      if (RIG_IS_FLT_END(filter))
-        break;
-      if (filter.width > 0 && !filters.contains(int(filter.width)))
-        filters << int(filter.width);
-      for (const auto &candidate : knownModes) {
-        const QString name = QString::fromLatin1(candidate.name);
-        if ((filter.modes & candidate.hamlib) && !modes.contains(name))
-          modes << name;
-      }
-    }
-    if (caps->set_freq && caps->get_freq)
-      setters << "radio.set.frequency";
-    if (caps->set_mode && caps->get_mode) {
-      setters << "radio.set.mode" << "radio.set.filter";
-      if (setters.contains("radio.set.frequency"))
-        setters << "preset.recall";
-    }
-    if (caps->get_level) {
-      if (caps->has_get_level & RIG_LEVEL_STRENGTH)
-        meters << "signal";
-      if (caps->has_get_level & RIG_LEVEL_SWR)
-        meters << "swr";
-      if (caps->has_get_level & RIG_LEVEL_ALC)
-        meters << "alc";
-    }
-    m_backendCapabilities.insert("frequencyRangesHz", ranges);
-    m_backendCapabilities.insert("modes", modes);
-    m_backendCapabilities.insert("filtersHz", filters);
-    m_backendCapabilities.insert("setters", setters);
-    m_backendCapabilities.insert("meters", meters);
-  }
+  for (const QString &key : {QStringLiteral("frequencyRangesHz"),
+                             QStringLiteral("modes"),
+                             QStringLiteral("filtersHz"),
+                             QStringLiteral("setters"),
+                             QStringLiteral("meters")})
+    m_backendCapabilities.insert(key,
+                                 description.value(key).toArray().toVariantList());
   m_poll.start();
   poll();
   return true;

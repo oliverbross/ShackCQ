@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <array>
 #include <cstdio>
 
 #ifdef SHACKCQ_HAVE_HAMLIB
@@ -42,6 +43,80 @@ QString modeName(rmode_t value) {
   if (value == RIG_MODE_CWR)
     return QStringLiteral("CW");
   return QString::fromLatin1(rig_strrmode(value));
+}
+
+QJsonObject describe(const rig_caps *caps, int modelId) {
+  QJsonArray ranges, filters, modes, setters, meters;
+  if (caps) {
+    auto appendRanges = [&ranges](const freq_range_t *source) {
+      for (int index = 0; index < HAMLIB_FRQRANGESIZ; ++index) {
+        const auto &range = source[index];
+        if (RIG_IS_FRNG_END(range))
+          break;
+        if (range.startf > 0 && range.endf >= range.startf)
+          ranges.append(QJsonObject{{"min", double(range.startf)},
+                                    {"max", double(range.endf)}});
+      }
+    };
+    appendRanges(caps->rx_range_list1);
+    appendRanges(caps->rx_range_list2);
+    appendRanges(caps->rx_range_list3);
+    appendRanges(caps->rx_range_list4);
+    appendRanges(caps->rx_range_list5);
+
+    struct CloudMode {
+      rmode_t hamlib;
+      const char *name;
+    };
+    static constexpr std::array<CloudMode, 6> knownModes{{
+        {RIG_MODE_CW | RIG_MODE_CWR, "CW"},
+        {RIG_MODE_USB, "USB"},
+        {RIG_MODE_LSB, "LSB"},
+        {RIG_MODE_AM, "AM"},
+        {RIG_MODE_FM, "FM"},
+        {RIG_MODE_PKTUSB | RIG_MODE_PKTLSB, "DATA"},
+    }};
+    for (int index = 0; index < HAMLIB_FLTLSTSIZ; ++index) {
+      const auto &filter = caps->filters[index];
+      if (RIG_IS_FLT_END(filter))
+        break;
+      if (filter.width > 0 && !filters.contains(int(filter.width)))
+        filters.append(int(filter.width));
+      for (const auto &candidate : knownModes) {
+        const QString name = QString::fromLatin1(candidate.name);
+        if ((filter.modes & candidate.hamlib) && !modes.contains(name))
+          modes.append(name);
+      }
+    }
+    if (caps->set_freq && caps->get_freq)
+      setters.append("radio.set.frequency");
+    if (caps->set_mode && caps->get_mode) {
+      setters.append("radio.set.mode");
+      setters.append("radio.set.filter");
+      if (setters.contains("radio.set.frequency"))
+        setters.append("preset.recall");
+    }
+    if (caps->get_level) {
+      if (caps->has_get_level & RIG_LEVEL_STRENGTH)
+        meters.append("signal");
+      if (caps->has_get_level & RIG_LEVEL_SWR)
+        meters.append("swr");
+      if (caps->has_get_level & RIG_LEVEL_ALC)
+        meters.append("alc");
+    }
+  }
+  return {{"model", caps && caps->model_name
+                        ? QString::fromUtf8(caps->model_name)
+                        : QString::number(modelId)},
+          {"manufacturer", caps && caps->mfg_name
+                               ? QString::fromUtf8(caps->mfg_name)
+                               : QStringLiteral("Hamlib")},
+          {"frequencyRangesHz", ranges},
+          {"modes", modes},
+          {"filtersHz", filters},
+          {"setters", setters},
+          {"meters", meters},
+          {"pttSupported", bool(caps && caps->set_ptt && caps->get_ptt)}};
 }
 
 QJsonObject observe(RIG *rig) {
@@ -164,25 +239,7 @@ int main(int argc, char **argv) {
           reply(requestId, epoch, false, "OPEN_FAILED");
           continue;
         }
-        const rig_caps *caps = rig->caps;
-        QJsonArray setters;
-        if (caps && caps->set_freq && caps->get_freq)
-          setters.append("radio.set.frequency");
-        if (caps && caps->set_mode && caps->get_mode) {
-          setters.append("radio.set.mode");
-          setters.append("radio.set.filter");
-          if (setters.contains("radio.set.frequency"))
-            setters.append("preset.recall");
-        }
-        reply(requestId, epoch, true, "OPENED",
-              {{"model", caps && caps->model_name
-                             ? QString::fromUtf8(caps->model_name)
-                             : QString::number(modelId)},
-               {"manufacturer", caps && caps->mfg_name
-                                    ? QString::fromUtf8(caps->mfg_name)
-                                    : QStringLiteral("Hamlib")},
-               {"setters", setters},
-               {"pttSupported", bool(caps && caps->set_ptt && caps->get_ptt)}});
+        reply(requestId, epoch, true, "OPENED", describe(rig->caps, modelId));
         continue;
       }
       if (!rig) {

@@ -49,8 +49,13 @@ int main(int argc, char **argv) {
       reply(request, true, "OPENED",
             {{"model", "Fixture"},
              {"manufacturer", "ShackCQ"},
+             {"frequencyRangesHz", QJsonArray{QJsonObject{{"min", 1'800'000},
+                                                           {"max", 54'000'000}}}},
+             {"modes", QJsonArray{"CW", "USB", "LSB", "AM", "FM", "DATA"}},
+             {"filtersHz", QJsonArray{200, 500, 2'400, 3'000}},
              {"setters", QJsonArray{"radio.set.frequency", "radio.set.mode",
                                      "radio.set.filter", "preset.recall"}},
+             {"meters", QJsonArray{"signal", "swr", "alc"}},
              {"pttSupported", true}});
     } else if (operation == "stop" || operation == "ptt") {
       const bool verified = mode != "rx-fail";
