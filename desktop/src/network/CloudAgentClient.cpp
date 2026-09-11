@@ -23,6 +23,11 @@ namespace shackcq::desktop {
 namespace {
 constexpr qsizetype MaxControlBytes = 64 * 1024;
 QJsonObject protocol() { return {{"major", 1}, {"minor", 2}}; }
+QString buildIdentity() {
+  const QString configured = QStringLiteral(SHACKCQ_BUILD_SHA).left(80);
+  return configured.isEmpty() ? QStringLiteral("local-uncommitted-build")
+                              : configured;
+}
 QString compact(const QJsonObject &value) {
   return QString::fromUtf8(QJsonDocument(value).toJson(QJsonDocument::Compact));
 }
@@ -141,7 +146,7 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
                          {"name", name.trimmed()},
                          {"platform", QSysInfo::prettyProductName().left(40)},
                          {"version", QCoreApplication::applicationVersion()},
-                         {"build", QStringLiteral(SHACKCQ_BUILD_SHA).left(80)}};
+                         {"build", buildIdentity()}};
   QNetworkReply *reply =
       network.post(request, QJsonDocument(body).toJson(QJsonDocument::Compact));
   QEventLoop loop;
@@ -326,7 +331,7 @@ void CloudAgentClient::sendHello() {
               {"agentId", m_agentId},
               {"platform", QSysInfo::productType().left(40)},
               {"version", QCoreApplication::applicationVersion().left(40)},
-              {"build", QStringLiteral(SHACKCQ_BUILD_SHA).left(80)},
+              {"build", buildIdentity()},
               {"loggerSources", QJsonArray{"WSJTX", "N1MM"}},
               {"devices", devices}});
 }
