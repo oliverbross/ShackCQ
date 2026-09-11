@@ -297,23 +297,19 @@ bool SystemCredentialVault::write(const QString &alias, const QString &label,
   const CFStringRef display = label.toCFString();
   const CFDataRef value = CFDataCreate(kCFAllocatorDefault,
       reinterpret_cast<const UInt8 *>(bytes.constData()), bytes.size());
-  const void *queryKeys[] = {kSecClass, kSecAttrService, kSecAttrAccount,
-                             kSecUseDataProtectionKeychain};
-  const void *queryValues[] = {kSecClassGenericPassword, service, account,
-                               kCFBooleanTrue};
+  const void *queryKeys[] = {kSecClass, kSecAttrService, kSecAttrAccount};
+  const void *queryValues[] = {kSecClassGenericPassword, service, account};
   const CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault,
-      queryKeys, queryValues, 4, &kCFTypeDictionaryKeyCallBacks,
+      queryKeys, queryValues, 3, &kCFTypeDictionaryKeyCallBacks,
       &kCFTypeDictionaryValueCallBacks);
   SecItemDelete(query);
   const void *keys[] = {kSecClass, kSecAttrService, kSecAttrAccount,
-                        kSecAttrLabel, kSecValueData,
-                        kSecAttrAccessible, kSecUseDataProtectionKeychain};
+                        kSecAttrLabel, kSecValueData, kSecAttrAccessible};
   const void *values[] = {kSecClassGenericPassword, service, account,
                           display, value,
-                          kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-                          kCFBooleanTrue};
+                          kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly};
   const CFDictionaryRef item = CFDictionaryCreate(kCFAllocatorDefault, keys,
-      values, 7, &kCFTypeDictionaryKeyCallBacks,
+      values, 6, &kCFTypeDictionaryKeyCallBacks,
       &kCFTypeDictionaryValueCallBacks);
   const OSStatus status = SecItemAdd(item, nullptr);
   CFRelease(item); CFRelease(query); CFRelease(value); CFRelease(display);
@@ -365,13 +361,12 @@ std::optional<QString> SystemCredentialVault::read(const QString &alias,
 #elif defined(Q_OS_MACOS)
   const CFStringRef account = alias.toCFString();
   const void *keys[] = {kSecClass, kSecAttrService, kSecAttrAccount,
-                        kSecReturnData, kSecMatchLimit,
-                        kSecUseDataProtectionKeychain};
+                        kSecReturnData, kSecMatchLimit};
   const void *values[] = {kSecClassGenericPassword,
       CFSTR("app.shackcq.desktop"), account, kCFBooleanTrue,
-      kSecMatchLimitOne, kCFBooleanTrue};
+      kSecMatchLimitOne};
   const CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault, keys,
-      values, 6, &kCFTypeDictionaryKeyCallBacks,
+      values, 5, &kCFTypeDictionaryKeyCallBacks,
       &kCFTypeDictionaryValueCallBacks);
   CFTypeRef data{};
   const OSStatus status = SecItemCopyMatching(query, &data);
@@ -420,27 +415,17 @@ bool SystemCredentialVault::remove(const QString &alias, QString *error) {
   return true;
 #elif defined(Q_OS_MACOS)
   const CFStringRef account = alias.toCFString();
-  const void *keys[] = {kSecClass, kSecAttrService, kSecAttrAccount,
-                        kSecUseDataProtectionKeychain};
+  const void *keys[] = {kSecClass, kSecAttrService, kSecAttrAccount};
   const void *values[] = {kSecClassGenericPassword,
-      CFSTR("app.shackcq.desktop"), account, kCFBooleanTrue};
+      CFSTR("app.shackcq.desktop"), account};
   const CFDictionaryRef query = CFDictionaryCreate(kCFAllocatorDefault, keys,
-      values, 4, &kCFTypeDictionaryKeyCallBacks,
+      values, 3, &kCFTypeDictionaryKeyCallBacks,
       &kCFTypeDictionaryValueCallBacks);
   const OSStatus status = SecItemDelete(query);
-  const void *legacyKeys[] = {kSecClass, kSecAttrService, kSecAttrAccount};
-  const void *legacyValues[] = {kSecClassGenericPassword,
-      CFSTR("app.shackcq.desktop"), account};
-  const CFDictionaryRef legacyQuery = CFDictionaryCreate(
-      kCFAllocatorDefault, legacyKeys, legacyValues, 3,
-      &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-  const OSStatus legacyStatus = SecItemDelete(legacyQuery);
-  CFRelease(legacyQuery); CFRelease(query); CFRelease(account);
-  if ((status != errSecSuccess && status != errSecItemNotFound) ||
-      (legacyStatus != errSecSuccess && legacyStatus != errSecItemNotFound)) {
+  CFRelease(query); CFRelease(account);
+  if (status != errSecSuccess && status != errSecItemNotFound) {
     if (error)
-      *error = QStringLiteral("macOS Keychain delete failed (%1/%2)")
-                   .arg(status).arg(legacyStatus);
+      *error = QStringLiteral("macOS Keychain delete failed (%1)").arg(status);
     return false;
   }
   return true;
