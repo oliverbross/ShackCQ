@@ -331,8 +331,7 @@ QJsonObject AgentDigiController::processCommand(const QJsonObject &frame,const Q
     m_leaseBrowserSession=frame.value("browserSessionId").toString();m_leaseControlInstance=frame.value("controlInstanceId").toString();m_leaseExpiryMono=m_monotonic.elapsed()+LeaseMillis;emit snapshotChanged();return result(frame,agentId,deviceId,generation,true,"CONTROL_ACQUIRED");
   }
   if(action=="digi.stop"){
-    const bool requireRadioStop=!m_radio||m_radio->transmitting().value_or(true);
-    const StopOutcome stopped=stop("operator STOP",requireRadioStop);
+    const StopOutcome stopped=stop("operator STOP",false);
     if(stopped==StopOutcome::InProgress)return QJsonObject{{"type","digi.command.result"},{"protocol",QJsonObject{{"major",1},{"minor",2}}},{"commandId",frame.value("commandId")},{"agentId",agentId},{"deviceId",deviceId},{"generation",QJsonValue::fromVariant(generation)},{"ok",false},{"code","STOP_IN_PROGRESS_RX_UNCONFIRMED"}};
     return result(frame,agentId,deviceId,generation,stopped==StopOutcome::RxVerified,stopped==StopOutcome::RxVerified?"STOPPED_RX_VERIFIED":"RX_UNCONFIRMED");}
   if(!ownsLease(frame))return result(frame,agentId,deviceId,generation,false,"CONTROL_LEASE_REQUIRED");

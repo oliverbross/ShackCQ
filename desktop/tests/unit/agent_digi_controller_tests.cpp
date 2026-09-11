@@ -101,7 +101,7 @@ private slots:
 
   void idleDigiStopUsesCurrentRxReadbackWithoutQuarantine() {
     DesktopRadioController radio;
-    radio.setHamlibSnapshotForTest(14'280'580, "CW", false);
+    radio.setHamlibSnapshotForTest(14'280'580, "CW");
     AgentDigiController digi(&radio);
     const QJsonObject stopped = run(digi, "digi.stop");
     QVERIFY(stopped.value("ok").toBool());
@@ -176,6 +176,9 @@ private slots:
     DesktopRadioController radio;
     radio.setHamlibSnapshotForTest(14'074'000, "DATA");
     AgentDigiController digi(&radio);
+    digi.m_pttOwned = true;
+    digi.m_pttReleaseRequired = true;
+    digi.m_state = AgentDigiController::State::Transmitting;
     const QJsonObject stopped = run(digi, "digi.stop");
     QVERIFY(!stopped.value("ok").toBool());
     QCOMPARE(stopped.value("code").toString(), QString("RX_UNCONFIRMED"));
