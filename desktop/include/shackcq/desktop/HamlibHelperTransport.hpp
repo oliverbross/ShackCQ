@@ -50,7 +50,9 @@ private:
   int m_baudRate{};
   quint64 m_nextRequest{};
   quint64 m_epoch{};
-  int m_operationTimeoutMillis{2'000};
+  // Some physical radios need several seconds for Hamlib's initial serial
+  // identification exchange. Keep STOP independently bounded below.
+  int m_operationTimeoutMillis{8'000};
   int m_stopTimeoutMillis{1'000};
   bool m_operationActive{};
   bool m_stopInProgress{};

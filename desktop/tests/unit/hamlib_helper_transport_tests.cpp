@@ -9,6 +9,14 @@ using namespace shackcq::desktop;
 class HamlibHelperTransportTests final : public QObject {
   Q_OBJECT
 private slots:
+  void physicalRadioStartupMayExceedTwoSeconds() {
+    HamlibHelperTransport transport;
+    transport.setProgramForTest(QStringLiteral(SHACKCQ_HAMLIB_FIXTURE),
+                                {QStringLiteral("slow-open")});
+    QVERIFY(transport.open(1, "fixture", 0));
+    QVERIFY(!transport.quarantined());
+  }
+
   void blockedOperationIsPreemptedAndQuarantined() {
     HamlibHelperTransport transport;
     transport.setProgramForTest(QStringLiteral(SHACKCQ_HAMLIB_FIXTURE),

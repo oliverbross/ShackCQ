@@ -175,9 +175,32 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
       accountLabel.isEmpty() || accountLabel.size() > 160 ||
       stationLabel.isEmpty() || stationLabel.size() > 200 ||
       credential.size() < 32 || credential.size() > 256) {
-    if (error)
-      *error = status == 401 ? "Pairing code is invalid or expired"
-                            : "Cloud pairing failed";
+    if (error) {
+      if (status == 401) {
+        *error = "Pairing code is invalid or expired";
+      } else if (status == 429) {
+        *error = "Too many pairing attempts; wait before trying again";
+      } else if (status != 0 && status != 201) {
+        *error = QStringLiteral("Cloud pairing failed (HTTP %1)").arg(status);
+      } else if (failure != QNetworkReply::NoError) {
+        *error = "Cloud pairing failed: secure connection unavailable";
+      } else if (parse.error != QJsonParseError::NoError) {
+        *error = "Cloud pairing failed: invalid server response";
+      } else if (connectUrl.scheme() != "wss" ||
+                 connectUrl.host() != origin.host() ||
+                 connectUrl.port(443) != origin.port(443) ||
+                 connectUrl.path() != "/api/v1/agent/connect") {
+        *error = "Cloud pairing failed: invalid secure connection route";
+      } else if (!boundedId(agentId) || !boundedId(userId) ||
+                 !boundedId(stationProfileId)) {
+        *error = "Cloud pairing failed: invalid account association";
+      } else if (accountLabel.isEmpty() || accountLabel.size() > 160 ||
+                 stationLabel.isEmpty() || stationLabel.size() > 200) {
+        *error = "Cloud pairing failed: account association label unavailable";
+      } else {
+        *error = "Cloud pairing failed: invalid credential response";
+      }
+    }
     return false;
   }
   const QJsonObject stored{{"agentId", agentId},
