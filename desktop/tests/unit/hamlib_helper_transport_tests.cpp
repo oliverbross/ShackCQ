@@ -47,6 +47,16 @@ private slots:
     QVERIFY(transport.quarantined());
   }
 
+  void emergencyRecoveryAllowsPhysicalRadioOpenLatency() {
+    HamlibHelperTransport transport;
+    transport.setProgramForTest(QStringLiteral(SHACKCQ_HAMLIB_FIXTURE),
+                                {QStringLiteral("slow-open")});
+    transport.setTimeoutsForTest(2'500, 100);
+    QVERIFY(transport.open(1, "fixture", 0));
+    QVERIFY(transport.priorityStop());
+    QVERIFY(transport.quarantined());
+  }
+
   void lateResultIsRejectedAfterVerifiedPriorityStop() {
     HamlibHelperTransport transport;
     transport.setProgramForTest(QStringLiteral(SHACKCQ_HAMLIB_FIXTURE),
@@ -81,6 +91,18 @@ private slots:
         "radio.set.frequency", {{"frequencyHz", 14'076'000}});
     QVERIFY(first.value("ok").toBool());
     QCOMPARE(queued.value("code").toString(), QString("OPERATION_BUSY"));
+  }
+
+  void snapshotCannotReenterWhileWaitingForReadback() {
+    HamlibHelperTransport transport;
+    transport.setProgramForTest(QStringLiteral(SHACKCQ_HAMLIB_FIXTURE),
+                                {QStringLiteral("slow-snapshot")});
+    QVERIFY(transport.open(1, "fixture", 0));
+    QJsonObject nested;
+    QTimer::singleShot(10, &transport,
+                       [&] { nested = transport.snapshot(); });
+    QVERIFY(transport.snapshot().value("ok").toBool());
+    QCOMPARE(nested.value("code").toString(), QString("OPERATION_BUSY"));
   }
 
   void recoveryOpenRequiresFreshRxProof() {

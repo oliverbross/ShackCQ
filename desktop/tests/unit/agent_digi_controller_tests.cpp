@@ -76,6 +76,29 @@ private slots:
     QVERIFY(!tx["locallyPermitted"].toBool());QVERIFY(!tx["hardwareAccepted"].toBool());
   }
 
+  void passiveSnapshotDoesNotStartAnotherHardwareReadback() {
+    DesktopRadioController radio;
+    AgentDigiController digi(&radio);
+    int readbacks = 0;
+    digi.setSafetyHooksForTest(
+        [](bool) { return false; },
+        [&] {
+          ++readbacks;
+          return std::optional<bool>(false);
+        });
+    (void)digi.snapshot("agent-1", "hamlib:1", 1);
+    QCOMPARE(readbacks, 0);
+  }
+
+  void idleCloudDisconnectDoesNotQuarantineReceiveOnlyRadio() {
+    DesktopRadioController radio;
+    radio.setHamlibSnapshotForTest(14'280'580, "CW");
+    AgentDigiController digi(&radio);
+    QCOMPARE(digi.stop("cloud transport disconnected", false),
+             AgentDigiController::StopOutcome::RxVerified);
+    QVERIFY(radio.state().startsWith("Connected"));
+  }
+
   void leasePrepareAndThreeTxGatesFailClosed() {
     DesktopRadioController radio;AgentDigiController digi(&radio);QString error;
     QVERIFY(digi.restoreConfiguration({{"schemaVersion",1},{"audioProfile",QVariantMap{{"id","fixture-audio"},{"inputDeviceId","memory-in"},{"outputDeviceId","memory-out"},{"sampleRate",48000},{"inputChannel",0},{"outputChannel",0}}},{"localTxPermitted",false},{"hardwareAccepted",false},{"acceptedRadioIdentity",QString{}}},&error));
