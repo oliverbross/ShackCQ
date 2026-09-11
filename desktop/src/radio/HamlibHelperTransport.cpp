@@ -91,7 +91,8 @@ bool HamlibHelperTransport::emergencyStop() {
 
   quint64 emergencyRequest = 0;
   auto exchange = [&](const QString &operation,
-                      const QJsonObject &parameters) -> QJsonObject {
+                      const QJsonObject &parameters,
+                      int timeoutMillis) -> QJsonObject {
     const QString requestId = QStringLiteral("emergency-%1")
                                   .arg(++emergencyRequest);
     const QJsonObject frame{{"requestId", requestId},
@@ -101,13 +102,13 @@ bool HamlibHelperTransport::emergencyStop() {
     const QByteArray bytes =
         QJsonDocument(frame).toJson(QJsonDocument::Compact) + '\n';
     if (bytes.size() > MaxLineBytes || emergency.write(bytes) != bytes.size() ||
-        !emergency.waitForBytesWritten(qMin(100, m_stopTimeoutMillis)))
+        !emergency.waitForBytesWritten(qMin(100, timeoutMillis)))
       return {{"ok", false}, {"code", "EMERGENCY_WRITE_FAILED"}};
     QElapsedTimer elapsed;
     elapsed.start();
     QByteArray output;
-    while (elapsed.elapsed() < m_stopTimeoutMillis) {
-      const int remaining = m_stopTimeoutMillis - int(elapsed.elapsed());
+    while (elapsed.elapsed() < timeoutMillis) {
+      const int remaining = timeoutMillis - int(elapsed.elapsed());
       if (!emergency.waitForReadyRead(qMax(1, remaining)) &&
           emergency.state() == QProcess::NotRunning)
         break;
@@ -131,9 +132,11 @@ bool HamlibHelperTransport::emergencyStop() {
 
   const QJsonObject opened = exchange(
       QStringLiteral("open"),
-      {{"modelId", m_modelId}, {"route", m_route}, {"baudRate", m_baudRate}});
+      {{"modelId", m_modelId}, {"route", m_route}, {"baudRate", m_baudRate}},
+      m_operationTimeoutMillis);
   const QJsonObject stopped = opened.value("ok").toBool()
-                                  ? exchange(QStringLiteral("stop"), {})
+                                  ? exchange(QStringLiteral("stop"), {},
+                                             m_stopTimeoutMillis)
                                   : QJsonObject{{"ok", false}};
   emergency.closeWriteChannel();
   if (!emergency.waitForFinished(qMin(100, m_stopTimeoutMillis))) {
@@ -292,8 +295,11 @@ QJsonObject HamlibHelperTransport::snapshot() {
     return {{"ok", false}, {"code", "OPERATION_BUSY"}};
   if (m_process.state() == QProcess::NotRunning)
     return {{"ok", false}, {"code", "HELPER_QUARANTINED"}};
-  return request(QStringLiteral("snapshot"), {}, m_operationTimeoutMillis,
-                 true);
+  m_operationActive = true;
+  const QJsonObject response =
+      request(QStringLiteral("snapshot"), {}, m_operationTimeoutMillis, true);
+  m_operationActive = false;
+  return response;
 }
 
 QJsonObject HamlibHelperTransport::setPtt(bool enabled) {

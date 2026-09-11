@@ -37,11 +37,11 @@ QJsonObject adminRequest(const QCommandLineParser &parser) {
 int sendAdminRequest(const QJsonObject &request) {
   QLocalSocket socket;
   socket.connectToServer(AdminSocket, QIODevice::ReadWrite);
-  if (!socket.waitForConnected(5'000)) return 5;
+  if (!socket.waitForConnected(10'000)) return 5;
   socket.write(QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n');
   if (!socket.waitForBytesWritten(2'000)) return 6;
   while (!socket.canReadLine()) {
-    if (!socket.waitForReadyRead(3'000)) return 6;
+    if (!socket.waitForReadyRead(5'000)) return 6;
   }
   const QByteArray response = socket.readLine(256 * 1024);
   QTextStream(stdout) << response;

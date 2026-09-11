@@ -71,7 +71,7 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
     m_announcedDeviceId.clear();
     if (m_digi) {
       m_digi->setServerTxPermitted(false);
-      m_digi->stop("cloud transport disconnected");
+      m_digi->stop("cloud transport disconnected", false);
     }
     if (!m_stopping) {
       setState("Offline", "Cloud transport disconnected; no commands queued");
@@ -288,7 +288,7 @@ void CloudAgentClient::stop() {
   m_generation = 0;
   if (m_digi) {
     m_digi->setServerTxPermitted(false);
-    m_digi->stop("cloud Agent stopped");
+    m_digi->stop("cloud Agent stopped", false);
   }
   if (m_socket.state() != QAbstractSocket::UnconnectedState)
     m_socket.close(QWebSocketProtocol::CloseCodeNormal, "Agent shutdown");

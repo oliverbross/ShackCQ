@@ -64,6 +64,8 @@ int main(int argc, char **argv) {
           request.value("parameters").toObject().value("enabled").toBool())
         return 9;
     } else if (operation == "snapshot") {
+      if (mode == "slow-snapshot")
+        QThread::msleep(80);
       reply(request, true, "OBSERVED",
             {{"frequencyHz", QJsonValue(double(frequency))},
              {"mode", radioMode}, {"filterHz", filter},

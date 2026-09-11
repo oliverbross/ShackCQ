@@ -38,7 +38,7 @@ public:
   QJsonObject snapshot(const QString &agentId, const QString &deviceId,
                        quint64 generation);
   void setServerTxPermitted(bool permitted);
-  StopOutcome stop(const QString &reason);
+  StopOutcome stop(const QString &reason, bool requireRadioStop = true);
   bool radioMutationBlocked() const;
   QString currentAcceptanceIdentity() const;
   bool isKx3Profile() const;
@@ -88,7 +88,7 @@ private:
   void processDisplayAndContinuous();
   bool applyReceiveEntry(const QJsonObject &entry, QString *error);
   void scannerStep();
-  StopOutcome performStop(bool autonomousRetry);
+  StopOutcome performStop(bool autonomousRetry, bool requireRadioStop = true);
   void handleUnsafeRadioLoss(bool rxVerified);
   void resetPrepared();
   QString stateName() const;

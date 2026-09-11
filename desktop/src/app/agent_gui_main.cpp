@@ -282,7 +282,7 @@ class AgentWindow final : public QMainWindow {
   }
 
   void ensureAgentRunning() {
-    const CommandResult result = run({QStringLiteral("--status")}, 8'000);
+    const CommandResult result = run({QStringLiteral("--status")}, 15'000);
     if (result.exitCode != 0) {
       if (!QProcess::startDetached(helperPath(), {QStringLiteral("--foreground")})) {
         m_status->setText(QStringLiteral("Agent could not start."));
@@ -296,7 +296,7 @@ class AgentWindow final : public QMainWindow {
   }
 
   void refreshStatusView(bool reportFailure) {
-    const CommandResult result = run({QStringLiteral("--status")}, 8'000);
+    const CommandResult result = run({QStringLiteral("--status")}, 15'000);
     if (result.exitCode != 0) {
       m_status->setText(QStringLiteral("Agent is not running."));
       if (reportFailure) appendResult(result);
@@ -331,7 +331,7 @@ class AgentWindow final : public QMainWindow {
   }
 
   bool stopAgentService(bool report) {
-    const CommandResult result = run({QStringLiteral("--stop")}, 8'000);
+    const CommandResult result = run({QStringLiteral("--stop")}, 15'000);
     if (result.exitCode == 0) {
       m_status->setText(QStringLiteral("Agent stopped."));
       if (report) appendResult(result);
@@ -342,7 +342,7 @@ class AgentWindow final : public QMainWindow {
   }
 
   bool prepareConfiguration() {
-    const CommandResult status = run({QStringLiteral("--status")}, 5'000);
+    const CommandResult status = run({QStringLiteral("--status")}, 15'000);
     if (status.exitCode != 0) return true;
     if (stopAgentService(false)) return true;
     QMessageBox::critical(

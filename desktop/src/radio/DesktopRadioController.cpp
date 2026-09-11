@@ -712,7 +712,13 @@ void DesktopRadioController::poll() {
   if (m_backend != "hamlib" || m_hamlibHelper.quarantined() ||
       m_hamlibHelper.operationActive())
     return;
+  // A physical serial snapshot may take longer than the timer interval. Stop
+  // the repeating timer while it is in flight, then schedule the next poll
+  // after this read completes so overdue timer events cannot starve the local
+  // administration socket.
+  m_poll.stop();
   const QJsonObject observed = m_hamlibHelper.snapshot();
+  m_poll.start();
   if (!observed.value("ok").toBool())
     return;
   m_frequencyHz = observed.value("frequencyHz").toVariant().toULongLong();
