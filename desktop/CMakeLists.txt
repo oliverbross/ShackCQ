@@ -199,6 +199,18 @@ if(ShackCQHamlib_FOUND)
 endif()
 shackcq_target_warnings(shackcq-hamlib-helper)
 
+if(APPLE)
+    add_dependencies(ShackCQAgent shackcq-stationd shackcq-hamlib-helper)
+    add_custom_command(TARGET ShackCQAgent POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:shackcq-stationd>
+            $<TARGET_BUNDLE_DIR:ShackCQAgent>/Contents/MacOS/shackcq-stationd
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            $<TARGET_FILE:shackcq-hamlib-helper>
+            $<TARGET_BUNDLE_DIR:ShackCQAgent>/Contents/MacOS/shackcq-hamlib-helper
+        COMMENT "Embedding the current Agent daemon and Hamlib helper")
+endif()
+
 file(GLOB_RECURSE SHACKCQ_QML_FILES CONFIGURE_DEPENDS "qml/*.qml")
 file(GLOB SHACKCQ_ICON_FILES CONFIGURE_DEPENDS "resources/icons/*.svg")
 set(SHACKCQ_APP_ICON "${CMAKE_CURRENT_SOURCE_DIR}/../assets/branding/shackcq-app-icon-1024.png")
