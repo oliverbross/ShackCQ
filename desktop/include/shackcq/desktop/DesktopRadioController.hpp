@@ -127,7 +127,8 @@ public:
   bool requestDigiPtt(bool enabled);
   std::optional<bool> digiPttReadback() const;
   void setTciTimeoutsForTest(int connectionMs, int readyMs, int reconnectMs);
-  void setHamlibSnapshotForTest(quint64 frequencyHz, const QString &mode);
+  void setHamlibSnapshotForTest(quint64 frequencyHz, const QString &mode,
+                                std::optional<bool> transmitting = std::nullopt);
   HamlibHelperTransport *hamlibHelperForTest() { return &m_hamlibHelper; }
 
 signals:

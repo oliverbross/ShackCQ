@@ -22,6 +22,7 @@
 #include <QPushButton>
 #include <QScrollArea>
 #include <QSizePolicy>
+#include <QStyle>
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -68,39 +69,54 @@ class AgentWindow final : public QMainWindow {
     auto *cloudTitle = new QLabel(QStringLiteral("ShackCQ account"), cloudGroup);
     cloudTitle->setObjectName(QStringLiteral("sectionTitle"));
     cloudLayout->addWidget(cloudTitle);
+    m_pairingSummary = new QLabel(cloudGroup);
+    m_pairingSummary->setObjectName(QStringLiteral("pairedSummary"));
+    m_pairingSummary->setWordWrap(true);
+    m_pairingSummary->setVisible(false);
+    cloudLayout->addWidget(m_pairingSummary);
+
+    m_pairingSetup = new QWidget(cloudGroup);
+    auto *pairingLayout = new QVBoxLayout(m_pairingSetup);
+    pairingLayout->setContentsMargins(0, 0, 0, 0);
+    pairingLayout->setSpacing(12);
     auto *cloudHelp = new QLabel(
         QStringLiteral("Create a one-time code in ShackCQ, then paste it below. Codes expire after 10 minutes."),
-        cloudGroup);
+        m_pairingSetup);
     cloudHelp->setObjectName(QStringLiteral("secondaryText"));
     cloudHelp->setWordWrap(true);
-    cloudLayout->addWidget(cloudHelp);
+    pairingLayout->addWidget(cloudHelp);
     auto *cloudForm = new QFormLayout;
     cloudForm->setHorizontalSpacing(16);
     cloudForm->setVerticalSpacing(10);
     cloudForm->setFieldGrowthPolicy(QFormLayout::AllNonFixedFieldsGrow);
-    m_origin = new QLineEdit(QStringLiteral("https://shackcq.com"), cloudGroup);
-    m_agentName = new QLineEdit(QHostInfo::localHostName(), cloudGroup);
-    m_pairingCode = new QLineEdit(cloudGroup);
+    m_origin = new QLineEdit(QStringLiteral("https://shackcq.com"), m_pairingSetup);
+    m_agentName = new QLineEdit(QHostInfo::localHostName(), m_pairingSetup);
+    m_pairingCode = new QLineEdit(m_pairingSetup);
     m_pairingCode->setPlaceholderText(QStringLiteral("XXXX XXXX XXXX"));
     m_pairingCode->setClearButtonEnabled(true);
     m_pairingCode->setAccessibleName(QStringLiteral("One-time ShackCQ pairing code"));
     cloudForm->addRow(QStringLiteral("ShackCQ address"), m_origin);
     cloudForm->addRow(QStringLiteral("Agent name"), m_agentName);
     cloudForm->addRow(QStringLiteral("Pairing code"), m_pairingCode);
-    cloudLayout->addLayout(cloudForm);
+    pairingLayout->addLayout(cloudForm);
     auto *cloudButtons = new QHBoxLayout;
     cloudButtons->setSpacing(8);
-    auto *openPairing = new QPushButton(QStringLiteral("Get pairing code…"), cloudGroup);
+    auto *openPairing = new QPushButton(QStringLiteral("Get pairing code…"), m_pairingSetup);
     openPairing->setObjectName(QStringLiteral("linkButton"));
-    auto *pairButton = new QPushButton(QStringLiteral("Pair this Mac"), cloudGroup);
+    auto *pairButton = new QPushButton(QStringLiteral("Pair this Mac"), m_pairingSetup);
     pairButton->setObjectName(QStringLiteral("primaryButton"));
     pairButton->setDefault(true);
-    auto *unpairButton = new QPushButton(QStringLiteral("Unpair"), cloudGroup);
     cloudButtons->addWidget(openPairing);
     cloudButtons->addStretch();
-    cloudButtons->addWidget(unpairButton);
     cloudButtons->addWidget(pairButton);
-    cloudLayout->addLayout(cloudButtons);
+    pairingLayout->addLayout(cloudButtons);
+    cloudLayout->addWidget(m_pairingSetup);
+    auto *pairedButtons = new QHBoxLayout;
+    pairedButtons->addStretch();
+    m_unpairButton = new QPushButton(QStringLiteral("Unpair this Mac"), cloudGroup);
+    m_unpairButton->setVisible(false);
+    pairedButtons->addWidget(m_unpairButton);
+    cloudLayout->addLayout(pairedButtons);
     layout->addWidget(cloudGroup);
 
     auto *radioGroup = new QFrame(root);
@@ -165,6 +181,17 @@ class AgentWindow final : public QMainWindow {
     m_status = new QLabel(QStringLiteral("Starting Agent…"), statusGroup);
     m_status->setObjectName(QStringLiteral("statusText"));
     m_status->setWordWrap(true);
+    auto *connectionStates = new QHBoxLayout;
+    connectionStates->setSpacing(8);
+    m_pairingIndicator = new QLabel(QStringLiteral("● Checking account"), statusGroup);
+    m_cloudIndicator = new QLabel(QStringLiteral("● Checking ShackCQ"), statusGroup);
+    m_radioIndicator = new QLabel(QStringLiteral("● Checking radio"), statusGroup);
+    for (QLabel *indicator : {m_pairingIndicator, m_cloudIndicator, m_radioIndicator}) {
+      indicator->setObjectName(QStringLiteral("connectionPill"));
+      indicator->setProperty("connected", false);
+      connectionStates->addWidget(indicator);
+    }
+    connectionStates->addStretch();
     m_details = new QPlainTextEdit(statusGroup);
     m_details->setReadOnly(true);
     m_details->setMaximumBlockCount(200);
@@ -180,6 +207,7 @@ class AgentWindow final : public QMainWindow {
     statusButtons->addWidget(startAgent);
     statusButtons->addWidget(stopAgent);
     statusLayout->addWidget(m_status);
+    statusLayout->addLayout(connectionStates);
     statusLayout->addWidget(m_details);
     statusLayout->addLayout(statusButtons);
     layout->addWidget(statusGroup);
@@ -197,12 +225,18 @@ class AgentWindow final : public QMainWindow {
     const QString borderColor = dark ? QStringLiteral("#4a4a4e") : QStringLiteral("#d1d1d6");
     const QString textColor = dark ? QStringLiteral("#f5f5f7") : QStringLiteral("#1d1d1f");
     const QString secondaryColor = dark ? QStringLiteral("#b7b7bd") : QStringLiteral("#5f5f66");
+    const QString successColor = dark ? QStringLiteral("#30d158") : QStringLiteral("#14753c");
+    const QString successBackground = dark ? QStringLiteral("#153b27") : QStringLiteral("#e8f7ed");
+    const QString successBorder = dark ? QStringLiteral("#2f7549") : QStringLiteral("#86c79e");
     root->setStyleSheet(QStringLiteral(
         "QWidget#agentRoot { background: %1; color: %5; }"
         "QFrame#settingsCard { background: %2; border: 1px solid %4; border-radius: 12px; }"
         "QLabel#sectionTitle { font-size: 15px; font-weight: 600; border: none; }"
         "QLabel#secondaryText { color: %6; border: none; }"
         "QLabel#statusText { font-size: 14px; font-weight: 600; border: none; }"
+        "QLabel#pairedSummary { color: %7; background: %8; border: 1px solid %9; border-radius: 8px; padding: 10px; font-weight: 600; }"
+        "QLabel#connectionPill { color: %6; background: %3; border: 1px solid %4; border-radius: 10px; padding: 5px 9px; font-size: 12px; font-weight: 600; }"
+        "QLabel#connectionPill[connected=\"true\"] { color: %7; border-color: %9; background: %8; }"
         "QLineEdit, QComboBox { min-height: 30px; padding: 0 8px; background: %3; color: %5; "
         "border: 1px solid %4; border-radius: 7px; selection-background-color: #0a84ff; }"
         "QLineEdit:focus, QComboBox:focus { border: 2px solid #0a84ff; }"
@@ -216,9 +250,10 @@ class AgentWindow final : public QMainWindow {
         "QPlainTextEdit { background: %3; color: %5; border: 1px solid %4; border-radius: 8px; padding: 8px; }"
         "QCheckBox { spacing: 8px; border: none; }"
         "QToolTip { background: %2; color: %5; border: 1px solid %4; }")
-        .arg(windowColor, cardColor, fieldColor, borderColor, textColor, secondaryColor));
+        .arg(windowColor, cardColor, fieldColor, borderColor, textColor,
+             secondaryColor, successColor, successBackground, successBorder));
     connect(pairButton, &QPushButton::clicked, this, [this] { pair(); });
-    connect(unpairButton, &QPushButton::clicked, this, [this] { unpair(); });
+    connect(m_unpairButton, &QPushButton::clicked, this, [this] { unpair(); });
     connect(openPairing, &QPushButton::clicked, this, [] {
       QDesktopServices::openUrl(QUrl(QStringLiteral("https://shackcq.com/app/settings/agents")));
     });
@@ -312,12 +347,32 @@ class AgentWindow final : public QMainWindow {
     const QJsonObject radio = status.value(QStringLiteral("radio")).toObject();
     const QString cloudState = cloud.value(QStringLiteral("state")).toString(QStringLiteral("available"));
     const QString radioState = radio.value(QStringLiteral("state")).toString(QStringLiteral("DISCONNECTED"));
-    m_status->setText(QStringLiteral("Agent running · ShackCQ %1 · Radio %2")
-                          .arg(cloudState, radioState));
     const QString cloudDetail = cloud.value(QStringLiteral("detail")).toString();
     const QString accountLabel = cloud.value(QStringLiteral("accountLabel")).toString();
     const QString stationLabel = cloud.value(QStringLiteral("stationLabel")).toString();
     const QString radioError = radio.value(QStringLiteral("lastSanitizedError")).toString();
+    const bool paired = !accountLabel.isEmpty() && !stationLabel.isEmpty();
+    const bool cloudConnected = cloudState.compare(QStringLiteral("Live"), Qt::CaseInsensitive) == 0;
+    const bool radioConnected = radioState.startsWith(QStringLiteral("Connected"), Qt::CaseInsensitive);
+    m_pairingSetup->setVisible(!paired);
+    m_pairingSummary->setVisible(paired);
+    m_unpairButton->setVisible(paired);
+    if (paired)
+      m_pairingSummary->setText(
+          QStringLiteral("✓ Paired to %1\nStation profile: %2")
+              .arg(accountLabel, stationLabel));
+    setConnectionIndicator(m_pairingIndicator, paired,
+                           paired ? QStringLiteral("Account paired")
+                                  : QStringLiteral("Account not paired"));
+    setConnectionIndicator(m_cloudIndicator, cloudConnected,
+                           cloudConnected ? QStringLiteral("ShackCQ connected")
+                                          : QStringLiteral("ShackCQ offline"));
+    setConnectionIndicator(m_radioIndicator, radioConnected,
+                           radioConnected ? QStringLiteral("Radio connected")
+                                          : QStringLiteral("Radio disconnected"));
+    m_status->setText(radioConnected && cloudConnected
+                          ? QStringLiteral("Agent is online and monitoring this radio.")
+                          : QStringLiteral("Agent is running. One or more connections need attention."));
     QStringList details{
         QStringLiteral("ShackCQ: %1").arg(cloudDetail.isEmpty() ? cloudState : cloudDetail),
         QStringLiteral("Radio: %1").arg(radioState)};
@@ -328,6 +383,15 @@ class AgentWindow final : public QMainWindow {
                      QStringLiteral("Station profile: %1").arg(stationLabel));
     if (!radioError.isEmpty()) details << QStringLiteral("Radio detail: %1").arg(radioError);
     m_details->setPlainText(details.join(QLatin1Char('\n')));
+  }
+
+  void setConnectionIndicator(QLabel *label, bool connected,
+                              const QString &text) {
+    label->setText(QStringLiteral("● %1").arg(text));
+    label->setAccessibleName(text);
+    label->setProperty("connected", connected);
+    label->style()->unpolish(label);
+    label->style()->polish(label);
   }
 
   bool stopAgentService(bool report) {
@@ -380,6 +444,7 @@ class AgentWindow final : public QMainWindow {
       return;
     }
     restartAfterConfiguration();
+    QTimer::singleShot(1'500, this, [this] { refreshStatusView(false); });
     QMessageBox::information(
         this, QStringLiteral("Paired"),
         QStringLiteral("This Mac is paired with your ShackCQ account and selected station profile. The credential and association are stored in macOS Keychain."));
@@ -394,6 +459,7 @@ class AgentWindow final : public QMainWindow {
     const CommandResult result = run({QStringLiteral("--unpair-shackcq")}, 15'000);
     appendResult(result);
     restartAfterConfiguration();
+    QTimer::singleShot(1'500, this, [this] { refreshStatusView(false); });
     if (result.exitCode != 0)
       QMessageBox::critical(this, QStringLiteral("Unpair failed"),
                             QString::fromUtf8(result.output).trimmed());
@@ -519,11 +585,17 @@ class AgentWindow final : public QMainWindow {
   QLineEdit *m_origin{};
   QLineEdit *m_agentName{};
   QLineEdit *m_pairingCode{};
+  QWidget *m_pairingSetup{};
+  QLabel *m_pairingSummary{};
+  QPushButton *m_unpairButton{};
   QComboBox *m_model{};
   QComboBox *m_route{};
   QComboBox *m_baud{};
   QCheckBox *m_autoConnect{};
   QLabel *m_status{};
+  QLabel *m_pairingIndicator{};
+  QLabel *m_cloudIndicator{};
+  QLabel *m_radioIndicator{};
   QPlainTextEdit *m_details{};
 };
 }
@@ -531,7 +603,7 @@ class AgentWindow final : public QMainWindow {
 int main(int argc, char **argv) {
   QApplication application(argc, argv);
   QCoreApplication::setApplicationName(QStringLiteral("ShackCQ Agent"));
-  QCoreApplication::setApplicationVersion(QStringLiteral("1.0.3"));
+  QCoreApplication::setApplicationVersion(QStringLiteral("1.0.4"));
   const bool smokeTest = QCoreApplication::arguments().contains(QStringLiteral("--ui-smoke"));
   const bool preview = QCoreApplication::arguments().contains(QStringLiteral("--ui-preview"));
   AgentWindow window(smokeTest || preview);

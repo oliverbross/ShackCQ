@@ -57,7 +57,7 @@ int sendAdminRequest(const QJsonObject &request) {
 int main(int argc, char **argv) {
   QCoreApplication application(argc, argv);
   QCoreApplication::setApplicationName("shackcq-stationd");
-  QCoreApplication::setApplicationVersion("1.0.3");
+  QCoreApplication::setApplicationVersion("1.0.4");
   QCommandLineParser parser;
   parser.setApplicationDescription("ShackCQ Remote Station Service v1");
   parser.addHelpOption(); parser.addVersionOption();

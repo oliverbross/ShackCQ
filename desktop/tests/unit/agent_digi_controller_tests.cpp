@@ -99,6 +99,26 @@ private slots:
     QVERIFY(radio.state().startsWith("Connected"));
   }
 
+  void idleDigiStopUsesCurrentRxReadbackWithoutQuarantine() {
+    DesktopRadioController radio;
+    radio.setHamlibSnapshotForTest(14'280'580, "CW", false);
+    AgentDigiController digi(&radio);
+    const QJsonObject stopped = run(digi, "digi.stop");
+    QVERIFY(stopped.value("ok").toBool());
+    QVERIFY(radio.state().startsWith("Connected"));
+  }
+
+  void idleLeaseExpiryDoesNotQuarantineReceiveOnlyRadio() {
+    DesktopRadioController radio;
+    radio.setHamlibSnapshotForTest(14'280'580, "CW");
+    AgentDigiController digi(&radio);
+    QVERIFY(run(digi, "digi.control.acquire")["ok"].toBool());
+    digi.m_leaseExpiryMono = digi.m_monotonic.elapsed();
+    digi.expireLease();
+    QVERIFY(radio.state().startsWith("Connected"));
+    QCOMPARE(digi.m_state, AgentDigiController::State::Safe);
+  }
+
   void leasePrepareAndThreeTxGatesFailClosed() {
     DesktopRadioController radio;AgentDigiController digi(&radio);QString error;
     QVERIFY(digi.restoreConfiguration({{"schemaVersion",1},{"audioProfile",QVariantMap{{"id","fixture-audio"},{"inputDeviceId","memory-in"},{"outputDeviceId","memory-out"},{"sampleRate",48000},{"inputChannel",0},{"outputChannel",0}}},{"localTxPermitted",false},{"hardwareAccepted",false},{"acceptedRadioIdentity",QString{}}},&error));
