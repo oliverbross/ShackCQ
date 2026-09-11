@@ -940,7 +940,8 @@ void DesktopRadioController::setTciTimeoutsForTest(int a, int b, int c) {
   m_tci.setTimeoutsForTest(a, b, c);
 }
 void DesktopRadioController::setHamlibSnapshotForTest(quint64 frequency,
-                                                      const QString &mode) {
+                                                      const QString &mode,
+                                                      std::optional<bool> transmitting) {
   disconnectRadio();
   m_backend = "hamlib";
   m_state = "Connected — fixture receive controls only; PTT/TUNE disabled";
@@ -949,6 +950,7 @@ void DesktopRadioController::setHamlibSnapshotForTest(quint64 frequency,
   m_frequencyHz = frequency;
   m_mode = mode;
   m_filterHz = 400;
+  m_transmitting = transmitting;
   m_hamlibModelId = 1;
   m_activeReceiverId = m_listeningReceiverId = m_transmitReceiverId =
       "hamlib:0";
