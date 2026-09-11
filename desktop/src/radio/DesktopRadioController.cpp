@@ -726,14 +726,20 @@ void DesktopRadioController::poll() {
   // after this read completes so overdue timer events cannot starve the local
   // administration socket.
   m_poll.stop();
-  const QJsonObject observed = m_hamlibHelper.snapshot();
+  const bool full = m_hamlibPollsSinceFull >= 7;
+  const QJsonObject observed = m_hamlibHelper.snapshot(full);
+  m_hamlibPollsSinceFull = full ? 0 : m_hamlibPollsSinceFull + 1;
   m_poll.start();
   if (!observed.value("ok").toBool())
     return;
-  m_frequencyHz = observed.value("frequencyHz").toVariant().toULongLong();
-  m_mode = observed.value("mode").toString();
-  m_filterHz = observed.value("filterHz").toInt();
-  m_meters = observed.value("meters").toObject().toVariantMap();
+  if (observed.value("frequencyHz").isDouble())
+    m_frequencyHz = observed.value("frequencyHz").toVariant().toULongLong();
+  if (observed.value("mode").isString())
+    m_mode = observed.value("mode").toString();
+  if (observed.value("filterHz").isDouble())
+    m_filterHz = observed.value("filterHz").toInt();
+  if (observed.value("meters").isObject())
+    m_meters = observed.value("meters").toObject().toVariantMap();
   for (const QString &key : {QStringLiteral("rfGain"),
                              QStringLiteral("afGain"),
                              QStringLiteral("squelch"),
@@ -745,12 +751,14 @@ void DesktopRadioController::poll() {
                              QStringLiteral("ritEnabled")}) {
     if (observed.contains(key) && !observed.value(key).isNull())
       m_receiveControls.insert(key, observed.value(key).toVariant());
-    else
+    else if (full)
       m_receiveControls.remove(key);
   }
-  m_transmitting = observed.value("transmitting").isBool()
-                       ? std::optional<bool>(observed.value("transmitting").toBool())
-                       : std::nullopt;
+  if (observed.contains("transmitting"))
+    m_transmitting = observed.value("transmitting").isBool()
+                         ? std::optional<bool>(
+                               observed.value("transmitting").toBool())
+                         : std::nullopt;
   QVariantList rows{hamlibSnapshot(m_model, m_frequencyHz, m_mode)};
   m_receivers.replace(rows, m_activeReceiverId, m_listeningReceiverId,
                       m_transmitReceiverId);

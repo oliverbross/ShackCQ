@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstdio>
@@ -169,7 +170,7 @@ QJsonObject describe(const rig_caps *caps, int modelId) {
           {"pttSupported", bool(caps && caps->set_ptt && caps->get_ptt)}};
 }
 
-QJsonObject observe(RIG *rig) {
+QJsonObject observe(RIG *rig, bool full = true) {
   freq_t frequency = 0;
   rmode_t mode = RIG_MODE_NONE;
   pbwidth_t width = 0;
@@ -179,6 +180,14 @@ QJsonObject observe(RIG *rig) {
   const bool modeOk =
       rig_get_mode(rig, RIG_VFO_CURR, &mode, &width) == RIG_OK;
   const bool pttOk = rig_get_ptt(rig, RIG_VFO_CURR, &ptt) == RIG_OK;
+  QJsonObject result{{"frequencyHz", frequencyOk ? QJsonValue(double(frequency))
+                                                   : QJsonValue::Null},
+                     {"mode", modeOk ? QJsonValue(modeName(mode)) : QJsonValue::Null},
+                     {"filterHz", modeOk ? QJsonValue(int(width)) : QJsonValue::Null},
+                     {"transmitting", pttOk ? QJsonValue(ptt != RIG_PTT_OFF)
+                                             : QJsonValue::Null}};
+  if (!full)
+    return result;
   QJsonObject meters;
   auto readLevel = [rig, &meters](setting_t level, const QString &name,
                                   bool floatingPoint) {
@@ -192,13 +201,7 @@ QJsonObject observe(RIG *rig) {
   readLevel(RIG_LEVEL_STRENGTH, QStringLiteral("signal"), false);
   readLevel(RIG_LEVEL_SWR, QStringLiteral("swr"), true);
   readLevel(RIG_LEVEL_ALC, QStringLiteral("alc"), true);
-  QJsonObject result{{"frequencyHz", frequencyOk ? QJsonValue(double(frequency))
-                                                   : QJsonValue::Null},
-                     {"mode", modeOk ? QJsonValue(modeName(mode)) : QJsonValue::Null},
-                     {"filterHz", modeOk ? QJsonValue(int(width)) : QJsonValue::Null},
-                     {"meters", meters},
-                     {"transmitting", pttOk ? QJsonValue(ptt != RIG_PTT_OFF)
-                                             : QJsonValue::Null}};
+  result.insert(QStringLiteral("meters"), meters);
   const auto readPercent = [&](setting_t level, const char *name) {
     if (!rig_has_get_level(rig, level)) return;
     value_t value{};
@@ -231,6 +234,75 @@ QJsonObject observe(RIG *rig) {
     }
   }
   return result;
+}
+
+QJsonObject mutationReadback(RIG *rig, const QString &action) {
+  if (action == QStringLiteral("radio.set.frequency")) {
+    freq_t frequency = 0;
+    return {{"frequencyHz",
+             rig_get_freq(rig, RIG_VFO_CURR, &frequency) == RIG_OK
+                 ? QJsonValue(double(frequency))
+                 : QJsonValue::Null}};
+  }
+  if (action == QStringLiteral("radio.set.mode") ||
+      action == QStringLiteral("radio.set.filter")) {
+    rmode_t mode = RIG_MODE_NONE;
+    pbwidth_t width = 0;
+    const bool ok =
+        rig_get_mode(rig, RIG_VFO_CURR, &mode, &width) == RIG_OK;
+    return {{"mode", ok ? QJsonValue(modeName(mode)) : QJsonValue::Null},
+            {"filterHz", ok ? QJsonValue(int(width)) : QJsonValue::Null}};
+  }
+  if (action == QStringLiteral("radio.set.rfGain") ||
+      action == QStringLiteral("radio.set.afGain") ||
+      action == QStringLiteral("radio.set.squelch") ||
+      action == QStringLiteral("radio.set.agc")) {
+    const setting_t level =
+        action == QStringLiteral("radio.set.rfGain")
+            ? RIG_LEVEL_RF
+            : action == QStringLiteral("radio.set.afGain")
+                  ? RIG_LEVEL_AF
+                  : action == QStringLiteral("radio.set.squelch")
+                        ? RIG_LEVEL_SQL
+                        : RIG_LEVEL_AGC;
+    value_t value{};
+    if (rig_get_level(rig, RIG_VFO_CURR, level, &value) != RIG_OK)
+      return {};
+    if (action == QStringLiteral("radio.set.agc"))
+      return {{"agc", agcName(value.i)}};
+    const char *name = action == QStringLiteral("radio.set.rfGain")
+                           ? "rfGain"
+                           : action == QStringLiteral("radio.set.afGain")
+                                 ? "afGain"
+                                 : "squelch";
+    return {{QString::fromLatin1(name),
+             qBound(0, int(std::lround(value.f * 100.0)), 100)}};
+  }
+  if (action == QStringLiteral("radio.set.noiseBlanker") ||
+      action == QStringLiteral("radio.set.notch") ||
+      action == QStringLiteral("radio.set.noiseReduction")) {
+    const setting_t function =
+        action == QStringLiteral("radio.set.noiseBlanker")
+            ? RIG_FUNC_NB
+            : action == QStringLiteral("radio.set.notch") ? RIG_FUNC_ANF
+                                                            : RIG_FUNC_NR;
+    int enabled = 0;
+    if (rig_get_func(rig, RIG_VFO_CURR, function, &enabled) != RIG_OK)
+      return {};
+    const char *name = action == QStringLiteral("radio.set.noiseBlanker")
+                           ? "noiseBlanker"
+                           : action == QStringLiteral("radio.set.notch")
+                                 ? "notch"
+                                 : "noiseReduction";
+    return {{QString::fromLatin1(name), enabled != 0}};
+  }
+  if (action == QStringLiteral("radio.set.rit")) {
+    shortfreq_t rit = 0;
+    if (rig_get_rit(rig, RIG_VFO_CURR, &rit) != RIG_OK)
+      return {};
+    return {{"ritHz", int(rit)}, {"ritEnabled", rit != 0}};
+  }
+  return {};
 }
 
 bool forceRx(RIG *rig, bool *transmitting = nullptr) {
@@ -329,7 +401,8 @@ int main(int argc, char **argv) {
         continue;
       }
       if (operation == "snapshot") {
-        const QJsonObject values = observe(rig);
+        const QJsonObject values =
+            observe(rig, parameters.value("full").toBool(true));
         const bool ok = !values.value("frequencyHz").isNull() &&
                         !values.value("mode").isNull();
         reply(requestId, epoch, ok, ok ? "OBSERVED" : "READBACK_FAILED",
@@ -364,9 +437,15 @@ int main(int argc, char **argv) {
         code = rig_set_freq(rig, RIG_VFO_CURR,
                             freq_t(values.value("frequencyHz").toDouble()));
       } else if (action == "radio.set.mode" || action == "radio.set.filter") {
-        const rmode_t mode = action == "radio.set.mode"
-                                 ? parseMode(values.value("mode").toString())
-                                 : parseMode(observe(rig).value("mode").toString());
+        rmode_t currentMode = RIG_MODE_NONE;
+        pbwidth_t currentWidth = 0;
+        const rmode_t mode =
+            action == "radio.set.mode"
+                ? parseMode(values.value("mode").toString())
+                : rig_get_mode(rig, RIG_VFO_CURR, &currentMode,
+                               &currentWidth) == RIG_OK
+                      ? currentMode
+                      : RIG_MODE_NONE;
         const pbwidth_t width = action == "radio.set.filter"
                                     ? values.value("filterHz").toInt()
                                     : RIG_PASSBAND_NORMAL;
@@ -417,9 +496,18 @@ int main(int argc, char **argv) {
                    ? rig_set_rit(rig, RIG_VFO_CURR, requested)
                    : RIG_EINVAL;
       }
-      const QJsonObject observed = observe(rig);
-      reply(requestId, epoch, code == RIG_OK,
-            code == RIG_OK ? "MUTATION_OBSERVED" : "MUTATION_FAILED", observed);
+      const QJsonObject observed =
+          code == RIG_OK ? mutationReadback(rig, action) : QJsonObject{};
+      const bool confirmed = code == RIG_OK && !observed.isEmpty() &&
+                             std::none_of(observed.begin(), observed.end(),
+                                          [](const QJsonValue &value) {
+                                            return value.isNull();
+                                          });
+      reply(requestId, epoch, confirmed,
+            confirmed ? "MUTATION_OBSERVED"
+                      : code == RIG_OK ? "MUTATION_READBACK_FAILED"
+                                       : "MUTATION_FAILED",
+            observed);
 #endif
   }
 #ifdef SHACKCQ_HAVE_HAMLIB

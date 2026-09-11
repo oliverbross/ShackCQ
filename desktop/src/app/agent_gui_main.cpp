@@ -721,7 +721,7 @@ class AgentWindow final : public QMainWindow {
 int main(int argc, char **argv) {
   QApplication application(argc, argv);
   QCoreApplication::setApplicationName(QStringLiteral("ShackCQ Agent"));
-  QCoreApplication::setApplicationVersion(QStringLiteral("1.0.5"));
+  QCoreApplication::setApplicationVersion(QStringLiteral("1.0.6"));
   const bool smokeTest = QCoreApplication::arguments().contains(QStringLiteral("--ui-smoke"));
   const bool preview = QCoreApplication::arguments().contains(QStringLiteral("--ui-preview"));
   AgentWindow window(smokeTest || preview);

@@ -6,6 +6,7 @@
 
 #include <QJsonObject>
 #include <QObject>
+#include <QQueue>
 #include <QTimer>
 #include <QUrl>
 #include <QWebSocket>
@@ -68,7 +69,7 @@ private:
   QString m_announcedDeviceId;
   QString m_state{"Unpaired"};
   QString m_detail{"No cloud Agent credential"};
-  QJsonObject m_pendingRadioCommand;
+  QQueue<QJsonObject> m_pendingRadioCommands;
   quint64 m_generation{};
   quint64 m_sequence{};
   int m_reconnectAttempt{};

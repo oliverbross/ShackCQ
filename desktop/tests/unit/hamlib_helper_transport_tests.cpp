@@ -123,6 +123,10 @@ private slots:
     QCOMPARE(result.value("frequencyHz").toInt(), 14'076'000);
     QCOMPARE(transport.snapshot().value("meters").toObject().value("signal").toInt(),
              -73);
+    const QJsonObject fast = transport.snapshot(false);
+    QVERIFY(fast.value("ok").toBool());
+    QVERIFY(fast.contains("frequencyHz"));
+    QVERIFY(!fast.contains("meters"));
   }
 
   void failedRecoveryReadbackRemainsQuarantined() {

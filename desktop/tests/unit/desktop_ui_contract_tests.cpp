@@ -186,9 +186,21 @@ void DesktopUiContractTests::macosAgentUsesUnambiguousRuntimeAndRadioStates() {
   QVERIFY(cloudSource.contains("local-uncommitted-build"));
   QCOMPARE(cloudSource.count("{\"build\", buildIdentity()}"), 2);
   QVERIFY(cloudSource.contains("m_radio->radioOperationActive()"));
-  QVERIFY(cloudSource.contains("m_pendingRadioCommand = frame"));
+  QVERIFY(cloudSource.contains("m_pendingRadioCommands.enqueue(frame)"));
+  QVERIFY(cloudSource.contains("m_pendingRadioCommands.dequeue()"));
+  QVERIFY(cloudSource.contains("AGENT_QUEUE_FULL"));
+  QVERIFY(cloudSource.contains("frame.value(\"action\") == \"digi.stop\""));
+  QVERIFY(cloudSource.contains("m_pendingRadioCommands.clear()"));
   QVERIFY(cloudSource.contains("m_radioCommandRetry.start()"));
   QVERIFY(cloudSource.contains("completeRadioCommand(pending)"));
+
+  QFile helper(QStringLiteral(SHACKCQ_DESKTOP_APP_DIR
+                              "/../app/hamlib_helper_main.cpp"));
+  QVERIFY(helper.open(QIODevice::ReadOnly));
+  const QByteArray helperSource = helper.readAll();
+  QVERIFY(helperSource.contains("mutationReadback"));
+  QVERIFY(helperSource.contains("parameters.value(\"full\").toBool(true)"));
+  QVERIFY(helperSource.contains("MUTATION_READBACK_FAILED"));
 }
 
 QTEST_GUILESS_MAIN(DesktopUiContractTests)

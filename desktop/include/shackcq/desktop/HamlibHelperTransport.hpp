@@ -16,7 +16,7 @@ public:
   bool open(int modelId, const QString &route, int baudRate,
             QJsonObject *description = nullptr);
   QJsonObject mutate(const QString &action, const QJsonObject &parameters);
-  QJsonObject snapshot();
+  QJsonObject snapshot(bool full = true);
   QJsonObject setPtt(bool enabled);
   bool priorityStop();
   void close();

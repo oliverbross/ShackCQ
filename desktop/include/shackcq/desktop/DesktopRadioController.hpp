@@ -191,6 +191,7 @@ private:
   quint64 m_frequencyHz{};
   QString m_mode;
   int m_filterHz{};
+  int m_hamlibPollsSinceFull{7};
   int m_hamlibModelId{1};
   QString m_lastError;
   quint64 m_generation{};
