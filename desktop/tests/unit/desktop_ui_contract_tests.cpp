@@ -182,6 +182,9 @@ void DesktopUiContractTests::macosAgentUsesUnambiguousRuntimeAndRadioStates() {
   const qsizetype result = cloudSource.indexOf("sendObject(result);", snapshot);
   QVERIFY(snapshot >= 0);
   QVERIFY(result > snapshot);
+  QVERIFY(cloudSource.contains("QString buildIdentity()"));
+  QVERIFY(cloudSource.contains("local-uncommitted-build"));
+  QCOMPARE(cloudSource.count("{\"build\", buildIdentity()}"), 2);
 }
 
 QTEST_GUILESS_MAIN(DesktopUiContractTests)
