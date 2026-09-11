@@ -46,6 +46,8 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
     : QObject(parent), m_vault(vault), m_radio(radio), m_digi(digi), m_logger(logger) {
   m_heartbeat.setInterval(15'000);
   m_reconnect.setSingleShot(true);
+  m_radioCommandRetry.setInterval(25);
+  m_radioCommandRetry.setSingleShot(true);
   connect(&m_heartbeat, &QTimer::timeout, this, [this] {
     sendObject({{"type", "agent.heartbeat"},
                 {"protocol", protocol()},
@@ -53,6 +55,17 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
   });
   connect(&m_reconnect, &QTimer::timeout, this,
           &CloudAgentClient::connectNow);
+  connect(&m_radioCommandRetry, &QTimer::timeout, this, [this] {
+    if (m_pendingRadioCommand.isEmpty())
+      return;
+    if (m_radio->radioOperationActive()) {
+      m_radioCommandRetry.start();
+      return;
+    }
+    const QJsonObject pending = m_pendingRadioCommand;
+    m_pendingRadioCommand = {};
+    completeRadioCommand(pending);
+  });
   connect(&m_socket, &QWebSocket::connected, this, [this] {
     m_reconnectAttempt = 0;
     setState("Authenticating", "TLS connected; sending bounded Agent hello");
@@ -74,6 +87,8 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
     m_heartbeat.stop();
     m_generation = 0;
     m_announcedDeviceId.clear();
+    m_radioCommandRetry.stop();
+    m_pendingRadioCommand = {};
     if (m_digi) {
       m_digi->setServerTxPermitted(false);
       m_digi->stop("cloud transport disconnected", false);
@@ -387,6 +402,17 @@ void CloudAgentClient::receiveText(const QString &text) {
   }
   if (frame.value("type") != "radio.command")
     return;
+  if (m_radio->radioOperationActive()) {
+    if (m_pendingRadioCommand.isEmpty()) {
+      m_pendingRadioCommand = frame;
+      m_radioCommandRetry.start();
+    }
+    return;
+  }
+  completeRadioCommand(frame);
+}
+
+void CloudAgentClient::completeRadioCommand(const QJsonObject &frame) {
   const QJsonObject result = processControlFrame(frame);
   // Publish the fresh readback before the result. The hosted command path
   // resolves when it receives the result and must validate against this exact

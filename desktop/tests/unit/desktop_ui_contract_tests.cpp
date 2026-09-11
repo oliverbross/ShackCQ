@@ -185,6 +185,10 @@ void DesktopUiContractTests::macosAgentUsesUnambiguousRuntimeAndRadioStates() {
   QVERIFY(cloudSource.contains("QString buildIdentity()"));
   QVERIFY(cloudSource.contains("local-uncommitted-build"));
   QCOMPARE(cloudSource.count("{\"build\", buildIdentity()}"), 2);
+  QVERIFY(cloudSource.contains("m_radio->radioOperationActive()"));
+  QVERIFY(cloudSource.contains("m_pendingRadioCommand = frame"));
+  QVERIFY(cloudSource.contains("m_radioCommandRetry.start()"));
+  QVERIFY(cloudSource.contains("completeRadioCommand(pending)"));
 }
 
 QTEST_GUILESS_MAIN(DesktopUiContractTests)

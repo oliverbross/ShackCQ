@@ -96,6 +96,9 @@ public:
   QVariantMap meters() const { return m_meters; }
   QVariantMap receiveControls() const { return m_receiveControls; }
   std::optional<bool> transmitting() const { return m_transmitting; }
+  bool radioOperationActive() const {
+    return m_backend == "hamlib" && m_hamlibHelper.operationActive();
+  }
   QVariantList tciProfiles() const { return m_tciProfiles; }
   QVariantMap hamlibProfile() const { return m_hamlibProfile; }
   QVariantMap configuration() const;
