@@ -94,6 +94,7 @@ public:
   QString transmitReceiverId() const { return m_transmitReceiverId; }
   QVariantMap backendCapabilities() const { return m_backendCapabilities; }
   QVariantMap meters() const { return m_meters; }
+  QVariantMap receiveControls() const { return m_receiveControls; }
   std::optional<bool> transmitting() const { return m_transmitting; }
   QVariantList tciProfiles() const { return m_tciProfiles; }
   QVariantMap hamlibProfile() const { return m_hamlibProfile; }
@@ -121,6 +122,8 @@ public:
   Q_INVOKABLE bool requestFrequency(qulonglong frequencyHz);
   Q_INVOKABLE bool requestMode(const QString &mode);
   Q_INVOKABLE bool requestFilter(int filterHz);
+  Q_INVOKABLE bool requestReceiveControl(const QString &action,
+                                         const QVariantMap &parameters);
   Q_INVOKABLE bool globalStop();
   // Dedicated local Digi owner only. These are intentionally not Q_INVOKABLE,
   // not advertised as generic Radio setters, and never available to v1 frames.
@@ -174,6 +177,7 @@ private:
   QString m_autoConnectProfileId;
   QVariantMap m_backendCapabilities;
   QVariantMap m_meters;
+  QVariantMap m_receiveControls;
   std::optional<bool> m_transmitting;
   QVariantMap m_hamlibProfile;
   QVariantMap m_legacyConfiguration;

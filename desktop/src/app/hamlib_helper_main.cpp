@@ -6,6 +6,7 @@
 #include <QJsonObject>
 
 #include <array>
+#include <cmath>
 #include <cstdio>
 
 #ifdef SHACKCQ_HAVE_HAMLIB
@@ -45,8 +46,33 @@ QString modeName(rmode_t value) {
   return QString::fromLatin1(rig_strrmode(value));
 }
 
+QString agcName(int value) {
+  switch (value) {
+  case RIG_AGC_OFF: return QStringLiteral("OFF");
+  case RIG_AGC_SUPERFAST: return QStringLiteral("SUPERFAST");
+  case RIG_AGC_FAST: return QStringLiteral("FAST");
+  case RIG_AGC_MEDIUM: return QStringLiteral("MEDIUM");
+  case RIG_AGC_SLOW: return QStringLiteral("SLOW");
+  case RIG_AGC_USER: return QStringLiteral("USER");
+  case RIG_AGC_AUTO: return QStringLiteral("AUTO");
+  default: return QString::number(value);
+  }
+}
+
+int parseAgc(const QString &value) {
+  const QString mode = value.trimmed().toUpper();
+  if (mode == QStringLiteral("OFF")) return RIG_AGC_OFF;
+  if (mode == QStringLiteral("SUPERFAST")) return RIG_AGC_SUPERFAST;
+  if (mode == QStringLiteral("FAST")) return RIG_AGC_FAST;
+  if (mode == QStringLiteral("MEDIUM")) return RIG_AGC_MEDIUM;
+  if (mode == QStringLiteral("SLOW")) return RIG_AGC_SLOW;
+  if (mode == QStringLiteral("USER")) return RIG_AGC_USER;
+  if (mode == QStringLiteral("AUTO")) return RIG_AGC_AUTO;
+  return -1;
+}
+
 QJsonObject describe(const rig_caps *caps, int modelId) {
-  QJsonArray ranges, filters, modes, setters, meters;
+  QJsonArray ranges, filters, modes, setters, meters, agcModes;
   if (caps) {
     auto appendRanges = [&ranges](const freq_range_t *source) {
       for (int index = 0; index < HAMLIB_FRQRANGESIZ; ++index) {
@@ -96,6 +122,29 @@ QJsonObject describe(const rig_caps *caps, int modelId) {
       if (setters.contains("radio.set.frequency"))
         setters.append("preset.recall");
     }
+    const auto addLevelSetter = [&](setting_t level, const char *action) {
+      if (caps->get_level && caps->set_level &&
+          (caps->has_get_level & level) && (caps->has_set_level & level))
+        setters.append(QString::fromLatin1(action));
+    };
+    addLevelSetter(RIG_LEVEL_RF, "radio.set.rfGain");
+    addLevelSetter(RIG_LEVEL_AF, "radio.set.afGain");
+    addLevelSetter(RIG_LEVEL_SQL, "radio.set.squelch");
+    addLevelSetter(RIG_LEVEL_AGC, "radio.set.agc");
+    if (setters.contains(QStringLiteral("radio.set.agc"))) {
+      for (const char *mode : {"OFF", "SUPERFAST", "FAST", "MEDIUM", "SLOW", "USER", "AUTO"})
+        agcModes.append(QString::fromLatin1(mode));
+    }
+    const auto addFunctionSetter = [&](setting_t function, const char *action) {
+      if (caps->get_func && caps->set_func &&
+          (caps->has_get_func & function) && (caps->has_set_func & function))
+        setters.append(QString::fromLatin1(action));
+    };
+    addFunctionSetter(RIG_FUNC_NB, "radio.set.noiseBlanker");
+    addFunctionSetter(RIG_FUNC_ANF, "radio.set.notch");
+    addFunctionSetter(RIG_FUNC_NR, "radio.set.noiseReduction");
+    if (caps->get_rit && caps->set_rit)
+      setters.append(QStringLiteral("radio.set.rit"));
     if (caps->get_level) {
       if (caps->has_get_level & RIG_LEVEL_STRENGTH)
         meters.append("signal");
@@ -115,6 +164,7 @@ QJsonObject describe(const rig_caps *caps, int modelId) {
           {"modes", modes},
           {"filtersHz", filters},
           {"setters", setters},
+          {"agcModes", agcModes},
           {"meters", meters},
           {"pttSupported", bool(caps && caps->set_ptt && caps->get_ptt)}};
 }
@@ -142,13 +192,45 @@ QJsonObject observe(RIG *rig) {
   readLevel(RIG_LEVEL_STRENGTH, QStringLiteral("signal"), false);
   readLevel(RIG_LEVEL_SWR, QStringLiteral("swr"), true);
   readLevel(RIG_LEVEL_ALC, QStringLiteral("alc"), true);
-  return {{"frequencyHz", frequencyOk ? QJsonValue(double(frequency))
-                                      : QJsonValue::Null},
-          {"mode", modeOk ? QJsonValue(modeName(mode)) : QJsonValue::Null},
-          {"filterHz", modeOk ? QJsonValue(int(width)) : QJsonValue::Null},
-          {"meters", meters},
-          {"transmitting", pttOk ? QJsonValue(ptt != RIG_PTT_OFF)
-                                  : QJsonValue::Null}};
+  QJsonObject result{{"frequencyHz", frequencyOk ? QJsonValue(double(frequency))
+                                                   : QJsonValue::Null},
+                     {"mode", modeOk ? QJsonValue(modeName(mode)) : QJsonValue::Null},
+                     {"filterHz", modeOk ? QJsonValue(int(width)) : QJsonValue::Null},
+                     {"meters", meters},
+                     {"transmitting", pttOk ? QJsonValue(ptt != RIG_PTT_OFF)
+                                             : QJsonValue::Null}};
+  const auto readPercent = [&](setting_t level, const char *name) {
+    if (!rig_has_get_level(rig, level)) return;
+    value_t value{};
+    if (rig_get_level(rig, RIG_VFO_CURR, level, &value) == RIG_OK)
+      result.insert(QString::fromLatin1(name),
+                    qBound(0, int(std::lround(value.f * 100.0)), 100));
+  };
+  readPercent(RIG_LEVEL_RF, "rfGain");
+  readPercent(RIG_LEVEL_AF, "afGain");
+  readPercent(RIG_LEVEL_SQL, "squelch");
+  if (rig_has_get_level(rig, RIG_LEVEL_AGC)) {
+    value_t value{};
+    if (rig_get_level(rig, RIG_VFO_CURR, RIG_LEVEL_AGC, &value) == RIG_OK)
+      result.insert(QStringLiteral("agc"), agcName(value.i));
+  }
+  const auto readFunction = [&](setting_t function, const char *name) {
+    if (!rig_has_get_func(rig, function)) return;
+    int enabled = 0;
+    if (rig_get_func(rig, RIG_VFO_CURR, function, &enabled) == RIG_OK)
+      result.insert(QString::fromLatin1(name), enabled != 0);
+  };
+  readFunction(RIG_FUNC_NB, "noiseBlanker");
+  readFunction(RIG_FUNC_ANF, "notch");
+  readFunction(RIG_FUNC_NR, "noiseReduction");
+  if (rig->caps && rig->caps->get_rit) {
+    shortfreq_t rit = 0;
+    if (rig_get_rit(rig, RIG_VFO_CURR, &rit) == RIG_OK) {
+      result.insert(QStringLiteral("ritHz"), int(rit));
+      result.insert(QStringLiteral("ritEnabled"), rit != 0);
+    }
+  }
+  return result;
 }
 
 bool forceRx(RIG *rig, bool *transmitting = nullptr) {
@@ -291,6 +373,49 @@ int main(int argc, char **argv) {
         code = mode == RIG_MODE_NONE
                    ? RIG_EINVAL
                    : rig_set_mode(rig, RIG_VFO_CURR, mode, width);
+      } else if (action == "radio.set.rfGain" ||
+                 action == "radio.set.afGain" ||
+                 action == "radio.set.squelch") {
+        const double requested = values.value("value").toDouble(-1.0);
+        const setting_t level = action == "radio.set.rfGain"
+                                    ? RIG_LEVEL_RF
+                                    : action == "radio.set.afGain"
+                                          ? RIG_LEVEL_AF
+                                          : RIG_LEVEL_SQL;
+        value_t value{};
+        value.f = float(requested / 100.0);
+        code = requested >= 0.0 && requested <= 100.0 &&
+                       rig_has_set_level(rig, level)
+                   ? rig_set_level(rig, RIG_VFO_CURR, level, value)
+                   : RIG_EINVAL;
+      } else if (action == "radio.set.agc") {
+        const int requested = parseAgc(values.value("mode").toString());
+        value_t value{};
+        value.i = requested;
+        code = requested >= 0 && rig_has_set_level(rig, RIG_LEVEL_AGC)
+                   ? rig_set_level(rig, RIG_VFO_CURR, RIG_LEVEL_AGC, value)
+                   : RIG_EINVAL;
+      } else if (action == "radio.set.noiseBlanker" ||
+                 action == "radio.set.notch" ||
+                 action == "radio.set.noiseReduction") {
+        const setting_t function = action == "radio.set.noiseBlanker"
+                                       ? RIG_FUNC_NB
+                                       : action == "radio.set.notch"
+                                             ? RIG_FUNC_ANF
+                                             : RIG_FUNC_NR;
+        code = values.value("enabled").isBool() &&
+                       rig_has_set_func(rig, function)
+                   ? rig_set_func(rig, RIG_VFO_CURR, function,
+                                  values.value("enabled").toBool() ? 1 : 0)
+                   : RIG_EINVAL;
+      } else if (action == "radio.set.rit") {
+        shortfreq_t requested = 0;
+        if (values.value("enabled").toBool(true))
+          requested = shortfreq_t(values.value("valueHz").toInt());
+        code = rig->caps && rig->caps->set_rit &&
+                       requested >= -100'000 && requested <= 100'000
+                   ? rig_set_rit(rig, RIG_VFO_CURR, requested)
+                   : RIG_EINVAL;
       }
       const QJsonObject observed = observe(rig);
       reply(requestId, epoch, code == RIG_OK,

@@ -9,9 +9,9 @@
   <key>CFBundleDisplayName</key>
   <string>ShackCQ Agent</string>
   <key>CFBundleShortVersionString</key>
-  <string>1.0.4</string>
+  <string>1.0.5</string>
   <key>CFBundleVersion</key>
-  <string>5</string>
+  <string>6</string>
   <key>CFBundleName</key>
   <string>ShackCQ Agent</string>
   <key>CFBundlePackageType</key>
