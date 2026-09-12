@@ -229,7 +229,7 @@ impl AgentSupervisor {
         let mut token = [0u8; 32];
         getrandom::fill(&mut token).map_err(|_| "AGENT_NATIVE_INGRESS_UNAVAILABLE")?;
         let owner_token = hex::encode(token);
-        let child = Command::new(executable)
+        let mut child = Command::new(executable)
             .arg("--native-ingress-only")
             .arg("--native-owner-token")
             .arg(&owner_token)
@@ -250,6 +250,8 @@ impl AgentSupervisor {
             }
             std::thread::sleep(Duration::from_millis(25));
         }
+        let _ = child.kill();
+        let _ = child.wait();
         Err("AGENT_NATIVE_INGRESS_UNAVAILABLE".into())
     }
 }
@@ -263,6 +265,8 @@ impl Drop for AgentSupervisor {
                 }
                 std::thread::sleep(Duration::from_millis(25));
             }
+            let _ = child.kill();
+            let _ = child.wait();
         }
     }
 }
