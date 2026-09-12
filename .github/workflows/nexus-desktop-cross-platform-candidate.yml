@@ -63,7 +63,10 @@ jobs:
           "SHACKCQ_NODE_BIN_WINDOWS=$(Split-Path -Parent $npx)" >> $env:GITHUB_ENV
       - name: Install pinned NSIS packager
         shell: pwsh
-        run: choco install nsis --version=3.11 --yes --no-progress
+        run: |
+          choco install nsis --version=3.11 --yes --no-progress
+          $makensis = (Get-Command makensis.exe -ErrorAction Stop).Source
+          "SHACKCQ_NSIS_BIN_WINDOWS=$(Split-Path -Parent $makensis)" >> $env:GITHUB_ENV
       - name: Install pinned Rust target
         shell: pwsh
         run: |
@@ -77,8 +80,10 @@ jobs:
         shell: msys2 {0}
         run: |
           node_bin=$(cygpath -u "$SHACKCQ_NODE_BIN_WINDOWS")
-          export PATH="$node_bin:$PATH"
+          nsis_bin=$(cygpath -u "$SHACKCQ_NSIS_BIN_WINDOWS")
+          export PATH="$node_bin:$nsis_bin:$PATH"
           command -v npx.cmd
+          command -v makensis.exe
           sh scripts/build_nexus_desktop_candidate.sh windows-x64 "$GITHUB_WORKSPACE/artifacts/windows-x64"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
