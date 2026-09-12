@@ -178,7 +178,13 @@ case "$platform" in
     cp "${debs[0]}" "$output/${deb_name}-UNSIGNED-UNNOTARIZED.deb"
     cp "${appimages[0]}" "$output/${appimage_name}-UNSIGNED-UNNOTARIZED.AppImage"
     dpkg-deb -c "${debs[0]}" > "$output/DEBIAN_CONTENTS.txt"
-    7z l "${appimages[0]}" > "$output/APPIMAGE_CONTENTS.txt"
+    appimage_extract=$(mktemp -d)
+    (
+      cd "$appimage_extract"
+      "${appimages[0]}" --appimage-extract >/dev/null
+      find squashfs-root -print | LC_ALL=C sort
+    ) > "$output/APPIMAGE_CONTENTS.txt"
+    rm -rf "$appimage_extract"
     for packaged in shackcq-nexus-runtime shackcq-stationd shackcq-hamlib-helper; do
       grep -Fq "$packaged" "$output/DEBIAN_CONTENTS.txt"
       grep -Fq "$packaged" "$output/APPIMAGE_CONTENTS.txt"

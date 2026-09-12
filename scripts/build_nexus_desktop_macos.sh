@@ -8,6 +8,8 @@ tauri_cli_version=${TAURI_CLI_VERSION:-2.11.4}
 app="$repo/desktop/shackcq-tauri/target/release/bundle/macos/ShackCQ Desktop.app"
 qt_prefix=${QT_PREFIX:?QT_PREFIX must name an official Qt 6.11.2 macOS installation}
 macdeployqt="$qt_prefix/bin/macdeployqt"
+qtwebengine_prefix=${QTWEBENGINE_PREFIX:-$(brew --prefix qtwebengine)}
+brotli_prefix=${BROTLI_PREFIX:-$(brew --prefix brotli)}
 build_dir="$repo/build/desktop/nexus-macos-13-portable"
 hamlib_root="$repo/build/desktop/nexus-hamlib-macos-13"
 openssl_root="$repo/build/desktop/nexus-openssl-macos-13"
@@ -19,6 +21,8 @@ test ! -e "$output/ShackCQ-Desktop-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
 
 test "$(git -C "$repo/third_party/nexus" rev-parse HEAD)" = 7618390658f8f92431dec0ac65979b84f2c0fb76
 test -x "$macdeployqt"
+test -d "$qtwebengine_prefix/lib"
+test -d "$brotli_prefix/lib"
 python3 "$repo/scripts/check_nexus_native_desktop.py"
 python3 "$repo/desktop/shackcq-tauri/scripts/verify-shared-ui.py"
 "$repo/scripts/build_nexus_native_sidecar.sh"
@@ -54,7 +58,8 @@ test -x "$nexus"
 test -x "$hamlib_helper"
 "$macdeployqt" "$app" -no-strip -no-plugins \
   -executable="$stationd" -executable="$nexus" -executable="$hamlib_helper" \
-  -libpath="$qt_prefix/lib"
+  -libpath="$qt_prefix/lib" -libpath="$qtwebengine_prefix/lib" \
+  -libpath="$brotli_prefix/lib"
 mkdir -p "$app/Contents/PlugIns/tls"
 cp "$qt_prefix/plugins/tls/libqcertonlybackend.dylib" \
   "$qt_prefix/plugins/tls/libqsecuretransportbackend.dylib" \
