@@ -24,21 +24,21 @@
 
 using namespace shackcq::desktop;
 namespace {
-const QString AdminSocket = QStringLiteral("shackcq-stationd-v1");
+const QString DefaultAdminSocket = QStringLiteral("shackcq-stationd-v1");
 
 QJsonObject adminRequest(const QCommandLineParser &parser) {
   if (parser.isSet("status")) return {{"action", "status"}};
   if (parser.isSet("list-clients")) return {{"action", "list-clients"}};
   if (parser.isSet("pairing-offer")) return {{"action", "pairing-offer"}};
   if (parser.isSet("revoke")) return {{"action", "revoke"}, {"deviceId", parser.value("revoke")}};
-  if (parser.isSet("stop")) return {{"action", "stop"}};
+  if (parser.isSet("stop")) return {{"action", "stop"}, {"ownerToken", parser.value("native-owner-token")}};
   if (parser.isSet("digi-stop")) return {{"action", "digi-stop"}};
   return {};
 }
 
-int sendAdminRequest(const QJsonObject &request) {
+int sendAdminRequest(const QString &adminSocket, const QJsonObject &request) {
   QLocalSocket socket;
-  socket.connectToServer(AdminSocket, QIODevice::ReadWrite);
+  socket.connectToServer(adminSocket, QIODevice::ReadWrite);
   if (!socket.waitForConnected(10'000)) return 5;
   socket.write(QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n');
   if (!socket.waitForBytesWritten(2'000)) return 6;
@@ -66,6 +66,9 @@ int main(int argc, char **argv) {
   parser.addOption(QCommandLineOption({"f", "foreground"}, "Run the explicitly enabled service in the foreground"));
   parser.addOption(QCommandLineOption(QStringLiteral("native-ingress-only"), "Run cloud/logger native ingress with every hardware autoconnect path disabled"));
   parser.addOption(QCommandLineOption(QStringLiteral("native-owner-token"), "Ephemeral owner token for graceful native-only shutdown", "token"));
+  parser.addOption(QCommandLineOption(QStringLiteral("admin-socket"), "Explicit isolated local administration socket", "name", DefaultAdminSocket));
+  parser.addOption(QCommandLineOption(QStringLiteral("ephemeral-root"), "Isolated data root; valid only with --native-ingress-only", "path"));
+  parser.addOption(QCommandLineOption(QStringLiteral("ephemeral-credentials"), "Use an in-memory credential vault; valid only with --native-ingress-only and --ephemeral-root"));
   parser.addOption(QCommandLineOption({"s", "status"}, "Print bounded service status"));
   parser.addOption(QCommandLineOption({"p", "pairing-offer"}, "Create a short-lived pairing offer"));
   parser.addOption(QCommandLineOption(QStringLiteral("list-clients"), "List paired public device metadata"));
@@ -95,7 +98,14 @@ int main(int argc, char **argv) {
   parser.process(application);
 
   const QJsonObject requestedAdminAction = adminRequest(parser);
-  if (!parser.isSet("foreground") && !requestedAdminAction.isEmpty()) return sendAdminRequest(requestedAdminAction);
+  const QString adminSocket = parser.value("admin-socket");
+  if (!QRegularExpression(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$"))
+           .match(adminSocket).hasMatch()) {
+    QTextStream(stderr) << "Invalid administration socket name\n";
+    return 2;
+  }
+  if (!parser.isSet("foreground") && !requestedAdminAction.isEmpty())
+    return sendAdminRequest(adminSocket, requestedAdminAction);
   const bool setupAction = parser.isSet("pair-with-shackcq") ||
       parser.isSet("list-hamlib-models") || parser.isSet("list-serial-ports") ||
       parser.isSet("show-radio-profile") ||
@@ -104,6 +114,13 @@ int main(int argc, char **argv) {
       parser.isSet("configure-digi-audio") || parser.isSet("authorize-digi-tx") ||
       parser.isSet("disable-digi-tx");
   const bool nativeIngressOnly = parser.isSet("native-ingress-only");
+  const bool ephemeralCredentials = parser.isSet("ephemeral-credentials");
+  const QString ephemeralRoot = parser.value("ephemeral-root");
+  if ((!ephemeralRoot.isEmpty() || ephemeralCredentials) &&
+      (!nativeIngressOnly || ephemeralRoot.isEmpty())) {
+    QTextStream(stderr) << "Ephemeral isolation requires --native-ingress-only and --ephemeral-root\n";
+    return 2;
+  }
   const QString nativeOwnerToken = parser.value("native-owner-token");
   if (nativeIngressOnly &&
       !QRegularExpression(QStringLiteral("^[0-9a-f]{64}$"))
@@ -115,18 +132,24 @@ int main(int argc, char **argv) {
   if (!parser.isSet("foreground") && !nativeIngressOnly && !setupAction) parser.showHelp(1);
 
   DesktopPaths paths;
+  if (!ephemeralRoot.isEmpty())
+    paths.setEphemeralRoot(ephemeralRoot);
   QString error;
   if (!paths.create(&error)) { QTextStream(stderr) << error << '\n'; return 2; }
   DesktopConfigurationManager configuration(paths.configuration() + "/desktop-config.json");
   if (!configuration.load(&error)) { QTextStream(stderr) << error << '\n'; return 2; }
-  SystemCredentialVault vault;
+  SystemCredentialVault systemVault;
+  FakeCredentialVault fakeVault;
+  DesktopCredentialVault *vault = ephemeralCredentials
+      ? static_cast<DesktopCredentialVault *>(&fakeVault)
+      : static_cast<DesktopCredentialVault *>(&systemVault);
   DesktopRadioController radio;
   AgentDigiController digi(&radio);
-  LoggerIngestion logger(&vault, paths.databases() + "/logger-events-v1.json");
-  NativeAgentIngress nativeIngress(&vault, &logger);
+  LoggerIngestion logger(vault, paths.databases() + "/logger-events-v1.json");
+  NativeAgentIngress nativeIngress(vault, &logger);
   QString nativeIngressError;
   nativeIngress.initialize(&nativeIngressError);
-  CloudAgentClient cloudAgent(&vault, &radio, nativeIngressOnly ? nullptr : &digi,
+  CloudAgentClient cloudAgent(vault, &radio, nativeIngressOnly ? nullptr : &digi,
                               &logger);
   DesktopRotatorController rotator;
   DesktopPanadapter panadapter;
@@ -244,7 +267,7 @@ int main(int argc, char **argv) {
     QTextStream(stdout) << "ShackCQ Cloud Agent paired; credential stored in the operating-system vault\n";
     return 0;
   }
-  RemoteStationService service(&vault, &radio, &rotator, &panadapter);
+  RemoteStationService service(vault, &radio, &rotator, &panadapter);
   if (!service.restoreConfiguration(configuration.section("remoteStation"), &error)) {
     QTextStream(stderr) << error << '\n'; return 2;
   }
@@ -269,13 +292,13 @@ int main(int argc, char **argv) {
   QLocalServer admin;
   admin.setSocketOptions(QLocalServer::UserAccessOption);
   QLocalSocket existing;
-  existing.connectToServer(AdminSocket);
+  existing.connectToServer(adminSocket);
   if (existing.waitForConnected(250)) {
     QTextStream(stderr) << "Another shackcq-stationd instance already owns local administration\n";
     return 4;
   }
-  QLocalServer::removeServer(AdminSocket);
-  if (!admin.listen(AdminSocket)) { QTextStream(stderr) << admin.errorString() << '\n'; return 4; }
+  QLocalServer::removeServer(adminSocket);
+  if (!admin.listen(adminSocket)) { QTextStream(stderr) << admin.errorString() << '\n'; return 4; }
   const bool remoteStationEnabled = !nativeIngressOnly && service.configuration().value("enabled").toBool();
   if (remoteStationEnabled && !service.start(&error)) {
     QTextStream(stderr) << error << '\n';

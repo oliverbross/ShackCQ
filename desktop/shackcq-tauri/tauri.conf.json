@@ -26,7 +26,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": ["binaries/shackcq-nexus-runtime", "binaries/shackcq-stationd"],
+    "externalBin": ["binaries/shackcq-nexus-runtime", "binaries/shackcq-stationd", "binaries/shackcq-hamlib-helper"],
     "icon": [
       "../../assets/branding/shackcq-mark-1024.png",
       "../../desktop/resources/app-icon.icns",
