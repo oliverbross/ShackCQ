@@ -739,7 +739,12 @@ impl StationRuntime {
             RuntimeCommand::PendingReviewedContacts => Ok((
                 "CONTACT_PENDING_LIST".into(),
                 serde_json::to_value(
-                    self.queue.pending().iter().take(8).cloned().collect::<Vec<_>>(),
+                    self.queue
+                        .pending()
+                        .iter()
+                        .take(8)
+                        .cloned()
+                        .collect::<Vec<_>>(),
                 )
                 .unwrap(),
             )),
