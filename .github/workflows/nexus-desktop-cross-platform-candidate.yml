@@ -82,7 +82,6 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
           SHACKCQ_QT_PREFIX: ${{ env.QT_ROOT_DIR }}
-          OPENSSL_ROOT_DIR: C:/msys64/mingw64
         shell: msys2 {0}
         run: |
           node_bin=$(cygpath -u "$SHACKCQ_NODE_BIN_WINDOWS")
@@ -92,6 +91,10 @@ jobs:
           command -v npx.cmd
           command -v makensis.exe
           command -v cargo.exe
+          test -s /mingw64/include/openssl/ssl.h
+          test -s /mingw64/lib/libcrypto.dll.a
+          test -s /mingw64/lib/libssl.dll.a
+          export OPENSSL_ROOT_DIR="$(cygpath -m /mingw64)"
           sh scripts/build_nexus_desktop_candidate.sh windows-x64 "$GITHUB_WORKSPACE/artifacts/windows-x64"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

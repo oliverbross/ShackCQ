@@ -5,6 +5,7 @@ set -eu
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 candidate="$repo/scripts/build_nexus_desktop_candidate.sh"
 macos="$repo/scripts/build_nexus_desktop_macos.sh"
+cross_workflow="$repo/.github/workflows/nexus-desktop-cross-platform-candidate.yml"
 contract_scratch=$(mktemp -d)
 PYTHONPYCACHEPREFIX="$contract_scratch/pycache"
 export PYTHONPYCACHEPREFIX
@@ -105,6 +106,12 @@ case "$socket_name" in
   *[!A-Za-z0-9._-]* ) exit 1 ;;
 esac
 test "${#socket_name}" -le 96
+
+! grep -F 'OPENSSL_ROOT_DIR: C:/msys64/mingw64' "$cross_workflow" >/dev/null
+grep -F 'test -s /mingw64/include/openssl/ssl.h' "$cross_workflow" >/dev/null
+grep -F 'test -s /mingw64/lib/libcrypto.dll.a' "$cross_workflow" >/dev/null
+grep -F 'test -s /mingw64/lib/libssl.dll.a' "$cross_workflow" >/dev/null
+grep -F 'export OPENSSL_ROOT_DIR="$(cygpath -m /mingw64)"' "$cross_workflow" >/dev/null
 
 mkdir -p "$mac_sidecar_dir"
 test ! -e "$mac_lock" && test ! -L "$mac_lock"
