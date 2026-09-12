@@ -2,6 +2,9 @@ name: Nexus Desktop Cross-Platform Candidate
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/nexus-native-desktop-cross-platform-ci-v1
 
 permissions:
   contents: read
@@ -12,7 +15,7 @@ env:
 
 jobs:
   windows-x64-gnu-cross:
-    name: Windows x64 GNU cross candidate
+    name: Windows x64 Tauri Digi candidate (Agent blocked)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -22,6 +25,7 @@ jobs:
           submodules: recursive
       - name: Verify exact checkout and Nexus pin
         run: |
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_REF" = refs/heads/feature/nexus-native-desktop-cross-platform-ci-v1
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git merge-base --is-ancestor 68cebdc2991cf9754477e29ac82228de6f8b8107 "$GITHUB_SHA"
           test "$(git -C third_party/nexus rev-parse HEAD)" = "7618390658f8f92431dec0ac65979b84f2c0fb76"
@@ -56,13 +60,13 @@ jobs:
         run: scripts/build_nexus_desktop_candidate.sh windows-x64 "$GITHUB_WORKSPACE/artifacts/windows-x64"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ShackCQ-Nexus-Desktop-Windows-x64-UNSIGNED-UNNOTARIZED-${{ github.sha }}
+          name: ShackCQ-Nexus-Digi-Desktop-Windows-x64-UNSIGNED-UNNOTARIZED-${{ github.sha }}
           path: artifacts/windows-x64
           if-no-files-found: error
           retention-days: 14
 
   linux-x86-64:
-    name: Linux x86_64 candidate
+    name: Linux x86_64 Tauri Digi candidate (Agent blocked)
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -72,6 +76,7 @@ jobs:
           submodules: recursive
       - name: Verify exact checkout and Nexus pin
         run: |
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_REF" = refs/heads/feature/nexus-native-desktop-cross-platform-ci-v1
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git merge-base --is-ancestor 68cebdc2991cf9754477e29ac82228de6f8b8107 "$GITHUB_SHA"
           test "$(git -C third_party/nexus rev-parse HEAD)" = "7618390658f8f92431dec0ac65979b84f2c0fb76"
@@ -113,7 +118,7 @@ jobs:
         run: scripts/build_nexus_desktop_candidate.sh linux-x86_64 "$GITHUB_WORKSPACE/artifacts/linux-x86_64"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ShackCQ-Nexus-Desktop-Linux-x86_64-UNSIGNED-UNNOTARIZED-${{ github.sha }}
+          name: ShackCQ-Nexus-Digi-Desktop-Linux-x86_64-UNSIGNED-UNNOTARIZED-${{ github.sha }}
           path: artifacts/linux-x86_64
           if-no-files-found: error
           retention-days: 14

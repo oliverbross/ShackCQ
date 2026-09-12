@@ -1,9 +1,12 @@
 # Nexus desktop cross-platform candidate CI
 
-`.github/workflows/nexus-desktop-cross-platform-candidate.yml` is a manual,
-read-only candidate workflow for the committed ShackCQ Tauri/Nexus desktop. It
-does not run on pushes, publish a GitHub Release, sign, notarize, deploy, launch
-the app, open audio devices, contact a radio, or enable Digi transmission.
+`.github/workflows/nexus-desktop-cross-platform-candidate.yml` is a read-only
+candidate workflow for the committed ShackCQ Tauri/Nexus desktop. It can be
+started manually and is registered for pushes only to
+`feature/nexus-native-desktop-cross-platform-ci-v1`; pushes to every other
+branch remain outside this workflow. It does not publish a GitHub Release, sign,
+notarize, deploy, launch the app, open audio devices, contact a radio, or enable
+Digi transmission.
 
 The Windows x64 job runs on Ubuntu 24.04 and targets
 `x86_64-pc-windows-gnu`. This is required by the pinned Nexus modem: its
@@ -54,3 +57,26 @@ integration state is
 `CANONICAL_LOGBOOK_AGENT=NOT_BUNDLED_REQUIRES_SEPARATE_SHACKCQ_AGENT`.
 These artifacts are not complete native logging candidates, and this bounded CI
 slice does not expand into Qt, stationd or separate ShackCQ Agent packaging.
+
+That omission is an implementation blocker, not only a documentation gap.
+`shackcq-stationd` links the full Qt desktop service library, which requires Qt
+6.11.2 exactly (Core, GUI, Quick/QML, Network, SQL, SerialPort, Multimedia,
+WebSockets, Concurrent, SVG, Positioning, Location and Widgets), OpenSSL 3,
+pinned Opus, the platform credential vault and, for the supported Agent package,
+the pinned Hamlib build. It is not a Core-only headless binary.
+
+The Ubuntu-hosted Windows GNU job has no Qt 6.11.2 Windows cross sysroot with
+Linux-runnable `moc`, `rcc`, QML and deployment host tools. The repository's
+working Windows route instead uses a separate native Windows runner, Qt MinGW
+6.11.2/MinGW 13.1, matching OpenSSL and Hamlib, and `windeployqt`. Mixing those
+objects into this Linux-hosted Tauri cross job is unsupported. Its status is
+`WINDOWS_CANONICAL_LOGBOOK_AGENT_BUILD=BLOCKED_NO_LINUX_HOST_QT_6_11_2_WINDOWS_TOOLCHAIN_OR_DEPLOYMENT`.
+
+Linux can compile the Agent on a separate Qt 6.11.2 runner, but the Tauri bundle
+does not have a Qt 6.11.2 runtime/plugin deployment path and Ubuntu 24.04's distro
+Qt cannot satisfy the source's exact-version requirement. Its status in this
+slice is
+`LINUX_CANONICAL_LOGBOOK_AGENT_BUILD=BLOCKED_NO_QT_6_11_2_RUNTIME_DEPLOYMENT_CLOSURE_IN_THIS_SLICE`.
+Closing either blocker requires a separately validated Agent distribution and
+artifact-composition design; merely copying `shackcq-stationd` would create an
+unrunnable and misleading package.
