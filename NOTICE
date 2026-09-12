@@ -24,10 +24,11 @@ the complete selected-source notices remain in third_party/nexus/NOTICE.
 ShackCQ's adapter is GPL-3.0-only and records the exact boundary in
 docs/nexus/NATIVE_DESKTOP_PROVENANCE.md. Nexus and KD9TAW do not endorse
 ShackCQ. The desktop build excludes Nexus radio/rigctld/OmniRig, external
-logger, network-service, updater and DeepCW model paths. WSPR is withheld from
-the declared/callable modes, but Nexus's unconditional internal modes edge can
-place its code in the link closure; distribution is gated on owner review of
-its project-wide WSJT-X grant.
+logger, network-service, updater and DeepCW model paths. WSPR receive and
+null/file-sink encoding are declared and callable through the pinned Nexus
+workspace's GPL-3.0-only `wspr` crate. Its vendored fano.c/jelinek.c provenance
+relies on the WSJT-X project-wide GPL grant recorded by upstream; no physical
+audio output or RF transmit path is available in this package.
 
 The Android KX3 panadapter was independently implemented after behavior-only
 study of these pinned references:

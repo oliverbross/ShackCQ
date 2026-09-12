@@ -5,7 +5,9 @@ set -eu
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 candidate="$repo/scripts/build_nexus_desktop_candidate.sh"
 macos="$repo/scripts/build_nexus_desktop_macos.sh"
+legal="$repo/scripts/stage_nexus_package_legal.sh"
 cross_workflow="$repo/.github/workflows/nexus-desktop-cross-platform-candidate.yml"
+stationd_sidecar="$repo/desktop/shackcq-tauri/scripts/build-stationd-sidecar.sh"
 contract_scratch=$(mktemp -d)
 PYTHONPYCACHEPREFIX="$contract_scratch/pycache"
 export PYTHONPYCACHEPREFIX
@@ -62,7 +64,10 @@ trap cleanup_contract_test EXIT
 
 bash -n "$candidate"
 sh -n "$macos"
+sh -n "$legal"
+sh -n "$stationd_sidecar"
 python3 -m py_compile "$repo/scripts/claim_package_sidecar_lock.py"
+python3 -m py_compile "$repo/scripts/write_nexus_package_metadata.py"
 test "$(grep -c '^trap cleanup EXIT' "$candidate")" = 1
 grep -F "trap 'exit 143' TERM" "$candidate" >/dev/null
 test "$(grep -c '^trap cleanup EXIT$' "$macos")" = 1
@@ -96,7 +101,95 @@ printf '%s\n' "$linux_acceptance" | grep -F 'cd "$launch_cwd"' >/dev/null
 test "$(printf '%s\n' "$linux_acceptance" | grep -Fc 'launch_env+=("APPDIR=$payload_root")')" = 1
 printf '%s\n' "$linux_acceptance" | grep -F '"${launch_env[@]}"' >/dev/null
 ! printf '%s\n' "$linux_acceptance" | grep -F '${LD_LIBRARY_PATH:+' >/dev/null
-printf '%s\n' "$linux_acceptance" | grep -F 'LD_LIBRARY_PATH="$lib_path"' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F 'env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F 'SHACKCQ_PACKAGE_RUNTIME_HERMETIC=1 "$agent_path" --package-runtime-probe' >/dev/null
+grep -F 'windeployqt.exe" --release --no-translations' "$candidate" >/dev/null
+grep -F '.package-windows-runtime-$target' "$candidate" >/dev/null
+grep -F 'audit_windows_payload "$nsis_extract" "$windows_app_root"' "$candidate" >/dev/null
+windows_acceptance=$(sed -n '/^accept_windows_payload()/,/^}/p' "$candidate")
+printf '%s\n' "$windows_acceptance" | grep -F 'app_root=$(dirname "$agent_path")' >/dev/null
+printf '%s\n' "$windows_acceptance" | grep -F 'packaged_windows_path="$app_root:$windows_system32:$windows_root"' >/dev/null
+printf '%s\n' "$windows_acceptance" | grep -F 'runtime_probe=$(run_packaged_windows_binary "$agent_path" --package-runtime-probe)' >/dev/null
+printf '%s\n' "$windows_acceptance" | grep -F 'run_packaged_windows_binary "$helper_path"' >/dev/null
+printf '%s\n' "$windows_acceptance" | grep -F 'PATH="$packaged_windows_path"' >/dev/null
+! printf '%s\n' "$windows_acceptance" | grep -F 'PATH="$qt_runtime_bin:$PATH"' >/dev/null
+windows_audit=$(sed -n '/^audit_windows_payload()/,/^}/p' "$candidate")
+printf '%s\n' "$windows_audit" | grep -F 'find "$object_dir" -maxdepth 1' >/dev/null
+printf '%s\n' "$windows_audit" | grep -F 'find "$app_root" -maxdepth 1' >/dev/null
+! printf '%s\n' "$windows_audit" | grep -F 'find "$payload_root" -type f -iname "$dependency"' >/dev/null
+test "$(grep -Fc -- '--package-runtime-probe' "$candidate")" -ge 2
+grep -F 'stage_linux_qt_runtime "$appimage_extract/squashfs-root" APPIMAGE' "$candidate" >/dev/null
+grep -F 'stage_linux_qt_runtime "$deb_extract" DEB' "$candidate" >/dev/null
+grep -F "rpath='\$ORIGIN/../lib/shackcq'" "$candidate" >/dev/null
+grep -F "rpath='\$ORIGIN/../lib'" "$candidate" >/dev/null
+grep -F "patchelf --set-rpath '\$ORIGIN'" "$candidate" >/dev/null
+grep -F "plugin_rpath='\$ORIGIN/../../lib'" "$candidate" >/dev/null
+grep -F "plugin_rpath='\$ORIGIN/../..'" "$candidate" >/dev/null
+grep -F 'final_appimage_extract' "$candidate" >/dev/null
+grep -F 'final_deb_extract' "$candidate" >/dev/null
+grep -F -- '--package-runtime-probe' "$candidate" >/dev/null
+grep -F 'libqsqlite.so' "$candidate" >/dev/null
+grep -F "grep -Eq '/(home/runner|Users|opt/hostedtoolcache|__w)/|[A-Za-z]:" "$candidate" >/dev/null
+grep -F 'mksquashfs "$appimage_extract/squashfs-root"' "$candidate" >/dev/null
+grep -F 'QCoreApplication::setLibraryPaths(packagedPluginPaths)' "$repo/desktop/src/app/stationd_main.cpp" >/dev/null
+grep -F 'qEnvironmentVariableIntValue("SHACKCQ_PACKAGE_RUNTIME_HERMETIC") == 1' "$repo/desktop/src/app/stationd_main.cpp" >/dev/null
+! grep -F 'QCoreApplication::addLibraryPath(path)' "$repo/desktop/src/app/stationd_main.cpp" >/dev/null
+grep -F 'refresh_debian_metadata "$deb_extract"' "$candidate" >/dev/null
+grep -F 'DEBIAN/md5sums' "$candidate" >/dev/null
+grep -F 'Installed-Size:' "$candidate" >/dev/null
+grep -F 'legal/PACKAGE_MANIFEST.json' "$candidate" >/dev/null
+for packaged_legal in NEXUS-COPYING NEXUS-NOTICE HAMLIB-COPYING \
+    HAMLIB-COPYING.LIB HAMLIB-LICENSE OPUS-COPYING \
+    Qt-LGPL-3.0-only.txt Qt-GPL-3.0-only.txt ICU-73-LICENSE.txt ICU-74-LICENSE.txt \
+    OPENSSL-LICENSE.txt FFTW-COPYING; do
+  grep -F "$packaged_legal" "$candidate" >/dev/null
+done
+grep -F 'Contents/Resources/PACKAGE_MANIFEST.json' "$macos" >/dev/null
+grep -F 'Contents/Resources/OPUS-COPYING' "$macos" >/dev/null
+metadata_probe="$contract_scratch/PACKAGE_MANIFEST.json"
+python3 "$repo/scripts/write_nexus_package_metadata.py" --output "$metadata_probe" \
+  --source "$(git -C "$repo" rev-parse HEAD)" --web test-web --nexus test-nexus \
+  --frontend-content-sha test-content --platform test-platform --qt test-qt \
+  --rust test-rust --tauri-cli test-tauri
+python3 - "$metadata_probe" <<'PY'
+import json
+import sys
+
+data = json.load(open(sys.argv[1]))
+assert data["sharedDigiFrontendContentSha256"] == "test-content"
+assert data["rustToolchain"] == "test-rust" and data["tauriCliVersion"] == "test-tauri"
+assert data["transmit"] == {
+    "encoderCallableWithoutPhysicalOutput": False,
+    "automaticSequenceImplemented": False,
+    "physicalAudioOutputAvailable": False,
+    "productionEnabled": False,
+}
+assert data["signing"] == "UNSIGNED"
+assert data["notarization"] == "NOT_APPLICABLE"
+assert data["browserLocalBridge"] == "DISABLED_UNTIL_EXPLICIT_PAIRING"
+assert data["canonicalLogbook"] == "BUNDLED_AGENT_NATIVE_INGRESS"
+assert "FST4W" in data["rxModes"] and "WSPR" in data["rxModes"]
+PY
+mac_metadata_probe="$contract_scratch/MAC_PACKAGE_MANIFEST.json"
+python3 "$repo/scripts/write_nexus_package_metadata.py" --output "$mac_metadata_probe" \
+  --source test-source --web test-web --nexus test-nexus \
+  --frontend-content-sha test-content --platform macos-arm64 --qt 6.11.2 \
+  --rust test-rust --tauri-cli test-tauri
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["signing"] == "AD_HOC_ONLY" and d["notarization"] == "NOT_PERFORMED" and d["platformBaseline"] == "macOS 13 arm64"' \
+  "$mac_metadata_probe"
+legal_probe="$contract_scratch/legal"
+sh "$legal" "$legal_probe" "$repo" 6.10.2 windows-x64
+for legal_name in COPYING NOTICE THIRD_PARTY_NOTICES.txt Qt-LGPL-3.0-only.txt Qt-GPL-3.0-only.txt \
+    ICU-73-LICENSE.txt ICU-74-LICENSE.txt OPENSSL-LICENSE.txt FFTW-COPYING LEGAL_PROVENANCE.txt NEXUS-COPYING NEXUS-NOTICE HAMLIB-COPYING \
+    HAMLIB-COPYING.LIB HAMLIB-LICENSE; do
+  test -s "$legal_probe/$legal_name"
+done
+grep -F 'QT_RUNTIME_VERSION=6.10.2' "$legal_probe/LEGAL_PROVENANCE.txt" >/dev/null
+grep -F 'FFTW_STATIC_WINDOWS_VERSION=3.3.10' "$legal_probe/LEGAL_PROVENANCE.txt" >/dev/null
+grep -F 'OPENSSL_WINDOWS_RUNTIME_EXPECTED=3.6.4' "$legal_probe/LEGAL_PROVENANCE.txt" >/dev/null
+grep -F 'exact Qt runtime' "$repo/desktop/resources/THIRD_PARTY_NOTICES.txt" >/dev/null
+grep -F 'WSPR receive and' "$repo/NOTICE" >/dev/null
+! grep -F 'WSPR is withheld' "$repo/NOTICE" >/dev/null
 socket_name=shackcq-package-32767-32767.sock
 case "$socket_name" in
   [A-Za-z0-9]* ) ;;
@@ -112,6 +205,8 @@ grep -F 'test -s /mingw64/include/openssl/ssl.h' "$cross_workflow" >/dev/null
 grep -F 'test -s /mingw64/lib/libcrypto.dll.a' "$cross_workflow" >/dev/null
 grep -F 'test -s /mingw64/lib/libssl.dll.a' "$cross_workflow" >/dev/null
 grep -F 'export OPENSSL_ROOT_DIR="$(cygpath -m /mingw64)"' "$cross_workflow" >/dev/null
+grep -F "SHACKCQ_VERBOSE_STATIOND_BUILD: '1'" "$cross_workflow" >/dev/null
+grep -F 'cmake --build "$build_dir" --target shackcq-stationd shackcq-hamlib-helper -j4 --verbose' "$stationd_sidecar" >/dev/null
 
 mkdir -p "$mac_sidecar_dir"
 test ! -e "$mac_lock" && test ! -L "$mac_lock"

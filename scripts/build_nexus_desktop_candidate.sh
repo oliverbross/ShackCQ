@@ -23,6 +23,7 @@ main_pid=
 windows_owned_agent_pid=
 windows_owned_agent_path=
 windows_owned_agent_socket=
+packaged_windows_path=
 cleanup_paths=()
 generated_sidecar_dir=
 generated_sidecar_lock=
@@ -63,8 +64,14 @@ stop_windows_owned_agent() {
 stop_owned_stationd() {
   if [ -n "$stationd_pid" ]; then
     if [ -n "$owned_stationd_socket" ]; then
-      "$stationd_executable" --admin-socket "$owned_stationd_socket" --stop \
-        --native-owner-token "$owned_stationd_token" >/dev/null 2>&1 || true
+      if [ "${platform:-}" = windows-x64 ] && [ -n "$packaged_windows_path" ]; then
+        run_packaged_windows_binary "$stationd_executable" \
+          --admin-socket "$owned_stationd_socket" --stop \
+          --native-owner-token "$owned_stationd_token" >/dev/null 2>&1 || true
+      else
+        "$stationd_executable" --admin-socket "$owned_stationd_socket" --stop \
+          --native-owner-token "$owned_stationd_token" >/dev/null 2>&1 || true
+      fi
     else
       "$stationd_executable" --stop --native-owner-token "$owned_stationd_token" \
         >/dev/null 2>&1 || true
@@ -73,6 +80,16 @@ stop_owned_stationd() {
     wait "$stationd_pid" 2>/dev/null || true
     stationd_pid=
   fi
+}
+
+run_packaged_windows_binary() {
+  [ -n "$packaged_windows_path" ] || {
+    echo "packaged Windows execution PATH is not initialized" >&2
+    return 1
+  }
+  env -u QT_PLUGIN_PATH -u QT_QPA_PLATFORM_PLUGIN_PATH -u QML2_IMPORT_PATH \
+    -u OPENSSL_MODULES -u SSL_CERT_DIR -u SSL_CERT_FILE \
+    PATH="$packaged_windows_path" "$@"
 }
 cleanup() {
   cleanup_status=$?
@@ -325,6 +342,30 @@ case "${SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP:-}" in
   *) echo "invalid SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP value" >&2; exit 64 ;;
 esac
 qt_prefix=${SHACKCQ_QT_PREFIX:?SHACKCQ_QT_PREFIX is required}
+if [ "$platform" = windows-x64 ]; then
+  qt_runtime_bin="$qt_prefix/bin"
+  if command -v cygpath >/dev/null 2>&1; then
+    qt_runtime_bin=$(cygpath -u "$qt_runtime_bin")
+  fi
+  test -d "$qt_runtime_bin"
+  export PATH="$qt_runtime_bin:$PATH"
+fi
+source_sha=$(git -C "$repo" rev-parse HEAD)
+web_sha=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sourceRevision"])' \
+  "$repo/desktop/shared-digi-ui-snapshot/frontend-manifest.json")
+frontend_content_sha=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["contentSha256"])' \
+  "$repo/desktop/shared-digi-ui-manifest.json")
+rust_version=$(rustc --version | awk '{print $2}')
+package_metadata_dir="$repo/desktop/shackcq-tauri/.package-metadata-$target"
+cleanup_paths+=("$package_metadata_dir")
+sh "$repo/scripts/stage_nexus_package_legal.sh" "$package_metadata_dir" "$repo" "$agent_qt_version" "$platform"
+python3 "$repo/scripts/write_nexus_package_metadata.py" \
+  --output "$package_metadata_dir/PACKAGE_MANIFEST.json" \
+  --source "$source_sha" --web "$web_sha" \
+  --frontend-content-sha "$frontend_content_sha" \
+  --nexus 7618390658f8f92431dec0ac65979b84f2c0fb76 \
+  --platform "$platform" --qt "$agent_qt_version" \
+  --rust "$rust_version" --tauri-cli "$tauri_cli_version"
 if command -v npx >/dev/null 2>&1; then
   npx_command=npx
 elif command -v npx.cmd >/dev/null 2>&1; then
@@ -342,7 +383,7 @@ python3 "$repo/desktop/shackcq-tauri/scripts/verify-shared-ui.py"
 test "$("$npx_command" --yes "@tauri-apps/cli@${tauri_cli_version}" --version | awk '{print $NF}')" = "$tauri_cli_version"
 
 if [ "$platform" = windows-x64 ]; then
-  for tool in x86_64-w64-mingw32-gcc x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gfortran cmake cmp curl make ninja makensis sha256sum tar; do
+  for tool in x86_64-w64-mingw32-gcc x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gfortran cmake cmp curl ldd make ninja makensis sha256sum tar; do
     command -v "$tool" >/dev/null || { echo "missing Windows cross tool: $tool" >&2; exit 1; }
   done
   fftw_version=3.3.10
@@ -380,6 +421,7 @@ if [ "$platform" = windows-x64 ]; then
   fi
   export CMAKE_PREFIX_PATH="$fftw_cmake_prefix${CMAKE_PREFIX_PATH:+;$CMAKE_PREFIX_PATH}"
   test "$(pkg-config --modversion fftw3f)" = "$fftw_version"
+  test "$(/mingw64/bin/openssl.exe version | awk '{print $1, $2}')" = "OpenSSL 3.6.4"
   configure_windows_fftw_rust_link
   boost_version_header=/mingw64/include/boost/version.hpp
   test -s "$boost_version_header"
@@ -412,11 +454,50 @@ cmake -S "$repo/desktop" -B "$agent_build" -G Ninja \
 export SHACKCQ_DESKTOP_BUILD_DIR="$agent_build"
 export SHACKCQ_TAURI_TARGET="$target"
 sh "$repo/desktop/shackcq-tauri/scripts/build-stationd-sidecar.sh"
+test -s "$agent_build/_deps/opus-src/COPYING"
+cp "$agent_build/_deps/opus-src/COPYING" "$package_metadata_dir/OPUS-COPYING"
+windows_runtime_dir=
 if [ "$platform" = windows-x64 ]; then
   isolated_root="${RUNNER_TEMP:-$repo/build}/shackcq-windows-agent-proof"
   cleanup_paths+=("$isolated_root")
   owner_token=$(printf 'a%.0s' {1..64})
   stationd_executable="$agent_build/shackcq-stationd.exe"
+  test -x "$stationd_executable"
+  stationd_dependency_status=0
+  stationd_dependencies=$(ldd "$stationd_executable" 2>&1) || \
+    stationd_dependency_status=$?
+  printf '%s\n' "$stationd_dependencies"
+  test "$stationd_dependency_status" = 0
+  ! printf '%s\n' "$stationd_dependencies" | grep -Eiq 'not found|cannot find|error:'
+  "$stationd_executable" --version
+  windows_runtime_dir="$repo/desktop/shackcq-tauri/.package-windows-runtime-$target"
+  cleanup_paths+=("$windows_runtime_dir")
+  mkdir -p "$windows_runtime_dir"
+  "$qt_runtime_bin/windeployqt.exe" --release --no-translations \
+    --dir "$windows_runtime_dir" "$stationd_executable"
+  "$qt_runtime_bin/windeployqt.exe" --release --no-translations \
+    --dir "$windows_runtime_dir" "$agent_build/shackcq-hamlib-helper.exe"
+  for openssl_dll in libcrypto-3-x64.dll libssl-3-x64.dll; do
+    test -s "$agent_build/$openssl_dll"
+    cp "$agent_build/$openssl_dll" "$windows_runtime_dir/$openssl_dll"
+  done
+  test -s "$windows_runtime_dir/Qt6Core.dll"
+  test -s "$windows_runtime_dir/sqldrivers/qsqlite.dll"
+  find "$windows_runtime_dir/tls" -type f -iname 'q*backend.dll' -print -quit | grep -q .
+  : >"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
+  for mingw_runtime in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+    if [ -s "$windows_runtime_dir/$mingw_runtime" ]; then
+      mingw_package=$(pacman -Qqo "/mingw64/bin/$mingw_runtime")
+      pacman -Q "$mingw_package" >>"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
+      while IFS= read -r mingw_license; do
+        test -s "$mingw_license"
+        cp "$mingw_license" \
+          "$package_metadata_dir/MINGW-${mingw_package}-$(basename "$mingw_license")"
+      done < <(pacman -Ql "$mingw_package" | \
+        awk '$2 ~ /\/share\/licenses\// && $2 !~ /\/$/ { print $2 }')
+    fi
+  done
+  test -s "$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
   owned_stationd_token=$owner_token
   owned_stationd_socket=
   rm -rf "$isolated_root"
@@ -436,10 +517,38 @@ if [ "$platform" = windows-x64 ]; then
   stop_owned_stationd
 fi
 CARGO_BUILD_TARGET="$target" "$repo/scripts/build_nexus_native_sidecar.sh"
-tauri_args=(build --ci --no-sign --target "$target" --bundles "$bundles")
-if [ "$platform" = linux-x86_64 ]; then
-  tauri_args+=(--config '{"bundle":{"linux":{"deb":{"depends":["libwebkit2gtk-4.1-0","libasound2","libssl3","libsecret-1-0","libgfortran5","libfftw3-single3","libstdc++6","libgcc-s1"]}}}}')
-fi
+package_config="$repo/desktop/shackcq-tauri/.tauri-package-config-$target.json"
+cleanup_paths+=("$package_config")
+python3 - "$package_config" "$target" "$platform" "$windows_runtime_dir" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+output, target, platform, windows_runtime = sys.argv[1:]
+root = f".package-metadata-{target}"
+metadata_root = Path(output).parent / root
+if not metadata_root.is_dir():
+    raise SystemExit("package metadata directory is missing")
+bundle = {"resources": {}}
+for source in sorted(path for path in metadata_root.rglob("*") if path.is_file()):
+    relative = source.relative_to(metadata_root).as_posix()
+    bundle["resources"][f"{root}/{relative}"] = f"legal/{relative}"
+if platform == "linux-x86_64":
+    bundle["linux"] = {"deb": {"depends": [
+        "libwebkit2gtk-4.1-0", "libasound2", "libssl3", "libsecret-1-0",
+        "libgfortran5", "libfftw3-single3", "libstdc++6", "libgcc-s1",
+    ]}}
+if platform == "windows-x64":
+    runtime_root = Path(windows_runtime)
+    if not runtime_root.is_dir():
+        raise SystemExit("Windows runtime staging directory is missing")
+    source_root = f".package-windows-runtime-{target}"
+    for source in sorted(path for path in runtime_root.rglob("*") if path.is_file()):
+        relative = source.relative_to(runtime_root).as_posix()
+        bundle["resources"][f"{source_root}/{relative}"] = relative
+json.dump({"bundle": bundle}, open(output, "w"), separators=(",", ":"))
+PY
+tauri_args=(build --ci --no-sign --target "$target" --bundles "$bundles" --config "$package_config")
 tauri_args+=(-- --locked)
 (
   cd "$repo/desktop/shackcq-tauri"
@@ -469,11 +578,20 @@ cp "$sidecar" "$staged_sidecar"
 probe_nexus_identity() {
   local packaged_nexus=$1 probe_root=$2 result fixture fixture_json fixture_sha request
   mkdir -p "$probe_root"
-  result=$(printf '%s\n' \
-    '{"version":1,"commandId":"package-identity","generation":0,"launchNonce":"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn","command":{"type":"IDENTITY"}}' |
-    SHACKCQ_RUNTIME_NONCE=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn \
-    SHACKCQ_QUEUE_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000 \
-    SHACKCQ_QUEUE_PATH="$probe_root/queue.json" "$packaged_nexus")
+  if [ "$platform" = windows-x64 ]; then
+    result=$(printf '%s\n' \
+      '{"version":1,"commandId":"package-identity","generation":0,"launchNonce":"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn","command":{"type":"IDENTITY"}}' |
+      SHACKCQ_RUNTIME_NONCE=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn \
+      SHACKCQ_QUEUE_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000 \
+      SHACKCQ_QUEUE_PATH="$probe_root/queue.json" \
+      run_packaged_windows_binary "$packaged_nexus")
+  else
+    result=$(printf '%s\n' \
+      '{"version":1,"commandId":"package-identity","generation":0,"launchNonce":"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn","command":{"type":"IDENTITY"}}' |
+      SHACKCQ_RUNTIME_NONCE=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn \
+      SHACKCQ_QUEUE_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000 \
+      SHACKCQ_QUEUE_PATH="$probe_root/queue.json" "$packaged_nexus")
+  fi
   python3 - "$result" <<'PY'
 import json
 import sys
@@ -511,10 +629,18 @@ print(json.dumps({
 }, separators=(",", ":")))
 PY
 )
-  result=$(printf '%s\n' "$request" |
-    SHACKCQ_RUNTIME_NONCE=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn \
-    SHACKCQ_QUEUE_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000 \
-    SHACKCQ_QUEUE_PATH="$probe_root/reference-queue.json" "$packaged_nexus")
+  if [ "$platform" = windows-x64 ]; then
+    result=$(printf '%s\n' "$request" |
+      SHACKCQ_RUNTIME_NONCE=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn \
+      SHACKCQ_QUEUE_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000 \
+      SHACKCQ_QUEUE_PATH="$probe_root/reference-queue.json" \
+      run_packaged_windows_binary "$packaged_nexus")
+  else
+    result=$(printf '%s\n' "$request" |
+      SHACKCQ_RUNTIME_NONCE=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn \
+      SHACKCQ_QUEUE_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000 \
+      SHACKCQ_QUEUE_PATH="$probe_root/reference-queue.json" "$packaged_nexus")
+  fi
   python3 - "$result" <<'PY'
 import json
 import sys
@@ -528,7 +654,7 @@ PY
 
 accept_linux_payload() {
   local payload_root=$1 label=$2
-  local payload_tmp agent_path nexus_path main_path launch_path launch_cwd socket_name owner_token lib_path main_rc
+  local payload_tmp agent_path nexus_path main_path launch_path launch_cwd socket_name owner_token main_rc runtime_probe
   local -a launch_env=()
   payload_tmp=$(mktemp -d)
   cleanup_paths+=("$payload_tmp")
@@ -544,7 +670,6 @@ accept_linux_payload() {
     launch_env+=("APPDIR=$payload_root")
     test -x "$launch_path"
   fi
-  lib_path=$(find "$payload_root" -type d \( -name lib -o -name lib64 \) -print | paste -sd: -)
   # stationd resolves this bounded logical name beneath its private runtime
   # directory; it intentionally rejects path separators supplied by callers.
   socket_name="shackcq-package-${RANDOM}-${RANDOM}.sock"
@@ -559,8 +684,13 @@ accept_linux_payload() {
       ;;
   esac
   test "${#socket_name}" -le 96
+  runtime_probe=$(env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
+    SHACKCQ_PACKAGE_RUNTIME_HERMETIC=1 "$agent_path" --package-runtime-probe)
+  python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert p["qsqlite"] is True and p["tls"] is True and p["tlsBackend"]' \
+    "$runtime_probe"
+  printf 'PACKAGED_%s_QT_RUNTIME_OK qsqlite=true tls=true\n' "$label"
   owner_token=$(printf 'b%.0s' {1..64})
-  LD_LIBRARY_PATH="$lib_path" \
+  env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
     "$agent_path" --foreground --native-ingress-only \
       --native-owner-token "$owner_token" --admin-socket "$socket_name" \
       --ephemeral-root "$payload_tmp/agent" --ephemeral-credentials &
@@ -569,16 +699,16 @@ accept_linux_payload() {
   owned_stationd_socket=$socket_name
   owned_stationd_token=$owner_token
   for _ in {1..50}; do
-    LD_LIBRARY_PATH="$lib_path" \
+    env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
       "$agent_path" --admin-socket "$socket_name" --status >/dev/null 2>&1 && break
     sleep 0.1
   done
-  LD_LIBRARY_PATH="$lib_path" \
+  env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
     "$agent_path" --admin-socket "$socket_name" --status >/dev/null
-  ! LD_LIBRARY_PATH="$lib_path" \
+  ! env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
     "$agent_path" --admin-socket "$socket_name" --stop \
       --native-owner-token "$(printf 'c%.0s' {1..64})" >/dev/null 2>&1
-  LD_LIBRARY_PATH="$lib_path" \
+  env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
     "$agent_path" --admin-socket "$socket_name" --stop \
       --native-owner-token "$owner_token" >/dev/null
   wait "$stationd_pid"
@@ -599,7 +729,7 @@ accept_linux_payload() {
       SHACKCQ_AGENT_EPHEMERAL_ROOT="$payload_tmp/main-agent" \
       SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
       SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 \
-      LD_LIBRARY_PATH="$lib_path" \
+      env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
       "$launch_path"
   ) >"$payload_tmp/main.log" 2>&1
   main_rc=$?
@@ -614,21 +744,205 @@ accept_linux_payload() {
   rm -rf "$payload_tmp"
 }
 
+stage_linux_qt_runtime() {
+  local payload_root=$1 layout=$2 lib_dir plugin_dir binary rpath plugin_rpath plugin
+  local changed object dependency_name dependency_path destination
+  case "$layout" in
+    APPIMAGE)
+      lib_dir="$payload_root/usr/lib"
+      plugin_dir="$payload_root/usr/plugins"
+      rpath='$ORIGIN/../lib'
+      plugin_rpath='$ORIGIN/../../lib'
+      ;;
+    DEB)
+      lib_dir="$payload_root/usr/lib/shackcq"
+      plugin_dir="$lib_dir/plugins"
+      rpath='$ORIGIN/../lib/shackcq'
+      plugin_rpath='$ORIGIN/../..'
+      ;;
+    *) echo "unknown Linux payload layout: $layout" >&2; return 1 ;;
+  esac
+  mkdir -p "$lib_dir" "$plugin_dir/sqldrivers" "$plugin_dir/tls"
+  for binary in "$payload_root/usr/bin/shackcq-stationd" \
+      "$payload_root/usr/bin/shackcq-hamlib-helper"; do
+    test -x "$binary"
+    patchelf --set-rpath "$rpath" "$binary"
+  done
+  for plugin in "$qt_prefix/plugins/sqldrivers/libqsqlite.so" \
+      "$qt_prefix/plugins/tls/libqcertonlybackend.so" \
+      "$qt_prefix/plugins/tls/libqopensslbackend.so"; do
+    test -s "$plugin"
+    case "$plugin" in
+      */sqldrivers/*) cp -L "$plugin" "$plugin_dir/sqldrivers/" ;;
+      */tls/*) cp -L "$plugin" "$plugin_dir/tls/" ;;
+    esac
+  done
+  # Close the Qt/ICU graph recursively from the actual sidecars and selected
+  # plugins. System GTK/WebKit/OpenSSL dependencies remain declared platform
+  # dependencies; Qt and ICU are package-owned and may never resolve via CI.
+  changed=1
+  while [ "$changed" = 1 ]; do
+    changed=0
+    while IFS= read -r -d '' object; do
+      while IFS=$'\t' read -r dependency_name dependency_path; do
+        case "$dependency_name" in
+          libQt6*.so*|libicu*.so*) ;;
+          *) continue ;;
+        esac
+        test -s "$dependency_path"
+        destination="$lib_dir/$dependency_name"
+        if [ ! -s "$destination" ]; then
+          cp -L "$dependency_path" "$destination"
+          changed=1
+        fi
+      done < <(LD_LIBRARY_PATH="$lib_dir:$qt_prefix/lib" ldd "$object" | \
+        awk '$2 == "=>" && $3 ~ /^\// { print $1 "\t" $3 }')
+    done < <(find "$payload_root/usr/bin" "$lib_dir" "$plugin_dir" -type f -print0)
+  done
+  find "$lib_dir" -maxdepth 1 -type f -name 'lib*.so*' -exec patchelf --set-rpath '$ORIGIN' {} +
+  find "$plugin_dir" -type f -name '*.so' -exec patchelf --set-rpath "$plugin_rpath" {} +
+}
+
+refresh_debian_metadata() {
+  local payload_root=$1 installed_kib
+  (
+    cd "$payload_root"
+    find usr -type f -print0 | LC_ALL=C sort -z | xargs -0 md5sum
+  ) >"$payload_root/DEBIAN/md5sums"
+  installed_kib=$(du -sk "$payload_root/usr" | awk '{print $1}')
+  python3 - "$payload_root/DEBIAN/control" "$installed_kib" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+line = f"Installed-Size: {int(sys.argv[2])}"
+if re.search(r"(?m)^Installed-Size:.*$", text):
+    text = re.sub(r"(?m)^Installed-Size:.*$", line, text)
+else:
+    text = text.rstrip() + "\n" + line + "\n"
+path.write_text(text)
+PY
+}
+
+audit_linux_payload() {
+  local payload_root=$1 label=$2 binary object dependency_report dynamic
+  dependency_report=$3
+  for binary in "$payload_root/usr/bin/shackcq-desktop" \
+      "$payload_root/usr/bin/shackcq-nexus-runtime" \
+      "$payload_root/usr/bin/shackcq-stationd" \
+      "$payload_root/usr/bin/shackcq-hamlib-helper"; do
+    test -x "$binary"
+    {
+      printf 'PAYLOAD=%s BINARY=%s\n' "$label" "$(basename "$binary")"
+      file -b "$binary"
+      readelf -d "$binary"
+      env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH ldd "$binary"
+    } >>"$dependency_report"
+  done
+  while IFS= read -r -d '' object; do
+    file -b "$object" | grep -q '^ELF ' || continue
+    {
+      printf 'PAYLOAD=%s OBJECT=%s\n' "$label" "${object#"$payload_root"/}"
+      readelf -d "$object"
+      dynamic=$(readelf -d "$object" 2>/dev/null || true)
+      if [ -n "$dynamic" ]; then
+        env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH ldd "$object"
+      fi
+    } >>"$dependency_report"
+  done < <(find "$payload_root" -type f -print0 | LC_ALL=C sort -z)
+  ! grep -q 'not found' "$dependency_report"
+  ! grep -Eq '/(home/runner|Users|opt/hostedtoolcache|__w)/|[A-Za-z]:[/\\]' "$dependency_report"
+  python3 - "$dependency_report" <<'PY'
+import re
+import sys
+
+for line in open(sys.argv[1], encoding="utf-8", errors="replace"):
+    if "(RPATH)" not in line and "(RUNPATH)" not in line:
+        continue
+    match = re.search(r"Library (?:rpath|runpath): \[([^]]*)\]", line)
+    if not match:
+        raise SystemExit(f"unparseable loader path: {line.rstrip()}")
+    for entry in match.group(1).split(":"):
+        if entry and not (entry == "$ORIGIN" or entry.startswith("$ORIGIN/")):
+            raise SystemExit(f"non-package-relative loader path: {entry}")
+PY
+}
+
+audit_windows_payload() {
+  local payload_root=$1 app_root=$2 report=$3 object object_dir dependency packaged_dependency
+  case "$app_root" in
+    "$payload_root"/*) ;;
+    *) echo "Windows application root escapes extracted payload: $app_root" >&2; return 1 ;;
+  esac
+  : >"$report"
+  while IFS= read -r -d '' object; do
+    file -b "$object" | grep -Eqi 'PE32\+.*x86-64' || continue
+    printf 'OBJECT=%s\n' "${object#"$payload_root"/}" >>"$report"
+    x86_64-w64-mingw32-objdump -p "$object" | grep 'DLL Name:' >>"$report" || true
+    while IFS= read -r dependency; do
+      test -n "$dependency"
+      object_dir=$(dirname "$object")
+      packaged_dependency=$(find "$object_dir" -maxdepth 1 -type f -iname "$dependency" -print -quit)
+      if [ -z "$packaged_dependency" ]; then
+        packaged_dependency=$(find "$app_root" -maxdepth 1 -type f -iname "$dependency" -print -quit)
+      fi
+      if [ -n "$packaged_dependency" ]; then
+        continue
+      fi
+      if [ -e "/c/Windows/System32/$dependency" ]; then
+        continue
+      fi
+      case "$dependency" in
+        api-ms-win-*.dll|ext-ms-win-*.dll) continue ;;
+      esac
+      echo "unresolved packaged Windows PE dependency: $dependency from $object" >&2
+      return 1
+    done < <(x86_64-w64-mingw32-objdump -p "$object" | \
+      sed -n 's/^[[:space:]]*DLL Name: //p')
+  done < <(find "$payload_root" -type f \( -iname '*.exe' -o -iname '*.dll' \) -print0)
+  grep -Fq 'Qt6Core.dll' "$report"
+  grep -Fq 'libcrypto-3-x64.dll' "$report"
+}
+
 accept_windows_payload() {
   local payload_root=$1
-  local payload_tmp agent_path nexus_path main_path socket_name owner_token main_rc main_socket
+  local payload_tmp app_root agent_path nexus_path helper_path main_path socket_name owner_token main_rc main_socket runtime_probe
+  local windows_root windows_system32
   payload_tmp=$(mktemp -d)
   cleanup_paths+=("$payload_tmp")
   agent_path=$(find "$payload_root" -type f -iname shackcq-stationd.exe -print -quit)
-  nexus_path=$(find "$payload_root" -type f -iname shackcq-nexus-runtime.exe -print -quit)
-  main_path=$(find "$payload_root" -type f -iname shackcq-desktop.exe -print -quit)
+  test -n "$agent_path"
+  app_root=$(dirname "$agent_path")
+  nexus_path=$(find "$app_root" -maxdepth 1 -type f -iname shackcq-nexus-runtime.exe -print -quit)
+  helper_path=$(find "$app_root" -maxdepth 1 -type f -iname shackcq-hamlib-helper.exe -print -quit)
+  main_path=$(find "$app_root" -maxdepth 1 -type f -iname shackcq-desktop.exe -print -quit)
   if [ -z "$main_path" ]; then
-    main_path=$(find "$payload_root" -type f -iname 'ShackCQ Desktop.exe' -print -quit)
+    main_path=$(find "$app_root" -maxdepth 1 -type f -iname 'ShackCQ Desktop.exe' -print -quit)
   fi
-  test -n "$agent_path" && test -n "$nexus_path" && test -n "$main_path"
+  test -n "$nexus_path" && test -n "$helper_path" && test -n "$main_path"
+  windows_root=${SYSTEMROOT:-${SystemRoot:-C:\\Windows}}
+  windows_root=$(cygpath -u "$windows_root")
+  windows_system32="$windows_root/System32"
+  test -d "$windows_root" && test -d "$windows_system32"
+  packaged_windows_path="$app_root:$windows_system32:$windows_root"
+  case "$packaged_windows_path" in
+    *"$qt_prefix"*|*'/mingw64/'*|*'/msys64/'*|*'/home/runner/'*|*'/opt/hostedtoolcache/'*)
+      echo "packaged Windows execution PATH is not hermetic: $packaged_windows_path" >&2
+      return 1
+      ;;
+  esac
+  runtime_probe=$(run_packaged_windows_binary "$agent_path" --package-runtime-probe)
+  python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert p["qsqlite"] is True and p["tls"] is True and p["tlsBackend"]; assert p["tlsBuildVersion"].startswith("OpenSSL 3.6.4"); assert p["tlsRuntimeVersion"].startswith("OpenSSL 3.6.4")' \
+    "$runtime_probe"
+  echo 'PACKAGED_WINDOWS_QT_RUNTIME_OK qsqlite=true tls=true'
+  printf '%s\n' '{"requestId":"package-helper-close","epoch":1,"operation":"close","parameters":{}}' | \
+    run_packaged_windows_binary "$helper_path"
+  echo 'PACKAGED_WINDOWS_HAMLIB_HELPER_CLOSE_OK hardware=not-opened'
   socket_name="shackcq-package-$RANDOM-$RANDOM"
   owner_token=$(printf 'b%.0s' {1..64})
-  "$agent_path" --foreground --native-ingress-only \
+  run_packaged_windows_binary "$agent_path" --foreground --native-ingress-only \
     --native-owner-token "$owner_token" --admin-socket "$socket_name" \
     --ephemeral-root "$payload_tmp/agent" --ephemeral-credentials &
   stationd_pid=$!
@@ -636,13 +950,13 @@ accept_windows_payload() {
   owned_stationd_socket=$socket_name
   owned_stationd_token=$owner_token
   for _ in {1..50}; do
-    "$agent_path" --admin-socket "$socket_name" --status >/dev/null 2>&1 && break
+    run_packaged_windows_binary "$agent_path" --admin-socket "$socket_name" --status >/dev/null 2>&1 && break
     sleep 0.1
   done
-  "$agent_path" --admin-socket "$socket_name" --status >/dev/null
-  ! "$agent_path" --admin-socket "$socket_name" --stop \
+  run_packaged_windows_binary "$agent_path" --admin-socket "$socket_name" --status >/dev/null
+  ! run_packaged_windows_binary "$agent_path" --admin-socket "$socket_name" --stop \
       --native-owner-token "$(printf 'c%.0s' {1..64})" >/dev/null 2>&1
-  "$agent_path" --admin-socket "$socket_name" --stop \
+  run_packaged_windows_binary "$agent_path" --admin-socket "$socket_name" --stop \
     --native-owner-token "$owner_token" >/dev/null
   wait "$stationd_pid"
   stationd_pid=
@@ -652,7 +966,10 @@ accept_windows_payload() {
 
   mkdir -p "$payload_tmp/home"
   main_socket="shackcq-package-main-$RANDOM-$RANDOM"
-  env HOME="$payload_tmp/home" APPDATA="$payload_tmp/home/AppData/Roaming" \
+  env -u QT_PLUGIN_PATH -u QT_QPA_PLATFORM_PLUGIN_PATH -u QML2_IMPORT_PATH \
+    -u OPENSSL_MODULES -u SSL_CERT_DIR -u SSL_CERT_FILE \
+    PATH="$packaged_windows_path" \
+    HOME="$payload_tmp/home" APPDATA="$payload_tmp/home/AppData/Roaming" \
     LOCALAPPDATA="$payload_tmp/home/AppData/Local" \
     SHACKCQ_AGENT_ADMIN_SOCKET="$main_socket" \
     SHACKCQ_AGENT_EPHEMERAL_ROOT="$payload_tmp/main-agent" \
@@ -701,21 +1018,27 @@ case "$platform" in
     for packaged in shackcq-nexus-runtime.exe shackcq-stationd.exe shackcq-hamlib-helper.exe; do
       7z l "${packages[0]}" | grep -Fq "$packaged"
     done
+    for metadata in legal/COPYING legal/NOTICE legal/THIRD_PARTY_NOTICES.txt \
+        legal/Qt-LGPL-3.0-only.txt legal/Qt-GPL-3.0-only.txt legal/ICU-73-LICENSE.txt legal/ICU-74-LICENSE.txt legal/OPENSSL-LICENSE.txt legal/LEGAL_PROVENANCE.txt legal/NEXUS-COPYING \
+        legal/NEXUS-NOTICE legal/HAMLIB-COPYING legal/HAMLIB-COPYING.LIB \
+        legal/HAMLIB-LICENSE legal/OPUS-COPYING legal/FFTW-COPYING legal/PACKAGE_MANIFEST.json; do
+      7z l "${packages[0]}" | grep -Fq "$metadata"
+    done
+    for runtime_file in Qt6Core.dll sqldrivers/qsqlite.dll \
+        libcrypto-3-x64.dll libssl-3-x64.dll; do
+      7z l "${packages[0]}" | grep -Fq "$runtime_file"
+    done
+    7z l "${packages[0]}" | grep -Eq 'tls[/\\]q[^/\\]*backend\.dll'
+    windows_agent=$(find "$nsis_extract" -type f -iname shackcq-stationd.exe -print -quit)
+    test -n "$windows_agent"
+    windows_app_root=$(dirname "$windows_agent")
+    audit_windows_payload "$nsis_extract" "$windows_app_root" "$output/WINDOWS_PE_IMPORTS.txt"
     accept_windows_payload "$nsis_extract"
     rm -rf "$nsis_extract"
-    {
-      echo 'MAIN_EXECUTABLE'
-      x86_64-w64-mingw32-objdump -p "$main_executable" | grep 'DLL Name:' || true
-      echo 'NEXUS_RUNTIME_SIDECAR'
-      x86_64-w64-mingw32-objdump -p "$staged_sidecar" | grep 'DLL Name:' || true
-      echo 'STATION_AGENT'
-      x86_64-w64-mingw32-objdump -p "$agent" | grep 'DLL Name:' || true
-      echo 'HAMLIB_HELPER'
-      x86_64-w64-mingw32-objdump -p "$helper" | grep 'DLL Name:' || true
-    } > "$output/WINDOWS_PE_IMPORTS.txt"
     x86_64-w64-mingw32-objdump -f "$main_executable" | grep -q 'pei-x86-64'
     x86_64-w64-mingw32-objdump -f "$staged_sidecar" | grep -q 'pei-x86-64'
-    ! grep -Eiq 'lib(gfortran|quadmath|stdc\+\+|winpthread|fftw)[^ ]*\.dll' "$output/WINDOWS_PE_IMPORTS.txt"
+    7z l "${packages[0]}" | grep -Fq 'legal/MINGW_RUNTIME_PROVENANCE.txt'
+    7z l "${packages[0]}" | grep -Fq 'legal/MINGW-'
     ;;
   linux-x86_64)
     mapfile -d '' debs < <(find "$bundle_root/deb" -maxdepth 1 -type f -name '*.deb' -print0)
@@ -724,37 +1047,70 @@ case "$platform" in
     [ "${#appimages[@]}" -eq 1 ] || { echo "expected one AppImage, found ${#appimages[@]}" >&2; exit 1; }
     deb_name=$(basename "${debs[0]}" .deb)
     appimage_name=$(basename "${appimages[0]}" .AppImage)
-    cp "${debs[0]}" "$output/${deb_name}-UNSIGNED-UNNOTARIZED.deb"
-    cp "${appimages[0]}" "$output/${appimage_name}-UNSIGNED-UNNOTARIZED.AppImage"
-    dpkg-deb -c "${debs[0]}" > "$output/DEBIAN_CONTENTS.txt"
     appimage_extract=$(mktemp -d)
     cleanup_paths+=("$appimage_extract")
     (
       cd "$appimage_extract"
       "${appimages[0]}" --appimage-extract >/dev/null
-      find squashfs-root -print | LC_ALL=C sort
-    ) > "$output/APPIMAGE_CONTENTS.txt"
-    accept_linux_payload "$appimage_extract/squashfs-root" APPIMAGE
+    ) >/dev/null
+    stage_linux_qt_runtime "$appimage_extract/squashfs-root" APPIMAGE
+    appimage_offset=$("${appimages[0]}" --appimage-offset)
+    dd if="${appimages[0]}" of="$appimage_extract/runtime" bs=1 count="$appimage_offset" status=none
+    mksquashfs "$appimage_extract/squashfs-root" "$appimage_extract/payload.squashfs" \
+      -noappend -root-owned -quiet
+    cat "$appimage_extract/runtime" "$appimage_extract/payload.squashfs" \
+      >"$output/${appimage_name}-UNSIGNED-UNNOTARIZED.AppImage"
+    chmod 0755 "$output/${appimage_name}-UNSIGNED-UNNOTARIZED.AppImage"
+    final_appimage_extract=$(mktemp -d)
+    cleanup_paths+=("$final_appimage_extract")
+    (
+      cd "$final_appimage_extract"
+      "$output/${appimage_name}-UNSIGNED-UNNOTARIZED.AppImage" --appimage-extract >/dev/null
+    ) >/dev/null
+    (
+      cd "$final_appimage_extract/squashfs-root"
+      find . -print | LC_ALL=C sort
+    ) >"$output/APPIMAGE_CONTENTS.txt"
+    accept_linux_payload "$final_appimage_extract/squashfs-root" APPIMAGE
     deb_extract=$(mktemp -d)
     cleanup_paths+=("$deb_extract")
-    dpkg-deb -x "${debs[0]}" "$deb_extract"
-    accept_linux_payload "$deb_extract" DEB
-    rm -rf "$appimage_extract" "$deb_extract"
+    dpkg-deb -R "${debs[0]}" "$deb_extract"
+    stage_linux_qt_runtime "$deb_extract" DEB
+    refresh_debian_metadata "$deb_extract"
+    dpkg-deb --root-owner-group --build "$deb_extract" \
+      "$output/${deb_name}-UNSIGNED-UNNOTARIZED.deb" >/dev/null
+    dpkg-deb -c "$output/${deb_name}-UNSIGNED-UNNOTARIZED.deb" > "$output/DEBIAN_CONTENTS.txt"
+    final_deb_extract=$(mktemp -d)
+    cleanup_paths+=("$final_deb_extract")
+    dpkg-deb -R "$output/${deb_name}-UNSIGNED-UNNOTARIZED.deb" "$final_deb_extract"
+    (
+      cd "$final_deb_extract"
+      md5sum -c DEBIAN/md5sums >/dev/null
+    )
+    expected_installed_kib=$(du -sk "$final_deb_extract/usr" | awk '{print $1}')
+    actual_installed_kib=$(sed -n 's/^Installed-Size: //p' "$final_deb_extract/DEBIAN/control")
+    test "$actual_installed_kib" = "$expected_installed_kib"
+    accept_linux_payload "$final_deb_extract" DEB
     for packaged in shackcq-nexus-runtime shackcq-stationd shackcq-hamlib-helper; do
       grep -Fq "$packaged" "$output/DEBIAN_CONTENTS.txt"
       grep -Fq "$packaged" "$output/APPIMAGE_CONTENTS.txt"
     done
-    {
-      for binary in "$main_executable" "$staged_sidecar" "$agent" "$helper"; do
-        echo "BINARY=$(basename "$binary")"
-        file -b "$binary"
-        readelf -d "$binary"
-        ldd "$binary"
-      done
-    } > "$output/LINUX_ELF_DEPENDENCIES.txt"
-    [ "$(grep -c 'ELF 64-bit.*x86-64' "$output/LINUX_ELF_DEPENDENCIES.txt")" -eq 4 ]
-    ! grep -q 'not found' "$output/LINUX_ELF_DEPENDENCIES.txt"
-    ! grep -Fq "$repo" "$output/LINUX_ELF_DEPENDENCIES.txt"
+    : > "$output/LINUX_ELF_DEPENDENCIES.txt"
+    audit_linux_payload "$final_appimage_extract/squashfs-root" APPIMAGE "$output/LINUX_ELF_DEPENDENCIES.txt"
+    audit_linux_payload "$final_deb_extract" DEB "$output/LINUX_ELF_DEPENDENCIES.txt"
+    [ "$(grep -c 'ELF 64-bit.*x86-64' "$output/LINUX_ELF_DEPENDENCIES.txt")" -eq 8 ]
+    grep -Fq 'usr/lib/shackcq/libQt6Core.so.6' "$output/DEBIAN_CONTENTS.txt"
+    grep -Fq 'usr/lib/shackcq/plugins/sqldrivers/libqsqlite.so' "$output/DEBIAN_CONTENTS.txt"
+    for metadata in legal/COPYING legal/NOTICE legal/THIRD_PARTY_NOTICES.txt \
+        legal/Qt-LGPL-3.0-only.txt legal/Qt-GPL-3.0-only.txt legal/ICU-73-LICENSE.txt legal/ICU-74-LICENSE.txt legal/OPENSSL-LICENSE.txt legal/LEGAL_PROVENANCE.txt legal/NEXUS-COPYING \
+        legal/NEXUS-NOTICE legal/HAMLIB-COPYING legal/HAMLIB-COPYING.LIB \
+        legal/HAMLIB-LICENSE legal/OPUS-COPYING legal/FFTW-COPYING legal/PACKAGE_MANIFEST.json; do
+      grep -Fq "$metadata" "$output/DEBIAN_CONTENTS.txt"
+      grep -Fq "$metadata" "$output/APPIMAGE_CONTENTS.txt"
+    done
+    test -s "$final_deb_extract/DEBIAN/md5sums"
+    grep -Eq '^Installed-Size: [1-9][0-9]*$' "$final_deb_extract/DEBIAN/control"
+    rm -rf "$appimage_extract" "$final_appimage_extract" "$deb_extract" "$final_deb_extract"
     dpkg-deb --info "$output/${deb_name}-UNSIGNED-UNNOTARIZED.deb" > "$output/DEBIAN_PACKAGE_INFO.txt"
     python3 - "$output/${deb_name}-UNSIGNED-UNNOTARIZED.deb" <<'PY'
 import re

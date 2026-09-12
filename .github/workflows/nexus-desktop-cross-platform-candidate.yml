@@ -82,6 +82,7 @@ jobs:
         env:
           RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
           SHACKCQ_QT_PREFIX: ${{ env.QT_ROOT_DIR }}
+          SHACKCQ_VERBOSE_STATIOND_BUILD: '1'
         shell: msys2 {0}
         run: |
           node_bin=$(cygpath -u "$SHACKCQ_NODE_BIN_WINDOWS")
@@ -144,6 +145,7 @@ jobs:
             patchelf \
             p7zip-full \
             pkg-config \
+            squashfs-tools \
             xauth \
             xvfb
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4

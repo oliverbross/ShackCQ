@@ -11,6 +11,7 @@
 
 #include <QCommandLineParser>
 #include <QCoreApplication>
+#include <QDir>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -21,6 +22,8 @@
 #include <QSysInfo>
 #include <QUrl>
 #include <QSerialPortInfo>
+#include <QSqlDatabase>
+#include <QSslSocket>
 
 using namespace shackcq::desktop;
 namespace {
@@ -58,6 +61,22 @@ int sendAdminRequest(const QString &adminSocket, const QJsonObject &request) {
 
 int main(int argc, char **argv) {
   QCoreApplication application(argc, argv);
+#if defined(Q_OS_LINUX)
+  const QDir executableDir(QCoreApplication::applicationDirPath());
+  QStringList packagedPluginPaths;
+  const QStringList packageCandidates = {
+      executableDir.absoluteFilePath(QStringLiteral("../lib/shackcq/plugins")),
+      executableDir.absoluteFilePath(QStringLiteral("../plugins"))};
+  for (const QString &path : packageCandidates) {
+    if (QDir(path).exists())
+      packagedPluginPaths.append(QDir(path).absolutePath());
+  }
+  // Exclude Qt's compiled-in CI prefix. Native-ingress-only packages need only
+  // their package-owned SQLite and TLS plugin roots.
+  if (!packagedPluginPaths.isEmpty() ||
+      qEnvironmentVariableIntValue("SHACKCQ_PACKAGE_RUNTIME_HERMETIC") == 1)
+    QCoreApplication::setLibraryPaths(packagedPluginPaths);
+#endif
   QCoreApplication::setApplicationName("shackcq-stationd");
   QCoreApplication::setApplicationVersion("1.0.6");
   QCommandLineParser parser;
@@ -69,6 +88,7 @@ int main(int argc, char **argv) {
   parser.addOption(QCommandLineOption(QStringLiteral("admin-socket"), "Explicit isolated local administration socket", "name", DefaultAdminSocket));
   parser.addOption(QCommandLineOption(QStringLiteral("ephemeral-root"), "Isolated data root; valid only with --native-ingress-only", "path"));
   parser.addOption(QCommandLineOption(QStringLiteral("ephemeral-credentials"), "Use an in-memory credential vault; valid only with --native-ingress-only and --ephemeral-root"));
+  parser.addOption(QCommandLineOption(QStringLiteral("package-runtime-probe"), "Report packaged SQLite and TLS plugin availability without network or hardware access"));
   parser.addOption(QCommandLineOption({"s", "status"}, "Print bounded service status"));
   parser.addOption(QCommandLineOption({"p", "pairing-offer"}, "Create a short-lived pairing offer"));
   parser.addOption(QCommandLineOption(QStringLiteral("list-clients"), "List paired public device metadata"));
@@ -96,6 +116,20 @@ int main(int argc, char **argv) {
   parser.addOption(QCommandLineOption(QStringLiteral("authorize-digi-tx"), "Locally accept Digi TX for the configured Hamlib profile; requires exact acknowledgement", "acknowledgement"));
   parser.addOption(QCommandLineOption(QStringLiteral("disable-digi-tx"), "Remove local Digi TX permission and hardware acceptance"));
   parser.process(application);
+
+  if (parser.isSet("package-runtime-probe")) {
+    const QJsonObject result{
+        {"qsqlite", QSqlDatabase::drivers().contains(QStringLiteral("QSQLITE"))},
+        {"tls", QSslSocket::supportsSsl()},
+        {"tlsBackend", QSslSocket::activeBackend()},
+        {"tlsBuildVersion", QSslSocket::sslLibraryBuildVersionString()},
+        {"tlsRuntimeVersion", QSslSocket::sslLibraryVersionString()}};
+    QTextStream(stdout) << QJsonDocument(result).toJson(QJsonDocument::Compact)
+                        << '\n';
+    return result.value("qsqlite").toBool() && result.value("tls").toBool()
+               ? 0
+               : 12;
+  }
 
   const QJsonObject requestedAdminAction = adminRequest(parser);
   const QString adminSocket = parser.value("admin-socket");

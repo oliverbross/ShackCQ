@@ -233,7 +233,18 @@ mkdir -p "$app/Contents/PlugIns/sqldrivers"
 cp "$qt_prefix/plugins/sqldrivers/libqsqlite.dylib" \
   "$app/Contents/PlugIns/sqldrivers/"
 mkdir -p "$app/Contents/Resources"
-cp "$repo/COPYING" "$repo/NOTICE" "$app/Contents/Resources/"
+sh "$repo/scripts/stage_nexus_package_legal.sh" "$app/Contents/Resources" "$repo" 6.11.2 macos-arm64
+test -s "$build_dir/_deps/opus-src/COPYING"
+cp "$build_dir/_deps/opus-src/COPYING" "$app/Contents/Resources/OPUS-COPYING"
+python3 "$repo/scripts/write_nexus_package_metadata.py" \
+  --output "$app/Contents/Resources/PACKAGE_MANIFEST.json" \
+  --source "$(git -C "$repo" rev-parse HEAD)" \
+  --web "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sourceRevision"])' "$repo/desktop/shared-digi-ui-snapshot/frontend-manifest.json")" \
+  --frontend-content-sha "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["contentSha256"])' "$repo/desktop/shared-digi-ui-manifest.json")" \
+  --nexus 7618390658f8f92431dec0ac65979b84f2c0fb76 \
+  --platform macos-arm64 --qt 6.11.2 \
+  --rust "$(rustc --version | awk '{print $2}')" \
+  --tauri-cli "$tauri_cli_version"
 python3 "$repo/scripts/audit_macos_nexus_desktop.py" --repair-install-ids "$app"
 manifest="$output/COMPONENT_MANIFEST.json"
 mkdir -p "$output"
