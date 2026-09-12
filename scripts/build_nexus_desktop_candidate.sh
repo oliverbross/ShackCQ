@@ -9,6 +9,7 @@ tauri_cli_version=${TAURI_CLI_VERSION:-2.11.4}
 nexus_windows_path_patch="$repo/patches/nexus-tempo-fast-windows-path.patch"
 nexus_windows_path_overlay_tool="$repo/scripts/apply_nexus_windows_path_overlay.py"
 nexus_windows_path_target="$repo/third_party/nexus/crates/tempo-fast-sys/build.rs"
+sidecar_lock_tool="$repo/scripts/claim_package_sidecar_lock.py"
 nexus_patch_applied=0
 nexus_overlay_recovery_required=0
 nexus_overlay_backup_dir=
@@ -25,7 +26,6 @@ windows_owned_agent_socket=
 cleanup_paths=()
 generated_sidecar_dir=
 generated_sidecar_lock=
-generated_sidecar_owner_metadata=
 generated_sidecars=()
 capture_windows_owned_agent() {
   local native_path observed_pid
@@ -136,15 +136,19 @@ cleanup() {
   if [ -n "$generated_sidecar_lock" ]; then
     if [ "$generated_sidecars_absent" != 1 ]; then
       echo "generated sidecar ownership lock retained: $generated_sidecar_lock" >&2
-      echo "inspect OWNER.json and the three exact target paths; after proving the recorded PID inactive, remove only those owned paths, OWNER.json, and then this lock directory" >&2
+      echo "inspect the lock JSON and the three exact target paths; after proving the recorded PID inactive, remove only those owned paths and then this lock file" >&2
       cleanup_status=1
     else
-      if ! rm -f -- "$generated_sidecar_owner_metadata" || \
-        [ -e "$generated_sidecar_owner_metadata" ] || \
-        [ -L "$generated_sidecar_owner_metadata" ] || \
-        ! rmdir "$generated_sidecar_lock"; then
-        echo "generated sidecar ownership metadata/lock retained: $generated_sidecar_lock" >&2
-        echo "inspect OWNER.json and confirm the recorded PID inactive before manually removing the metadata and empty lock directory" >&2
+      lock_remove_failed=0
+      if [ "${SHACKCQ_TEST_LOCK_REMOVE_FAILURE:-}" = 1 ]; then
+        lock_remove_failed=1
+      elif ! rm -f -- "$generated_sidecar_lock"; then
+        lock_remove_failed=1
+      fi
+      if [ "$lock_remove_failed" != 0 ] || \
+        [ -e "$generated_sidecar_lock" ] || [ -L "$generated_sidecar_lock" ]; then
+        echo "metadata-bearing generated sidecar ownership lock retained: $generated_sidecar_lock" >&2
+        echo "inspect the lock JSON and exact target paths; after proving the recorded PID inactive, remove only the owned paths and then this lock file" >&2
         cleanup_status=1
       fi
     fi
@@ -165,40 +169,31 @@ claim_generated_sidecars() {
   local candidate_dir="$repo/desktop/shackcq-tauri/binaries"
   mkdir -p "$candidate_dir"
   candidate_lock="$candidate_dir/.shackcq-package-$target.lock"
-  if ! mkdir "$candidate_lock"; then
-    echo "another package build owns target $target: $candidate_lock" >&2
-    echo "inspect $candidate_lock/OWNER.json and all exact target paths; never auto-break the lock, and remove it manually only after proving the recorded PID inactive" >&2
-    return 1
-  fi
-  generated_sidecar_dir=$candidate_dir
-  generated_sidecar_lock=$candidate_lock
-  generated_sidecar_owner_metadata="$candidate_lock/OWNER.json"
   owner_source=$(git -C "$repo" rev-parse HEAD)
   owner_started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
   owner_output=${output:0:512}
-  python3 - "$generated_sidecar_owner_metadata" "$$" "${HOSTNAME:-unknown}" \
-    "$owner_started" "$owner_source" "$platform" "$owner_output" <<'PY'
-import json
-import os
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-payload = {
-    "pid": int(sys.argv[2]),
-    "host": sys.argv[3][:128],
-    "startedUtc": sys.argv[4],
-    "sourceSha": sys.argv[5],
-    "platform": sys.argv[6],
-    "output": sys.argv[7],
-}
-raw = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
-if len(raw) > 2048:
-    raise SystemExit("generated sidecar owner metadata exceeds 2048 bytes")
-fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-with os.fdopen(fd, "wb") as handle:
-    handle.write(raw)
-PY
+  trap '' HUP INT TERM
+  set +e
+  python3 "$sidecar_lock_tool" "$candidate_lock" "$$" "${HOSTNAME:-unknown}" \
+    "$owner_started" "$owner_source" "$platform" "$owner_output"
+  claim_status=$?
+  set -e
+  if [ "$claim_status" = 0 ]; then
+    generated_sidecar_dir=$candidate_dir
+    generated_sidecar_lock=$candidate_lock
+  fi
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  if [ "$claim_status" != 0 ]; then
+    if [ "$claim_status" = 17 ]; then
+      echo "another package build owns target $target: $candidate_lock" >&2
+      echo "inspect the JSON lock and all exact target paths; never auto-break it, and remove it manually only after proving the recorded PID inactive" >&2
+    else
+      echo "failed to atomically claim package target $target (lock helper status $claim_status): $candidate_lock" >&2
+    fi
+    return 1
+  fi
   local candidates=(
     "$generated_sidecar_dir/shackcq-nexus-runtime-$target$suffix"
     "$generated_sidecar_dir/shackcq-stationd-$target$suffix"

@@ -8,6 +8,9 @@ macos="$repo/scripts/build_nexus_desktop_macos.sh"
 
 bash -n "$candidate"
 sh -n "$macos"
+PYTHONPYCACHEPREFIX=$(mktemp -d)
+trap 'rm -rf "$PYTHONPYCACHEPREFIX"' EXIT
+python3 -m py_compile "$repo/scripts/claim_package_sidecar_lock.py"
 test "$(grep -c '^trap cleanup EXIT' "$candidate")" = 1
 grep -F "trap 'exit 143' TERM" "$candidate" >/dev/null
 test "$(grep -c '^trap cleanup EXIT HUP INT TERM$' "$macos")" = 1
@@ -19,7 +22,8 @@ grep -F '.shackcq-package-aarch64-apple-darwin.lock' "$macos" >/dev/null
 grep -F '[ -e "$candidate" ] || [ -L "$candidate" ]' "$candidate" >/dev/null
 grep -F 'generated sidecar ownership lock retained:' "$candidate" "$macos" >/dev/null
 grep -F 'after proving the recorded PID inactive' "$candidate" "$macos" >/dev/null
-grep -F 'OWNER.json' "$candidate" "$macos" >/dev/null
+grep -F 'claim_package_sidecar_lock.py' "$candidate" "$macos" >/dev/null
+grep -F 'metadata-bearing generated sidecar ownership lock retained:' "$candidate" "$macos" >/dev/null
 grep -F 'taskkill.exe /PID "$main_pid" /T /F' "$candidate" >/dev/null
 grep -F 'pgrep -f "$mount_point/.*/shackcq-(desktop|stationd|nexus-runtime)"' "$macos" >/dev/null
 ! grep -Eq 'taskkill\.exe .* /IM|(^|[[:space:]])pkill([[:space:]]|$)' "$candidate" "$macos"

@@ -5,6 +5,7 @@ set -euo pipefail
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 candidate="$repo/scripts/build_nexus_desktop_candidate.sh"
 overlay_tool="$repo/scripts/apply_nexus_windows_path_overlay.py"
+lock_tool="$repo/scripts/claim_package_sidecar_lock.py"
 source_file="$repo/third_party/nexus/crates/tempo-fast-sys/build.rs"
 scratch=$(mktemp -d)
 test_sidecar_dir="$repo/desktop/shackcq-tauri/binaries"
@@ -15,6 +16,7 @@ retained_owned_dir=
 lock_holder_pid=
 lock_ready="$scratch/sidecar-lock-ready"
 cleanup_test() {
+  chmod 0755 "$test_sidecar_dir" 2>/dev/null || true
   if [ -n "$lock_holder_pid" ]; then
     printf 'release\n' >"$lock_ready.release"
     kill "$lock_holder_pid" 2>/dev/null || true
@@ -25,12 +27,13 @@ cleanup_test() {
   [ -z "$test_exact_sidecar" ] || rm -f -- "$test_exact_sidecar"
   [ -z "$retained_owned_dir" ] || rmdir "$retained_owned_dir" 2>/dev/null || true
   if [ -n "$retained_lock" ]; then
-    rm -f -- "$retained_lock/OWNER.json"
-    rmdir "$retained_lock" 2>/dev/null || true
+    rm -f -- "$retained_lock"
   fi
   rmdir "$test_sidecar_dir" 2>/dev/null || true
 }
 trap cleanup_test EXIT
+
+PYTHONPYCACHEPREFIX="$scratch/pycache" python3 -m py_compile "$lock_tool"
 
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 test "$(grep -Ec '^trap (cleanup )?EXIT$|^trap - EXIT$' "$candidate")" = 1
@@ -103,15 +106,17 @@ for _ in {1..100}; do
 done
 test "$lock_observed" = 1
 lock_path="$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
-test -s "$lock_path/OWNER.json"
-python3 - "$lock_path/OWNER.json" "$(git -C "$repo" rev-parse HEAD)" <<'PY'
+test -s "$lock_path"
+python3 - "$lock_path" "$(git -C "$repo" rev-parse HEAD)" <<'PY'
 import json
 from pathlib import Path
+import stat
 import sys
 
 path = Path(sys.argv[1])
 raw = path.read_bytes()
 assert len(raw) <= 2048
+assert stat.S_IMODE(path.stat().st_mode) == 0o600
 owner = json.loads(raw)
 assert owner["pid"] > 0
 assert owner["host"]
@@ -122,14 +127,27 @@ assert owner["output"].endswith("lock-holder")
 PY
 set +e
 SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
-  "$candidate" windows-x64 "$scratch/lock-contender" >/dev/null 2>&1
+  "$candidate" windows-x64 "$scratch/lock-contender" >"$scratch/lock-contender.log" 2>&1
 contender_status=$?
 set -e
 test "$contender_status" != 0
+grep -F 'another package build owns target x86_64-pc-windows-gnu:' "$scratch/lock-contender.log"
 printf 'release\n' >"$lock_ready.release"
 wait "$lock_holder_pid"
 lock_holder_pid=
-test ! -e "$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
+test ! -e "$lock_path" && test ! -L "$lock_path"
+
+mkdir -p "$test_sidecar_dir"
+chmod 0500 "$test_sidecar_dir"
+set +e
+SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
+  "$candidate" windows-x64 "$scratch/lock-io-failure" >"$scratch/lock-io-failure.log" 2>&1
+lock_io_status=$?
+set -e
+chmod 0755 "$test_sidecar_dir"
+test "$lock_io_status" != 0
+grep -F 'failed to atomically claim package target x86_64-pc-windows-gnu' "$scratch/lock-io-failure.log"
+! grep -F 'another package build owns target' "$scratch/lock-io-failure.log"
 
 lock_ready="$scratch/sidecar-abort-ready"
 SHACKCQ_TEST_SIDECAR_LOCK_READY="$lock_ready" \
@@ -151,7 +169,7 @@ abort_status=$?
 set -e
 lock_holder_pid=
 test "$abort_status" = 143
-test ! -e "$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
+test ! -e "$lock_path" && test ! -L "$lock_path"
 
 mkdir -p "$test_sidecar_dir"
 exact_sidecar="$test_sidecar_dir/shackcq-nexus-runtime-x86_64-pc-windows-gnu.exe"
@@ -175,7 +193,7 @@ for preexisting_kind in file dangling-symlink; do
   rm -f -- "$exact_sidecar"
 done
 test_exact_sidecar=
-test ! -e "$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
+test ! -e "$lock_path" && test ! -L "$lock_path"
 
 printf 'foreign file must survive\n' >"$test_sidecar_sentinel"
 retained_log="$scratch/generated-sidecar-retained.log"
@@ -190,14 +208,39 @@ test "$retained_status" != 0
 retained_lock="$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
 retained_owned_dir="$test_sidecar_dir/shackcq-nexus-runtime-x86_64-pc-windows-gnu.exe"
 test -d "$retained_owned_dir"
-test -s "$retained_lock/OWNER.json"
+test -s "$retained_lock"
 test "$(cat "$test_sidecar_sentinel")" = 'foreign file must survive'
 grep -F "generated sidecar ownership lock retained: $retained_lock" "$retained_log"
 grep -F 'after proving the recorded PID inactive' "$retained_log"
 rmdir "$retained_owned_dir"
 retained_owned_dir=
-rm -f -- "$retained_lock/OWNER.json"
-rmdir "$retained_lock"
+rm -f -- "$retained_lock"
+retained_lock=
+
+lock_remove_log="$scratch/generated-lock-remove-retained.log"
+set +e
+SHACKCQ_TEST_LOCK_REMOVE_FAILURE=1 \
+SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
+  "$candidate" windows-x64 "$scratch/generated-lock-remove-retained" \
+  >"$lock_remove_log" 2>&1
+lock_remove_status=$?
+set -e
+test "$lock_remove_status" != 0
+retained_lock="$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
+test -s "$retained_lock"
+python3 - "$retained_lock" <<'PY'
+from pathlib import Path
+import stat
+import sys
+
+path = Path(sys.argv[1])
+assert len(path.read_bytes()) <= 2048
+assert stat.S_IMODE(path.stat().st_mode) == 0o600
+PY
+test "$(cat "$test_sidecar_sentinel")" = 'foreign file must survive'
+grep -F "metadata-bearing generated sidecar ownership lock retained: $retained_lock" "$lock_remove_log"
+grep -F 'after proving the recorded PID inactive' "$lock_remove_log"
+rm -f -- "$retained_lock"
 retained_lock=
 
 for style in lf crlf; do
@@ -375,4 +418,4 @@ python3 "$overlay_tool" restore "$source_file" "$retained_dir/build.rs.preimage"
 rm -rf "$retained_dir"
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 
-echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean recovery-retained=proven fftw-link-path=executable generated-sidecars=exact-owned-lock-contended-term-clean-delete-failure-retained"
+echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean recovery-retained=proven fftw-link-path=executable generated-sidecars=atomic-json-lock-contended-term-clean-delete-and-lock-failure-retained"

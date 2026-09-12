@@ -5,6 +5,7 @@ set -eu
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 output=${1:?usage: build_nexus_desktop_macos.sh OUTPUT_DIRECTORY}
 tauri_cli_version=${TAURI_CLI_VERSION:-2.11.4}
+sidecar_lock_tool="$repo/scripts/claim_package_sidecar_lock.py"
 app="$repo/desktop/shackcq-tauri/target/release/bundle/macos/ShackCQ Desktop.app"
 qt_prefix=${QT_PREFIX:?QT_PREFIX must name an official Qt 6.11.2 macOS installation}
 macdeployqt="$qt_prefix/bin/macdeployqt"
@@ -31,7 +32,6 @@ owner_token=
 mounted_owner=
 generated_sidecar_dir=
 generated_sidecar_lock=
-generated_sidecar_owner_metadata=
 generated_nexus=
 generated_stationd=
 generated_hamlib_helper=
@@ -89,15 +89,19 @@ cleanup() {
   if [ -n "$generated_sidecar_lock" ]; then
     if [ "$generated_sidecars_absent" != 1 ]; then
       echo "generated sidecar ownership lock retained: $generated_sidecar_lock" >&2
-      echo "inspect OWNER.json and the three exact target paths; after proving the recorded PID inactive, remove only those owned paths, OWNER.json, and then this lock directory" >&2
+      echo "inspect the lock JSON and the three exact target paths; after proving the recorded PID inactive, remove only those owned paths and then this lock file" >&2
       cleanup_status=1
     else
-      if ! rm -f -- "$generated_sidecar_owner_metadata" || \
-        [ -e "$generated_sidecar_owner_metadata" ] || \
-        [ -L "$generated_sidecar_owner_metadata" ] || \
-        ! rmdir "$generated_sidecar_lock"; then
-        echo "generated sidecar ownership metadata/lock retained: $generated_sidecar_lock" >&2
-        echo "inspect OWNER.json and confirm the recorded PID inactive before manually removing the metadata and empty lock directory" >&2
+      lock_remove_failed=0
+      if [ "${SHACKCQ_TEST_LOCK_REMOVE_FAILURE:-}" = 1 ]; then
+        lock_remove_failed=1
+      elif ! rm -f -- "$generated_sidecar_lock"; then
+        lock_remove_failed=1
+      fi
+      if [ "$lock_remove_failed" != 0 ] || \
+        [ -e "$generated_sidecar_lock" ] || [ -L "$generated_sidecar_lock" ]; then
+        echo "metadata-bearing generated sidecar ownership lock retained: $generated_sidecar_lock" >&2
+        echo "inspect the lock JSON and exact target paths; after proving the recorded PID inactive, remove only the owned paths and then this lock file" >&2
         cleanup_status=1
       fi
     fi
@@ -119,39 +123,28 @@ python3 "$repo/desktop/shackcq-tauri/scripts/verify-shared-ui.py"
 sidecar_dir="$repo/desktop/shackcq-tauri/binaries"
 mkdir -p "$sidecar_dir"
 sidecar_lock="$sidecar_dir/.shackcq-package-aarch64-apple-darwin.lock"
-if ! mkdir "$sidecar_lock"; then
-  echo "another package build owns target aarch64-apple-darwin: $sidecar_lock" >&2
-  echo "inspect $sidecar_lock/OWNER.json and all exact target paths; never auto-break the lock, and remove it manually only after proving the recorded PID inactive" >&2
-  exit 1
-fi
-generated_sidecar_dir=$sidecar_dir
-generated_sidecar_lock=$sidecar_lock
-generated_sidecar_owner_metadata="$sidecar_lock/OWNER.json"
 owner_source=$(git -C "$repo" rev-parse HEAD)
 owner_started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-python3 - "$generated_sidecar_owner_metadata" "$$" "${HOSTNAME:-unknown}" \
-  "$owner_started" "$owner_source" "macos-arm64" "$output" <<'PY'
-import json
-import os
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-payload = {
-    "pid": int(sys.argv[2]),
-    "host": sys.argv[3][:128],
-    "startedUtc": sys.argv[4],
-    "sourceSha": sys.argv[5],
-    "platform": sys.argv[6],
-    "output": sys.argv[7][:512],
-}
-raw = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
-if len(raw) > 2048:
-    raise SystemExit("generated sidecar owner metadata exceeds 2048 bytes")
-fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
-with os.fdopen(fd, "wb") as handle:
-    handle.write(raw)
-PY
+trap '' HUP INT TERM
+set +e
+python3 "$sidecar_lock_tool" "$sidecar_lock" "$$" "${HOSTNAME:-unknown}" \
+  "$owner_started" "$owner_source" "macos-arm64" "$output"
+claim_status=$?
+set -e
+if [ "$claim_status" = 0 ]; then
+  generated_sidecar_dir=$sidecar_dir
+  generated_sidecar_lock=$sidecar_lock
+fi
+trap cleanup HUP INT TERM
+if [ "$claim_status" != 0 ]; then
+  if [ "$claim_status" = 17 ]; then
+    echo "another package build owns target aarch64-apple-darwin: $sidecar_lock" >&2
+    echo "inspect the JSON lock and all exact target paths; never auto-break it, and remove it manually only after proving the recorded PID inactive" >&2
+  else
+    echo "failed to atomically claim package target aarch64-apple-darwin (lock helper status $claim_status): $sidecar_lock" >&2
+  fi
+  exit 1
+fi
 candidate_nexus="$sidecar_dir/shackcq-nexus-runtime-aarch64-apple-darwin"
 candidate_stationd="$sidecar_dir/shackcq-stationd-aarch64-apple-darwin"
 candidate_hamlib_helper="$sidecar_dir/shackcq-hamlib-helper-aarch64-apple-darwin"
