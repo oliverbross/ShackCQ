@@ -18,7 +18,10 @@ assert git("describe", "--tags", "--exact-match") == RECORD["release"]
 for name, field in (("COPYING", "copyingSha256"), ("NOTICE", "noticeSha256")):
     assert hashlib.sha256((UP / name).read_bytes()).hexdigest() == RECORD[field]
 manifest = (ROOT / "desktop/nexus-runtime/Cargo.toml").read_text()
-for required in ("crates/ft8", "crates/ft4", "crates/tempo-audio"):
+for required in (
+    "crates/ft8", "crates/ft4", "crates/ft2", "crates/fst4", "crates/q65",
+    "crates/msk144", "crates/jt65", "crates/wspr", "crates/tempo-audio",
+):
     assert required in manifest
 for forbidden in ("rigctld", "omnirig", "tauri-plugin-updater", "mfsk-core"):
     assert forbidden not in manifest.lower()

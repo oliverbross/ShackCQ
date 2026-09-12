@@ -8,8 +8,8 @@ submodule `third_party/nexus` at release `v1.10.3`, commit
 the gitlink, release, tree, licence hashes, dependency paths and excluded
 features.
 
-`desktop/nexus-runtime` links the selected source's actual `ft8`, `ft4` and
-`tempo-audio` crates. Those wrappers compile `libtempo`: Nexus's C ABI plus its
+`desktop/nexus-runtime` links the selected source's actual `ft8`, `ft4`, `ft2`,
+`fst4`, `q65`, `msk144`, `jt65`, `wspr`, and `tempo-audio` crates. Those wrappers compile `libtempo`: Nexus's C ABI plus its
 vendored WSJT-X-derived Fortran/C/C++ modem and FFTW. The adapter calls the real
 decode and encode APIs; it contains no modem implementation and no legacy
 fallback. Upstream FT8 and FT4 off-air WAV fixtures remain under upstream's
@@ -24,11 +24,14 @@ Flex CAT or an output stream. Existing `shackcq-hamlib-helper` remains the sole
 radio owner. Nexus cloud/logbook connectors, propagation/network clients and
 updater are not dependencies of the Tauri shell.
 
-WSPR is not declared, callable, or advertised. Nexus's unconditional internal
-`modes` dependency means its WSPR crate is nevertheless present in the Rust
-link closure when `tempo-audio/device` is compiled. Its vendored `fano.c` and
-`jelinek.c` rely on the WSJT-X project-wide GPL grant rather than per-file
-grants, so distribution remains an explicit owner licence-acceptance gate.
-DeepCW is
+FST4W and WSPR are declared as receive and null/file-encoder beacon modes; they
+have no QSO or auto-sequence path and `TX_ENABLED` remains false. The pinned
+workspace and WSPR crate are `GPL-3.0-only`, with complete corresponding source
+and the WSJT-X project-wide GPL-3 grant recorded in Nexus's `NOTICE`. That same
+notice explicitly records weaker per-file provenance for vendored `fano.c` and
+`jelinek.c`: each lacks its own licence grant, so GPL-3 coverage is the Nexus
+maintainer's documented inference from the WSJT-X project-level licence and
+build. ShackCQ preserves that notice and source rather than presenting the
+inference as a per-file grant. DeepCW is
 unavailable because its AGPL model is deliberately absent. No AI-CW fallback is
 advertised.
