@@ -9,8 +9,8 @@ sidecar_lock_tool="$repo/scripts/claim_package_sidecar_lock.py"
 app="$repo/desktop/shackcq-tauri/target/release/bundle/macos/ShackCQ Desktop.app"
 qt_prefix=${QT_PREFIX:?QT_PREFIX must name an official Qt 6.11.2 macOS installation}
 macdeployqt="$qt_prefix/bin/macdeployqt"
-qtwebengine_prefix=${QTWEBENGINE_PREFIX:-$(brew --prefix qtwebengine)}
-brotli_prefix=${BROTLI_PREFIX:-$(brew --prefix brotli)}
+qtwebengine_prefix=${QTWEBENGINE_PREFIX:-}
+brotli_prefix=${BROTLI_PREFIX:-}
 build_dir="$repo/build/desktop/nexus-macos-13-portable"
 hamlib_root="$repo/build/desktop/nexus-hamlib-macos-13"
 openssl_root="$repo/build/desktop/nexus-openssl-macos-13"
@@ -109,10 +109,79 @@ cleanup() {
   [ -z "$generated_sidecar_dir" ] || rmdir "$generated_sidecar_dir" 2>/dev/null || true
   exit "$cleanup_status"
 }
-trap cleanup EXIT HUP INT TERM
+trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+claim_generated_sidecars() {
+  sidecar_dir="$repo/desktop/shackcq-tauri/binaries"
+  mkdir -p "$sidecar_dir"
+  sidecar_lock="$sidecar_dir/.shackcq-package-aarch64-apple-darwin.lock"
+  owner_source=$(git -C "$repo" rev-parse HEAD)
+  owner_started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  trap '' HUP INT TERM
+  set +e
+  python3 "$sidecar_lock_tool" "$sidecar_lock" "$$" "${HOSTNAME:-unknown}" \
+    "$owner_started" "$owner_source" "macos-arm64" "$output"
+  claim_status=$?
+  set -e
+  if [ "$claim_status" = 0 ]; then
+    generated_sidecar_dir=$sidecar_dir
+    generated_sidecar_lock=$sidecar_lock
+  fi
+  trap 'exit 129' HUP
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  if [ "$claim_status" != 0 ]; then
+    if [ "$claim_status" = 17 ]; then
+      echo "another package build owns target aarch64-apple-darwin: $sidecar_lock" >&2
+      echo "inspect the JSON lock and all exact target paths; never auto-break it, and remove it manually only after proving the recorded PID inactive" >&2
+    else
+      echo "failed to atomically claim package target aarch64-apple-darwin (lock helper status $claim_status): $sidecar_lock" >&2
+    fi
+    return 1
+  fi
+  candidate_nexus="$sidecar_dir/shackcq-nexus-runtime-aarch64-apple-darwin"
+  candidate_stationd="$sidecar_dir/shackcq-stationd-aarch64-apple-darwin"
+  candidate_hamlib_helper="$sidecar_dir/shackcq-hamlib-helper-aarch64-apple-darwin"
+  for candidate_sidecar in "$candidate_nexus" "$candidate_stationd" "$candidate_hamlib_helper"; do
+    { test ! -e "$candidate_sidecar" && test ! -L "$candidate_sidecar"; } || {
+      echo "refusing to overwrite pre-existing generated sidecar: $candidate_sidecar" >&2
+      return 1
+    }
+  done
+  generated_nexus=$candidate_nexus
+  generated_stationd=$candidate_stationd
+  generated_hamlib_helper=$candidate_hamlib_helper
+}
 
 test ! -e "$output/COMPONENT_MANIFEST.json"
 test ! -e "$output/ShackCQ-Desktop-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
+
+if [ -n "${SHACKCQ_TEST_MAC_SIDECAR_LOCK_READY:-}" ]; then
+  claim_generated_sidecars
+  if [ "${SHACKCQ_TEST_MAC_GENERATED_SIDECARS:-}" = 1 ]; then
+    for generated_sidecar in "$generated_nexus" "$generated_stationd" "$generated_hamlib_helper"; do
+      printf 'owned mac test sidecar\n' >"$generated_sidecar"
+    done
+  fi
+  printf 'locked\n' >"$SHACKCQ_TEST_MAC_SIDECAR_LOCK_READY"
+  lock_released=0
+  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 \
+    21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40; do
+    if [ -e "$SHACKCQ_TEST_MAC_SIDECAR_LOCK_READY.release" ]; then
+      lock_released=1
+      break
+    fi
+    sleep 0.05
+  done
+  test "$lock_released" = 1
+  exit 0
+fi
+
+[ -n "$qtwebengine_prefix" ] || qtwebengine_prefix=$(brew --prefix qtwebengine)
+[ -n "$brotli_prefix" ] || brotli_prefix=$(brew --prefix brotli)
 
 test "$(git -C "$repo/third_party/nexus" rev-parse HEAD)" = 7618390658f8f92431dec0ac65979b84f2c0fb76
 test -x "$macdeployqt"
@@ -120,43 +189,7 @@ test -d "$qtwebengine_prefix/lib"
 test -d "$brotli_prefix/lib"
 python3 "$repo/scripts/check_nexus_native_desktop.py"
 python3 "$repo/desktop/shackcq-tauri/scripts/verify-shared-ui.py"
-sidecar_dir="$repo/desktop/shackcq-tauri/binaries"
-mkdir -p "$sidecar_dir"
-sidecar_lock="$sidecar_dir/.shackcq-package-aarch64-apple-darwin.lock"
-owner_source=$(git -C "$repo" rev-parse HEAD)
-owner_started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-trap '' HUP INT TERM
-set +e
-python3 "$sidecar_lock_tool" "$sidecar_lock" "$$" "${HOSTNAME:-unknown}" \
-  "$owner_started" "$owner_source" "macos-arm64" "$output"
-claim_status=$?
-set -e
-if [ "$claim_status" = 0 ]; then
-  generated_sidecar_dir=$sidecar_dir
-  generated_sidecar_lock=$sidecar_lock
-fi
-trap cleanup HUP INT TERM
-if [ "$claim_status" != 0 ]; then
-  if [ "$claim_status" = 17 ]; then
-    echo "another package build owns target aarch64-apple-darwin: $sidecar_lock" >&2
-    echo "inspect the JSON lock and all exact target paths; never auto-break it, and remove it manually only after proving the recorded PID inactive" >&2
-  else
-    echo "failed to atomically claim package target aarch64-apple-darwin (lock helper status $claim_status): $sidecar_lock" >&2
-  fi
-  exit 1
-fi
-candidate_nexus="$sidecar_dir/shackcq-nexus-runtime-aarch64-apple-darwin"
-candidate_stationd="$sidecar_dir/shackcq-stationd-aarch64-apple-darwin"
-candidate_hamlib_helper="$sidecar_dir/shackcq-hamlib-helper-aarch64-apple-darwin"
-for candidate_sidecar in "$candidate_nexus" "$candidate_stationd" "$candidate_hamlib_helper"; do
-  { test ! -e "$candidate_sidecar" && test ! -L "$candidate_sidecar"; } || {
-    echo "refusing to overwrite pre-existing generated sidecar: $candidate_sidecar" >&2
-    exit 1
-  }
-done
-generated_nexus=$candidate_nexus
-generated_stationd=$candidate_stationd
-generated_hamlib_helper=$candidate_hamlib_helper
+claim_generated_sidecars
 "$repo/scripts/build_nexus_native_sidecar.sh"
 sh "$repo/scripts/build_hamlib_posix.sh" "$hamlib_root" \
   "$repo/core/third_party/hamlib" "$repo/build/desktop/nexus-hamlib-build-macos-13"
