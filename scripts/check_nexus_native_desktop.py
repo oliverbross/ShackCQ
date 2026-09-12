@@ -13,7 +13,7 @@ def git(*args: str) -> str:
     return subprocess.check_output(["git", "-C", str(UP), *args], text=True).strip()
 
 assert git("rev-parse", "HEAD") == RECORD["commit"]
-assert git("rev-parse", "HEAD^{tree}") == RECORD["tree"]
+assert git("show", "-s", "--format=%T", "HEAD") == RECORD["tree"]
 assert git("describe", "--tags", "--exact-match") == RECORD["release"]
 for name, field in (("COPYING", "copyingSha256"), ("NOTICE", "noticeSha256")):
     assert hashlib.sha256((UP / name).read_bytes()).hexdigest() == RECORD[field]
