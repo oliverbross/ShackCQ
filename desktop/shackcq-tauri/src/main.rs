@@ -276,7 +276,7 @@ impl AgentSupervisor {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|_| "AGENT_NATIVE_INGRESS_UNAVAILABLE")?;
-        for _ in 0..40 {
+        for _ in 0..100 {
             if agent_ingress::probe() == agent_ingress::AgentProbe::NativeIngress {
                 return Ok((
                     Self {
@@ -286,7 +286,10 @@ impl AgentSupervisor {
                     "OWNED_NATIVE_INGRESS".into(),
                 ));
             }
-            std::thread::sleep(Duration::from_millis(25));
+            if child.try_wait().ok().flatten().is_some() {
+                return Err("AGENT_NATIVE_INGRESS_UNAVAILABLE".into());
+            }
+            std::thread::sleep(Duration::from_millis(50));
         }
         let _ = child.kill();
         let _ = child.wait();

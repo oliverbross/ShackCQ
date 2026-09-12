@@ -189,28 +189,32 @@ jq -e '.ok == true and .code == "REFERENCE_RECORDING_DECODED" and
   (.payload.messages | index("CQ F5RXL IN94") != null)' \
   "$mounted_acceptance/reference-result.json" >/dev/null
 
-mkdir -p "$mounted_acceptance/home" "$mounted_acceptance/config" "$mounted_acceptance/data"
-SHACKCQ_AGENT_ADMIN_SOCKET="shackcq-mounted-main-$$" \
-SHACKCQ_AGENT_EPHEMERAL_ROOT="$mounted_acceptance/main-agent" \
-SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
-SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 \
-HOME="$mounted_acceptance/home" XDG_CONFIG_HOME="$mounted_acceptance/config" \
-XDG_DATA_HOME="$mounted_acceptance/data" \
-  "$mounted_main" >"$mounted_acceptance/main.log" 2>&1 &
-mounted_main_pid=$!
-main_exited=0
-for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40; do
-  if ! kill -0 "$mounted_main_pid" 2>/dev/null; then
-    wait "$mounted_main_pid"
-    main_exited=1
-    break
-  fi
-  sleep 0.1
+for launch in 1 2 3; do
+  mkdir -p "$mounted_acceptance/home-$launch" \
+    "$mounted_acceptance/config-$launch" "$mounted_acceptance/data-$launch"
+  SHACKCQ_AGENT_ADMIN_SOCKET="shackcq-mounted-main-$$-$launch" \
+  SHACKCQ_AGENT_EPHEMERAL_ROOT="$mounted_acceptance/main-agent-$launch" \
+  SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
+  SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 \
+  HOME="$mounted_acceptance/home-$launch" \
+  XDG_CONFIG_HOME="$mounted_acceptance/config-$launch" \
+  XDG_DATA_HOME="$mounted_acceptance/data-$launch" \
+    "$mounted_main" >"$mounted_acceptance/main-$launch.log" 2>&1 &
+  mounted_main_pid=$!
+  main_exited=0
+  for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60; do
+    if ! kill -0 "$mounted_main_pid" 2>/dev/null; then
+      wait "$mounted_main_pid"
+      main_exited=1
+      break
+    fi
+    sleep 0.1
+  done
+  test "$main_exited" = 1
 done
-test "$main_exited" = 1
 sleep 0.5
 ! pgrep -f "$mount_point/.*/shackcq-(desktop|stationd|nexus-runtime)" >/dev/null
-printf 'MOUNTED_DMG_ACCEPTANCE_OK stationd=isolated nexus=reference-recording gui=safe-exit stranded=none\n'
+printf 'MOUNTED_DMG_ACCEPTANCE_OK stationd=isolated nexus=reference-recording gui=cold-safe-exit-3-of-3 stranded=none\n'
 
 shasum -a 256 "$dmg" > "$output/SHA256SUMS.txt"
 printf '%s\n' "$dmg"
