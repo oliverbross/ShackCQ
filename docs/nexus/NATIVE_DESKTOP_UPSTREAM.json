@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/kd9taw/Nexus.git",
+  "release": "v1.10.3",
+  "commit": "7618390658f8f92431dec0ac65979b84f2c0fb76",
+  "tree": "5819ba0a27f34a8c0505ded93ebb7b0cee2d1d8b",
+  "license": "GPL-3.0-only",
+  "copyingSha256": "b4bbff835ca86b6051284a77138b7b31db215fb3e8aa70221464126cc9ad60fa",
+  "noticeSha256": "9d81579e1d974e0f75f80e090ed8059373ad147c7ac4234d0a49cd7a78849d0f",
+  "submodulePath": "third_party/nexus",
+  "adapterManifest": "desktop/nexus-runtime/Cargo.toml",
+  "enabled": ["ft8", "ft4", "tempo-audio/capture_resample", "tempo-audio/device when live-audio is built"],
+  "disabled": ["rigctld", "OmniRig", "native CI-V", "serial CAT", "Flex CAT", "external loggers", "network telemetry", "Nexus updater", "DeepCW", "WSPR", "legacy modem fallback"]
+}

@@ -1,0 +1,38 @@
+[package]
+name = "shackcq-nexus-runtime"
+version = "0.2.0"
+edition = "2021"
+rust-version = "1.91"
+license = "GPL-3.0-only"
+publish = false
+description = "Supervised local Nexus-native Digi runtime for ShackCQ Desktop"
+
+[features]
+default = []
+live-audio = ["dep:cpal", "tempo-audio/device"]
+
+[lib]
+name = "shackcq_nexus_runtime"
+path = "src/lib.rs"
+
+[[bin]]
+name = "shackcq-nexus-runtime"
+path = "src/main.rs"
+
+[dependencies]
+base64 = "0.22"
+chacha20poly1305 = "0.10"
+cpal = { version = "0.18", optional = true }
+ft4 = { path = "../../third_party/nexus/crates/ft4" }
+ft8 = { path = "../../third_party/nexus/crates/ft8" }
+getrandom = "0.3"
+hex = "0.4"
+rustfft = "6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+tempo-audio = { path = "../../third_party/nexus/crates/tempo-audio", default-features = false }
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"

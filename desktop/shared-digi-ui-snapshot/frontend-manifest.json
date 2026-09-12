@@ -1,0 +1,39 @@
+{
+  "formatVersion": 1,
+  "package": "@shackcq/shared-digi-ui",
+  "packageVersion": "1.0.0",
+  "contract": {
+    "major": 1,
+    "minor": 0
+  },
+  "sourceRevision": "0a134962fca85ffc2646759a152e9e14ab2694d3",
+  "entrypoint": "index.html",
+  "tauriBinding": "fixed-invoke-v1",
+  "tauriCommands": [
+    "digi_list_targets",
+    "digi_read_presence",
+    "digi_submit_command",
+    "digi_configure_audio",
+    "digi_emergency_stop",
+    "digi_set_browser_local_enabled",
+    "digi_submit_completed_contact",
+    "digi_close_session"
+  ],
+  "assets": [
+    {
+      "path": "assets/index-BDL7RTiY.js",
+      "bytes": 233003,
+      "sha256": "cc9d0a2afbfd30a2a7be234539e84533b01c49b4b4d274cd5a829d97d2b389f8"
+    },
+    {
+      "path": "assets/index-Dg6hXE2d.css",
+      "bytes": 74280,
+      "sha256": "1e38eaea857ddc7411982781f62a46ca42af0b87173e7f2af8d1b852450dfa21"
+    },
+    {
+      "path": "index.html",
+      "bytes": 450,
+      "sha256": "adbbb9f1c4f2db5cef543e2a53b75e7d64b172bb9a4ee85557dceb5d799a938d"
+    }
+  ]
+}
