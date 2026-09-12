@@ -73,6 +73,14 @@ if [ "$platform" = windows-x64 ]; then
     )
     test -s "$FFTW_MINGW_PREFIX/lib/libfftw3f.a"
   fi
+  test -s "$FFTW_MINGW_PREFIX/lib/pkgconfig/fftw3f.pc"
+  export PKG_CONFIG_PATH="$FFTW_MINGW_PREFIX/lib/pkgconfig${PKG_CONFIG_PATH:+:$PKG_CONFIG_PATH}"
+  fftw_cmake_prefix=$FFTW_MINGW_PREFIX
+  if command -v cygpath >/dev/null 2>&1; then
+    fftw_cmake_prefix=$(cygpath -w "$FFTW_MINGW_PREFIX")
+  fi
+  export CMAKE_PREFIX_PATH="$fftw_cmake_prefix${CMAKE_PREFIX_PATH:+;$CMAKE_PREFIX_PATH}"
+  test "$(pkg-config --modversion fftw3f)" = "$fftw_version"
   cargo test --locked --manifest-path "$repo/desktop/nexus-runtime/Cargo.toml" \
     --target "$target" --no-run
 else
