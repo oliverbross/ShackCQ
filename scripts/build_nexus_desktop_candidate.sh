@@ -348,7 +348,6 @@ if [ "$platform" = windows-x64 ]; then
     qt_runtime_bin=$(cygpath -u "$qt_runtime_bin")
   fi
   test -d "$qt_runtime_bin"
-  export PATH="$qt_runtime_bin:$PATH"
 fi
 source_sha=$(git -C "$repo" rev-parse HEAD)
 web_sha=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sourceRevision"])' \
@@ -464,12 +463,12 @@ if [ "$platform" = windows-x64 ]; then
   stationd_executable="$agent_build/shackcq-stationd.exe"
   test -x "$stationd_executable"
   stationd_dependency_status=0
-  stationd_dependencies=$(ldd "$stationd_executable" 2>&1) || \
+  stationd_dependencies=$(PATH="$qt_runtime_bin:$PATH" ldd "$stationd_executable" 2>&1) || \
     stationd_dependency_status=$?
   printf '%s\n' "$stationd_dependencies"
   test "$stationd_dependency_status" = 0
   ! printf '%s\n' "$stationd_dependencies" | grep -Eiq 'not found|cannot find|error:'
-  "$stationd_executable" --version
+  PATH="$qt_runtime_bin:$PATH" "$stationd_executable" --version
   windows_runtime_dir="$repo/desktop/shackcq-tauri/.package-windows-runtime-$target"
   cleanup_paths+=("$windows_runtime_dir")
   mkdir -p "$windows_runtime_dir"

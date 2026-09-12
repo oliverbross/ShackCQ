@@ -104,6 +104,9 @@ printf '%s\n' "$linux_acceptance" | grep -F '"${launch_env[@]}"' >/dev/null
 printf '%s\n' "$linux_acceptance" | grep -F 'env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH' >/dev/null
 printf '%s\n' "$linux_acceptance" | grep -F 'SHACKCQ_PACKAGE_RUNTIME_HERMETIC=1 "$agent_path" --package-runtime-probe' >/dev/null
 grep -F 'windeployqt.exe" --release --no-translations' "$candidate" >/dev/null
+! grep -F 'export PATH="$qt_runtime_bin:$PATH"' "$candidate" >/dev/null
+grep -F 'stationd_dependencies=$(PATH="$qt_runtime_bin:$PATH" ldd "$stationd_executable" 2>&1)' "$candidate" >/dev/null
+grep -F 'PATH="$qt_runtime_bin:$PATH" "$stationd_executable" --version' "$candidate" >/dev/null
 grep -F '.package-windows-runtime-$target' "$candidate" >/dev/null
 grep -F 'audit_windows_payload "$nsis_extract" "$windows_app_root"' "$candidate" >/dev/null
 windows_acceptance=$(sed -n '/^accept_windows_payload()/,/^}/p' "$candidate")
