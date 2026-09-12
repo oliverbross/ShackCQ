@@ -11,10 +11,20 @@ nexus_patch_applied=0
 fftw_build=
 stationd_pid=
 stationd_executable=
-owner_token=
+owned_stationd_token=
+owned_stationd_socket=
+main_pid=
+cleanup_paths=()
 stop_owned_stationd() {
   if [ -n "$stationd_pid" ]; then
-    "$stationd_executable" --stop --native-owner-token "$owner_token" >/dev/null 2>&1 || true
+    if [ -n "$owned_stationd_socket" ]; then
+      "$stationd_executable" --admin-socket "$owned_stationd_socket" --stop \
+        --native-owner-token "$owned_stationd_token" >/dev/null 2>&1 || true
+    else
+      "$stationd_executable" --stop --native-owner-token "$owned_stationd_token" \
+        >/dev/null 2>&1 || true
+    fi
+    kill "$stationd_pid" 2>/dev/null || true
     wait "$stationd_pid" 2>/dev/null || true
     stationd_pid=
   fi
@@ -22,6 +32,11 @@ stop_owned_stationd() {
 cleanup() {
   cleanup_status=$?
   set +e
+  if [ -n "$main_pid" ]; then
+    kill "$main_pid" 2>/dev/null || true
+    wait "$main_pid" 2>/dev/null || true
+    main_pid=
+  fi
   stop_owned_stationd
   if [ "$nexus_patch_applied" = 1 ]; then
     if ! git -C "$repo/third_party/nexus" apply --unidiff-zero --reverse "$nexus_windows_path_patch"; then
@@ -31,6 +46,9 @@ cleanup() {
   fi
   if [ -n "$fftw_build" ]; then
     rm -rf "$fftw_build"
+  fi
+  if [ "${#cleanup_paths[@]}" -gt 0 ]; then
+    rm -rf "${cleanup_paths[@]}"
   fi
   exit "$cleanup_status"
 }
@@ -165,8 +183,11 @@ export SHACKCQ_TAURI_TARGET="$target"
 sh "$repo/desktop/shackcq-tauri/scripts/build-stationd-sidecar.sh"
 if [ "$platform" = windows-x64 ]; then
   isolated_root="${RUNNER_TEMP:-$repo/build}/shackcq-windows-agent-proof"
+  cleanup_paths+=("$isolated_root")
   owner_token=$(printf 'a%.0s' {1..64})
   stationd_executable="$agent_build/shackcq-stationd.exe"
+  owned_stationd_token=$owner_token
+  owned_stationd_socket=
   rm -rf "$isolated_root"
   "$stationd_executable" --foreground --native-ingress-only \
     --native-owner-token "$owner_token" --ephemeral-root "$isolated_root" \
@@ -278,6 +299,7 @@ accept_linux_payload() {
   local payload_root=$1 label=$2
   local payload_tmp agent_path nexus_path main_path socket_path owner_token lib_path main_rc
   payload_tmp=$(mktemp -d)
+  cleanup_paths+=("$payload_tmp")
   agent_path=$(find "$payload_root" -type f -name shackcq-stationd -perm -111 -print -quit)
   nexus_path=$(find "$payload_root" -type f -name shackcq-nexus-runtime -perm -111 -print -quit)
   main_path=$(find "$payload_root" -type f -name shackcq-desktop -perm -111 -print -quit)
@@ -289,7 +311,10 @@ accept_linux_payload() {
     "$agent_path" --foreground --native-ingress-only \
       --native-owner-token "$owner_token" --admin-socket "$socket_path" \
       --ephemeral-root "$payload_tmp/agent" --ephemeral-credentials &
-  local agent_pid=$!
+  stationd_pid=$!
+  stationd_executable=$agent_path
+  owned_stationd_socket=$socket_path
+  owned_stationd_token=$owner_token
   for _ in {1..50}; do
     LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
       "$agent_path" --admin-socket "$socket_path" --status >/dev/null 2>&1 && break
@@ -303,7 +328,10 @@ accept_linux_payload() {
   LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
     "$agent_path" --admin-socket "$socket_path" --stop \
       --native-owner-token "$owner_token" >/dev/null
-  wait "$agent_pid"
+  wait "$stationd_pid"
+  stationd_pid=
+  owned_stationd_socket=
+  owned_stationd_token=
   probe_nexus_identity "$nexus_path" "$payload_tmp/nexus"
 
   mkdir -p "$payload_tmp/home" "$payload_tmp/runtime" "$payload_tmp/config" "$payload_tmp/data"
@@ -319,7 +347,10 @@ accept_linux_payload() {
     "$main_path" >"$payload_tmp/main.log" 2>&1
   main_rc=$?
   set -e
-  test "$main_rc" -eq 0 -o "$main_rc" -eq 124
+  if [ "$main_rc" -ne 0 ]; then
+    cat "$payload_tmp/main.log" >&2
+    return 1
+  fi
   sleep 1
   ! pgrep -f "$payload_root/.*/shackcq-(desktop|stationd|nexus-runtime)" >/dev/null
   printf 'PACKAGED_%s_SAFE_LAUNCH_OK hardware=not-opened tx=disabled\n' "$label"
@@ -330,6 +361,7 @@ accept_windows_payload() {
   local payload_root=$1
   local payload_tmp agent_path nexus_path main_path socket_name owner_token main_rc
   payload_tmp=$(mktemp -d)
+  cleanup_paths+=("$payload_tmp")
   agent_path=$(find "$payload_root" -type f -iname shackcq-stationd.exe -print -quit)
   nexus_path=$(find "$payload_root" -type f -iname shackcq-nexus-runtime.exe -print -quit)
   main_path=$(find "$payload_root" -type f -iname shackcq-desktop.exe -print -quit)
@@ -342,7 +374,10 @@ accept_windows_payload() {
   "$agent_path" --foreground --native-ingress-only \
     --native-owner-token "$owner_token" --admin-socket "$socket_name" \
     --ephemeral-root "$payload_tmp/agent" --ephemeral-credentials &
-  local agent_pid=$!
+  stationd_pid=$!
+  stationd_executable=$agent_path
+  owned_stationd_socket=$socket_name
+  owned_stationd_token=$owner_token
   for _ in {1..50}; do
     "$agent_path" --admin-socket "$socket_name" --status >/dev/null 2>&1 && break
     sleep 0.1
@@ -352,21 +387,37 @@ accept_windows_payload() {
       --native-owner-token "$(printf 'c%.0s' {1..64})" >/dev/null 2>&1
   "$agent_path" --admin-socket "$socket_name" --stop \
     --native-owner-token "$owner_token" >/dev/null
-  wait "$agent_pid"
+  wait "$stationd_pid"
+  stationd_pid=
+  owned_stationd_socket=
+  owned_stationd_token=
   probe_nexus_identity "$nexus_path" "$payload_tmp/nexus"
 
   mkdir -p "$payload_tmp/home"
-  set +e
-  timeout 8s env HOME="$payload_tmp/home" APPDATA="$payload_tmp/home/AppData/Roaming" \
+  env HOME="$payload_tmp/home" APPDATA="$payload_tmp/home/AppData/Roaming" \
     LOCALAPPDATA="$payload_tmp/home/AppData/Local" \
     SHACKCQ_AGENT_ADMIN_SOCKET="shackcq-package-main-$RANDOM-$RANDOM" \
     SHACKCQ_AGENT_EPHEMERAL_ROOT="$payload_tmp/main-agent" \
     SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
     SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 "$main_path" \
-    >"$payload_tmp/main.log" 2>&1
-  main_rc=$?
-  set -e
-  test "$main_rc" -eq 0 -o "$main_rc" -eq 124
+    >"$payload_tmp/main.log" 2>&1 &
+  main_pid=$!
+  main_rc=125
+  for _ in {1..80}; do
+    if ! kill -0 "$main_pid" 2>/dev/null; then
+      set +e
+      wait "$main_pid"
+      main_rc=$?
+      set -e
+      main_pid=
+      break
+    fi
+    sleep 0.1
+  done
+  if [ "$main_rc" -ne 0 ]; then
+    cat "$payload_tmp/main.log" >&2
+    return 1
+  fi
   sleep 1
   ! tasklist.exe | tr -d '\r' | grep -Eiq 'shackcq-(desktop|stationd|nexus-runtime)\.exe'
   echo 'PACKAGED_WINDOWS_SAFE_LAUNCH_OK hardware=not-opened tx=disabled'
@@ -380,6 +431,7 @@ case "$platform" in
     package_name=$(basename "${packages[0]}" .exe)
     cp "${packages[0]}" "$output/${package_name}-UNSIGNED-UNNOTARIZED.exe"
     nsis_extract=$(mktemp -d)
+    cleanup_paths+=("$nsis_extract")
     7z x -y -o"$nsis_extract" "${packages[0]}" >/dev/null
     for packaged in shackcq-nexus-runtime.exe shackcq-stationd.exe shackcq-hamlib-helper.exe; do
       7z l "${packages[0]}" | grep -Fq "$packaged"
@@ -411,6 +463,7 @@ case "$platform" in
     cp "${appimages[0]}" "$output/${appimage_name}-UNSIGNED-UNNOTARIZED.AppImage"
     dpkg-deb -c "${debs[0]}" > "$output/DEBIAN_CONTENTS.txt"
     appimage_extract=$(mktemp -d)
+    cleanup_paths+=("$appimage_extract")
     (
       cd "$appimage_extract"
       "${appimages[0]}" --appimage-extract >/dev/null
@@ -418,6 +471,7 @@ case "$platform" in
     ) > "$output/APPIMAGE_CONTENTS.txt"
     accept_linux_payload "$appimage_extract/squashfs-root" APPIMAGE
     deb_extract=$(mktemp -d)
+    cleanup_paths+=("$deb_extract")
     dpkg-deb -x "${debs[0]}" "$deb_extract"
     accept_linux_payload "$deb_extract" DEB
     rm -rf "$appimage_extract" "$deb_extract"

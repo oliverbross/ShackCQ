@@ -7,6 +7,7 @@ candidate="$repo/scripts/build_nexus_desktop_candidate.sh"
 
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 test "$(grep -Ec '^trap (cleanup )?EXIT$|^trap - EXIT$' "$candidate")" = 1
+! grep -Eq 'main_rc.*124|main_rc" -eq 124' "$candidate"
 
 SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
   "$candidate" windows-x64 "$repo/build/overlay-cleanup-success"

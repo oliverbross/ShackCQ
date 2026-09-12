@@ -16,6 +16,49 @@ openssl_root="$repo/build/desktop/nexus-openssl-macos-13"
 export SHACKCQ_DESKTOP_BUILD_DIR="$build_dir"
 export MACOSX_DEPLOYMENT_TARGET=13.0
 
+acceptance_root=
+stage=
+mount_point=
+mounted_acceptance=
+stationd_pid=
+mounted_stationd_pid=
+mounted_main_pid=
+stationd=
+mounted_stationd=
+acceptance_socket=
+mounted_socket=
+owner_token=
+mounted_owner=
+cleanup() {
+  cleanup_status=$?
+  trap - EXIT HUP INT TERM
+  set +e
+  if [ -n "$mounted_main_pid" ]; then
+    kill "$mounted_main_pid" 2>/dev/null || true
+    wait "$mounted_main_pid" 2>/dev/null || true
+  fi
+  if [ -n "$mounted_stationd_pid" ]; then
+    "$mounted_stationd" --admin-socket "$mounted_socket" --stop \
+      --native-owner-token "$mounted_owner" >/dev/null 2>&1 || true
+    kill "$mounted_stationd_pid" 2>/dev/null || true
+    wait "$mounted_stationd_pid" 2>/dev/null || true
+  fi
+  if [ -n "$stationd_pid" ]; then
+    "$stationd" --admin-socket "$acceptance_socket" --stop \
+      --native-owner-token "$owner_token" >/dev/null 2>&1 || true
+    kill "$stationd_pid" 2>/dev/null || true
+    wait "$stationd_pid" 2>/dev/null || true
+  fi
+  if [ -n "$mount_point" ]; then
+    hdiutil detach "$mount_point" >/dev/null 2>&1 || true
+  fi
+  [ -z "$acceptance_root" ] || rm -rf "$acceptance_root"
+  [ -z "$stage" ] || rm -rf "$stage"
+  [ -z "$mounted_acceptance" ] || rm -rf "$mounted_acceptance"
+  exit "$cleanup_status"
+}
+trap cleanup EXIT HUP INT TERM
+
 test ! -e "$output/COMPONENT_MANIFEST.json"
 test ! -e "$output/ShackCQ-Desktop-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
 
@@ -72,9 +115,9 @@ cp "$repo/COPYING" "$repo/NOTICE" "$app/Contents/Resources/"
 python3 "$repo/scripts/audit_macos_nexus_desktop.py" --repair-install-ids "$app"
 manifest="$output/COMPONENT_MANIFEST.json"
 mkdir -p "$output"
-python3 "$repo/scripts/audit_macos_nexus_desktop.py" --manifest "$manifest" "$app"
 codesign --force --deep --sign - "$app"
 codesign --verify --deep --strict --verbose=2 "$app"
+python3 "$repo/scripts/audit_macos_nexus_desktop.py" --manifest "$manifest" "$app"
 
 # Launch only the newly assembled headless sidecar, with a unique socket,
 # disposable paths, an in-memory credential vault, and hardware autoconnect off.
@@ -107,6 +150,7 @@ jq -e '.ok == true and .result.hardwareAutoconnect == false and .result.nativeIn
 "$stationd" --admin-socket "$acceptance_socket" \
   --native-owner-token "$owner_token" --stop >/dev/null
 wait "$stationd_pid"
+stationd_pid=
 printf 'PACKAGED_NATIVE_INGRESS_ONLY_OK hardwareAutoconnect=false\n'
 
 fixture="$repo/third_party/nexus/crates/ft8/tests/fixtures/ft8_sample.wav"
@@ -130,9 +174,9 @@ jq -e '.ok == true and .code == "REFERENCE_RECORDING_DECODED" and
   "$acceptance_root/reference-result.json" >/dev/null
 printf 'PACKAGED_REFERENCE_RECORDING_OK source=REFERENCE_RECORDING expected="CQ F5RXL IN94"\n'
 rm -rf "$acceptance_root"
+acceptance_root=
 
 stage=$(mktemp -d "${TMPDIR:-/tmp}/shackcq-nexus-desktop.XXXXXX")
-trap 'rm -rf "$stage"' EXIT HUP INT TERM
 ditto "$app" "$stage/ShackCQ Desktop.app"
 ln -s /Applications "$stage/Applications"
 dmg="$output/ShackCQ-Desktop-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
@@ -148,11 +192,6 @@ mounted_nexus="$mounted_app/Contents/MacOS/shackcq-nexus-runtime"
 mounted_main="$mounted_app/Contents/MacOS/shackcq-desktop"
 test -x "$mounted_stationd" && test -x "$mounted_nexus" && test -x "$mounted_main"
 mounted_acceptance=$(mktemp -d "${TMPDIR:-/tmp}/shackcq-mounted-acceptance.XXXXXX")
-cleanup() {
-  hdiutil detach "$mount_point" >/dev/null 2>&1 || true
-  rm -rf "$stage" "$mounted_acceptance"
-}
-trap cleanup EXIT HUP INT TERM
 
 mounted_socket="shackcq-mounted-$$"
 mounted_owner=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
@@ -171,6 +210,7 @@ jq -e '.ok == true and .result.hardwareAutoconnect == false and .result.nativeIn
 "$mounted_stationd" --admin-socket "$mounted_socket" \
   --native-owner-token "$mounted_owner" --stop >/dev/null
 wait "$mounted_stationd_pid"
+mounted_stationd_pid=
 
 python3 - "$fixture" "$fixture_sha" <<'PY' >"$mounted_acceptance/reference-request.json"
 import json
@@ -202,15 +242,23 @@ for launch in 1 2 3; do
     "$mounted_main" >"$mounted_acceptance/main-$launch.log" 2>&1 &
   mounted_main_pid=$!
   main_exited=0
+  main_rc=125
   for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60; do
     if ! kill -0 "$mounted_main_pid" 2>/dev/null; then
+      set +e
       wait "$mounted_main_pid"
+      main_rc=$?
+      set -e
+      mounted_main_pid=
       main_exited=1
       break
     fi
     sleep 0.1
   done
-  test "$main_exited" = 1
+  if [ "$main_exited" != 1 ] || [ "$main_rc" != 0 ]; then
+    cat "$mounted_acceptance/main-$launch.log" >&2
+    exit 1
+  fi
 done
 sleep 0.5
 ! pgrep -f "$mount_point/.*/shackcq-(desktop|stationd|nexus-runtime)" >/dev/null
