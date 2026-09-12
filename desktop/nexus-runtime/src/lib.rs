@@ -35,6 +35,11 @@ pub const MAX_DECODE_ROWS: usize = 200;
 pub enum DigiMode {
     Ft8,
     Ft4,
+    Ft2,
+    Fst4,
+    Q65,
+    Msk144,
+    Jt65,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -67,7 +72,7 @@ impl Default for EngineIdentity {
             upstream_release: NEXUS_RELEASE.into(),
             upstream_commit: NEXUS_COMMIT.into(),
             adapter_version: env!("CARGO_PKG_VERSION").into(),
-            compiled_modes: vec![DigiMode::Ft8, DigiMode::Ft4],
+            compiled_modes: supported_modes(),
             legacy_fallback: false,
         }
     }
@@ -91,7 +96,7 @@ pub struct Capabilities {
 impl Default for Capabilities {
     fn default() -> Self {
         Self {
-            native_decode: vec![DigiMode::Ft8, DigiMode::Ft4],
+            native_decode: supported_modes(),
             encoder_sinks: vec!["NULL".into(), "TEST_FILE".into()],
             live_audio_input: cfg!(feature = "live-audio"),
             audio_output: false,
@@ -114,6 +119,8 @@ pub struct RxProfile {
     pub channel: u16,
     pub input_rate_hz: u32,
     pub mode: DigiMode,
+    #[serde(default)]
+    pub submode: Option<String>,
 }
 
 impl RxProfile {
@@ -132,7 +139,93 @@ impl RxProfile {
         if self.channel > 63 || !(8_000..=384_000).contains(&self.input_rate_hz) {
             return Err(RuntimeError::InvalidProfile);
         }
+        mode_shape(self.mode, self.submode.as_deref())?;
         Ok(())
+    }
+}
+
+fn supported_modes() -> Vec<DigiMode> {
+    vec![
+        DigiMode::Ft8,
+        DigiMode::Ft4,
+        DigiMode::Ft2,
+        DigiMode::Fst4,
+        DigiMode::Q65,
+        DigiMode::Msk144,
+        DigiMode::Jt65,
+    ]
+}
+
+fn parse_period(
+    value: Option<&str>,
+    fallback: u16,
+    supported: &[u16],
+) -> Result<u16, RuntimeError> {
+    let period = match value {
+        None | Some("") => fallback,
+        Some(value) if value.is_ascii() && value.bytes().all(|byte| byte.is_ascii_digit()) => value
+            .parse::<u16>()
+            .map_err(|_| RuntimeError::UnsupportedMode)?,
+        Some(_) => return Err(RuntimeError::UnsupportedMode),
+    };
+    supported
+        .contains(&period)
+        .then_some(period)
+        .ok_or(RuntimeError::UnsupportedMode)
+}
+
+fn q65_shape(value: Option<&str>) -> Result<(u16, u8), RuntimeError> {
+    let value = value.unwrap_or("30A");
+    if !value.is_ascii() || value.len() < 2 {
+        return Err(RuntimeError::UnsupportedMode);
+    }
+    let (period, letter) = value.split_at(value.len() - 1);
+    let period = parse_period(Some(period), 30, &q65::PERIODS)?;
+    let submode = letter
+        .as_bytes()
+        .first()
+        .copied()
+        .and_then(|v| v.checked_sub(b'A'))
+        .filter(|v| *v < q65::NSUBMODES)
+        .ok_or(RuntimeError::UnsupportedMode)?;
+    Ok((period, submode))
+}
+
+fn jt65_submode(value: Option<&str>) -> Result<u8, RuntimeError> {
+    let value = value.unwrap_or("A");
+    if !value.is_ascii() || value.len() != 1 {
+        return Err(RuntimeError::UnsupportedMode);
+    }
+    value
+        .as_bytes()
+        .first()
+        .copied()
+        .and_then(|v| v.checked_sub(b'A'))
+        .filter(|v| *v < jt65::NSUBMODES)
+        .ok_or(RuntimeError::UnsupportedMode)
+}
+
+fn mode_shape(mode: DigiMode, submode: Option<&str>) -> Result<(u64, usize), RuntimeError> {
+    match mode {
+        DigiMode::Ft8 => Ok((15_000, ft8::NMAX)),
+        DigiMode::Ft4 => Ok((7_500, ft4::NMAX)),
+        DigiMode::Ft2 => Ok((3_750, ft2::NMAX)),
+        DigiMode::Fst4 => {
+            let period = parse_period(submode, 15, &fst4::PERIODS)?;
+            Ok((u64::from(period) * 1000, fst4::nmax(period)))
+        }
+        DigiMode::Q65 => {
+            let (period, _) = q65_shape(submode)?;
+            Ok((u64::from(period) * 1000, q65::nmax(period)))
+        }
+        DigiMode::Msk144 => {
+            let period = parse_period(submode, 15, &msk144::PERIODS)?;
+            Ok((u64::from(period) * 1000, msk144::nmax(period)))
+        }
+        DigiMode::Jt65 => {
+            jt65_submode(submode)?;
+            Ok((60_000, jt65::NMAX))
+        }
     }
 }
 
@@ -185,6 +278,19 @@ impl FrameDecoder {
         mode: DigiMode,
         samples: &[i16],
     ) -> Result<CaptureFrameOutput, RuntimeError> {
+        Self::process_configured_capture_frame(mode, None, samples, 0)
+    }
+
+    pub fn process_configured_capture_frame(
+        mode: DigiMode,
+        submode: Option<&str>,
+        samples: &[i16],
+        slot_start_millis: u64,
+    ) -> Result<CaptureFrameOutput, RuntimeError> {
+        let (_, required) = mode_shape(mode, submode)?;
+        if samples.len() < required {
+            return Err(RuntimeError::InvalidProfile);
+        }
         let decodes = match mode {
             DigiMode::Ft8 => {
                 if samples.len() < ft8::NMAX {
@@ -202,11 +308,31 @@ impl FrameDecoder {
                     })
                     .collect()
             }
-            DigiMode::Ft4 => {
-                if samples.len() < ft4::NMAX {
-                    return Err(RuntimeError::InvalidProfile);
-                }
-                ft4::decode_frame(samples, 200, 2900, 3, "", "", 0, 0, false)
+            DigiMode::Ft4 => ft4::decode_frame(samples, 200, 2900, 3, "", "", 0, 0, false)
+                .into_iter()
+                .take(MAX_DECODE_ROWS)
+                .map(|d| FrameDecode {
+                    message: d.message,
+                    snr_db: d.snr,
+                    dt_seconds: d.dt,
+                    audio_hz: d.freq,
+                    quality: d.qual,
+                })
+                .collect(),
+            DigiMode::Ft2 => ft2::decode_frame(samples, 200, 2900, 3, "", "", 0)
+                .into_iter()
+                .take(MAX_DECODE_ROWS)
+                .map(|d| FrameDecode {
+                    message: d.message,
+                    snr_db: d.snr,
+                    dt_seconds: d.dt,
+                    audio_hz: d.freq,
+                    quality: 0.0,
+                })
+                .collect(),
+            DigiMode::Fst4 => {
+                let period = parse_period(submode, 15, &fst4::PERIODS)?;
+                fst4::decode_frame(samples, period, false, 100, 2900, 3, "", "", 0, 1500)
                     .into_iter()
                     .take(MAX_DECODE_ROWS)
                     .map(|d| FrameDecode {
@@ -215,6 +341,49 @@ impl FrameDecoder {
                         dt_seconds: d.dt,
                         audio_hz: d.freq,
                         quality: d.qual,
+                    })
+                    .collect()
+            }
+            DigiMode::Q65 => {
+                let (period, variant) = q65_shape(submode)?;
+                q65::decode_frame(samples, period, variant, 100, 5500, 3, "", "", "", 0, 1500)
+                    .into_iter()
+                    .take(MAX_DECODE_ROWS)
+                    .map(|d| FrameDecode {
+                        message: d.message,
+                        snr_db: d.snr,
+                        dt_seconds: d.dt,
+                        audio_hz: d.freq,
+                        quality: d.sync,
+                    })
+                    .collect()
+            }
+            DigiMode::Msk144 => {
+                let period = parse_period(submode, 15, &msk144::PERIODS)?;
+                let period_label = (slot_start_millis / 1000).min(i32::MAX as u64) as i32;
+                msk144::decode_frame(samples, period, period_label, 0, 0, 3, "", "", 1500)
+                    .into_iter()
+                    .take(MAX_DECODE_ROWS)
+                    .map(|d| FrameDecode {
+                        message: d.message,
+                        snr_db: d.snr,
+                        dt_seconds: d.dt,
+                        audio_hz: d.freq,
+                        quality: 0.0,
+                    })
+                    .collect()
+            }
+            DigiMode::Jt65 => {
+                let variant = jt65_submode(submode)?;
+                jt65::decode_frame(samples, variant, 100, 5500, 3, "", "", "", 1500)
+                    .into_iter()
+                    .take(MAX_DECODE_ROWS)
+                    .map(|d| FrameDecode {
+                        message: d.message,
+                        snr_db: d.snr,
+                        dt_seconds: d.dt,
+                        audio_hz: d.freq,
+                        quality: d.qual as f32,
                     })
                     .collect()
             }
@@ -264,24 +433,19 @@ pub struct SlotFrameAligner {
 }
 impl SlotFrameAligner {
     pub fn new(mode: DigiMode) -> Self {
-        match mode {
-            DigiMode::Ft8 => Self {
-                slot_millis: 15_000,
-                frame_samples: ft8::NMAX,
-                pending: Vec::with_capacity(ft8::NMAX),
-                slot_start: None,
-                expected_next_millis: None,
-                clock_resets: 0,
-            },
-            DigiMode::Ft4 => Self {
-                slot_millis: 7_500,
-                frame_samples: ft4::NMAX,
-                pending: Vec::with_capacity(ft4::NMAX),
-                slot_start: None,
-                expected_next_millis: None,
-                clock_resets: 0,
-            },
-        }
+        Self::with_submode(mode, None).expect("default mode shape")
+    }
+
+    pub fn with_submode(mode: DigiMode, submode: Option<&str>) -> Result<Self, RuntimeError> {
+        let (slot_millis, frame_samples) = mode_shape(mode, submode)?;
+        Ok(Self {
+            slot_millis,
+            frame_samples,
+            pending: Vec::with_capacity(frame_samples),
+            slot_start: None,
+            expected_next_millis: None,
+            clock_resets: 0,
+        })
     }
     pub fn clock_resets(&self) -> u64 {
         self.clock_resets
@@ -648,6 +812,21 @@ impl StationRuntime {
         let samples = match mode {
             DigiMode::Ft8 => ft8::gen_wave(&ft8::encode(message), ft8::SAMPLE_RATE, 1500.0),
             DigiMode::Ft4 => ft4::gen_wave(&ft4::encode(message), ft4::SAMPLE_RATE, 1500.0),
+            DigiMode::Ft2 => ft2::encode(message)
+                .and_then(|tones| ft2::gen_wave(&tones, 1500.0))
+                .unwrap_or_default(),
+            DigiMode::Fst4 => fst4::encode(message, false)
+                .and_then(|tones| fst4::gen_wave(&tones, 15, 1, fst4::SAMPLE_RATE, 1500.0))
+                .unwrap_or_default(),
+            DigiMode::Q65 => q65::encode(message)
+                .and_then(|tones| q65::gen_wave(&tones, 30, 0, q65::SAMPLE_RATE, 1500.0))
+                .unwrap_or_default(),
+            DigiMode::Msk144 => msk144::encode(message)
+                .and_then(|tones| msk144::gen_wave(&tones, 15, msk144::SAMPLE_RATE, 1500.0))
+                .unwrap_or_default(),
+            DigiMode::Jt65 => jt65::encode(message)
+                .and_then(|tones| jt65::gen_wave(&tones, 0, jt65::SAMPLE_RATE, 1500.0))
+                .unwrap_or_default(),
         };
         if samples.is_empty() {
             return Err(RuntimeError::InvalidProfile);

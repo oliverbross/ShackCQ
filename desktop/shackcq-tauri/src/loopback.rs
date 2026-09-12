@@ -362,7 +362,7 @@ fn serve_validated(mut req: tiny_http::Request, state: &Backend, access: &Mutex<
         return;
     }
     match (&method, path.as_str()) {
-        (&Method::Get, "/v1/digi/targets") => respond(req, 200, digi_list_targets()),
+        (&Method::Get, "/v1/digi/targets") => respond(req, 200, list_targets_backend()),
         (&Method::Get, "/v1/digi/state") => {
             let query = req.url().split_once('?').map(|x| x.1).unwrap_or("");
             let mut agent = None;

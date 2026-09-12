@@ -11,10 +11,12 @@ case "$platform" in
   windows-x64)
     target=x86_64-pc-windows-gnu
     bundles=nsis
+    agent_qt_version=6.10.2
     ;;
   linux-x86_64)
     target=x86_64-unknown-linux-gnu
     bundles=deb,appimage
+    agent_qt_version=6.11.2
     ;;
   *)
     echo "usage: $0 {windows-x64|linux-x86_64} OUTPUT_DIRECTORY" >&2
@@ -23,13 +25,21 @@ case "$platform" in
 esac
 test -n "$output" || { echo "output directory is required" >&2; exit 64; }
 qt_prefix=${SHACKCQ_QT_PREFIX:?SHACKCQ_QT_PREFIX is required}
+if command -v npx >/dev/null 2>&1; then
+  npx_command=npx
+elif command -v npx.cmd >/dev/null 2>&1; then
+  npx_command=npx.cmd
+else
+  echo "missing npx command" >&2
+  exit 1
+fi
 
 test "$(git -C "$repo" rev-parse HEAD)" = "${GITHUB_SHA:-$(git -C "$repo" rev-parse HEAD)}"
 git -C "$repo" merge-base --is-ancestor 68cebdc2991cf9754477e29ac82228de6f8b8107 HEAD
 test "$(git -C "$repo/third_party/nexus" rev-parse HEAD)" = 7618390658f8f92431dec0ac65979b84f2c0fb76
 python3 "$repo/scripts/check_nexus_native_desktop.py"
 python3 "$repo/desktop/shackcq-tauri/scripts/verify-shared-ui.py"
-test "$(npx --yes "@tauri-apps/cli@${tauri_cli_version}" --version | awk '{print $NF}')" = "$tauri_cli_version"
+test "$("$npx_command" --yes "@tauri-apps/cli@${tauri_cli_version}" --version | awk '{print $NF}')" = "$tauri_cli_version"
 
 if [ "$platform" = windows-x64 ]; then
   for tool in x86_64-w64-mingw32-gcc x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gfortran cmake curl make ninja makensis sha256sum tar; do
@@ -72,11 +82,38 @@ cmake -S "$repo/desktop" -B "$agent_build" -G Ninja \
   -DCMAKE_PREFIX_PATH="$qt_prefix" \
   -DSHACKCQ_BUILD_TESTS=OFF \
   -DSHACKCQ_BUILD_NATIVE_DIGI=OFF \
+  -DSHACKCQ_QT_VERSION="$agent_qt_version" \
   -DSHACKCQ_REQUIRE_HAMLIB=ON \
   -DSHACKCQ_HAMLIB_ROOT="$hamlib_root"
 export SHACKCQ_DESKTOP_BUILD_DIR="$agent_build"
 export SHACKCQ_TAURI_TARGET="$target"
 sh "$repo/desktop/shackcq-tauri/scripts/build-stationd-sidecar.sh"
+if [ "$platform" = windows-x64 ]; then
+  isolated_root="${RUNNER_TEMP:-$repo/build}/shackcq-windows-agent-proof"
+  owner_token=$(printf 'a%.0s' {1..64})
+  stationd_executable="$agent_build/shackcq-stationd.exe"
+  rm -rf "$isolated_root"
+  "$stationd_executable" --foreground --native-ingress-only \
+    --native-owner-token "$owner_token" --ephemeral-root "$isolated_root" \
+    --ephemeral-credentials &
+  stationd_pid=$!
+  stop_stationd() {
+    "$stationd_executable" --stop --native-owner-token "$owner_token" >/dev/null 2>&1 || true
+    wait "$stationd_pid" 2>/dev/null || true
+  }
+  trap stop_stationd EXIT
+  for _ in {1..40}; do
+    "$stationd_executable" --status >/dev/null 2>&1 && break
+    sleep 0.1
+  done
+  "$stationd_executable" --status >/dev/null
+  SHACKCQ_TEST_WINDOWS_AGENT_PIPE=1 \
+    SHACKCQ_TEST_WINDOWS_AGENT_OWNER_TOKEN="$owner_token" cargo test --locked \
+    --manifest-path "$repo/desktop/shackcq-tauri/Cargo.toml" --target "$target" \
+    agent_ingress::tests::windows_named_pipe_reaches_the_isolated_qt_agent
+  stop_stationd
+  trap - EXIT
+fi
 CARGO_BUILD_TARGET="$target" "$repo/scripts/build_nexus_native_sidecar.sh"
 tauri_args=(build --ci --no-sign --target "$target" --bundles "$bundles")
 if [ "$platform" = linux-x86_64 ]; then
@@ -85,7 +122,7 @@ fi
 tauri_args+=(-- --locked)
 (
   cd "$repo/desktop/shackcq-tauri"
-  npx --yes "@tauri-apps/cli@${tauri_cli_version}" "${tauri_args[@]}"
+  "$npx_command" --yes "@tauri-apps/cli@${tauri_cli_version}" "${tauri_args[@]}"
 )
 git -C "$repo" diff --exit-code -- \
   desktop/nexus-runtime/Cargo.lock desktop/shackcq-tauri/Cargo.lock
@@ -188,7 +225,7 @@ DISTRIBUTION=GITHUB_WORKFLOW_ARTIFACT_ONLY
 RUN_ACCEPTANCE=NOT_PERFORMED
 PACKAGE_SCOPE=TAURI_DIGI_DESKTOP_WITH_OWNED_NATIVE_INGRESS_AGENT_AND_HAMLIB_HELPER
 CANONICAL_LOGBOOK_AGENT=BUNDLED_CONNECT_EXISTING_OR_OWNED_NO_HARDWARE_AUTOCONNECT
-WINDOWS_CANONICAL_LOGBOOK_AGENT_BUILD=CI_PROOF_REQUIRED_NATIVE_MINGW_QT_6_11_2
+WINDOWS_CANONICAL_LOGBOOK_AGENT_BUILD=CI_PROOF_REQUIRED_NATIVE_MINGW_QT_6_10_2
 LINUX_CANONICAL_LOGBOOK_AGENT_BUILD=CI_PROOF_REQUIRED_NATIVE_QT_6_11_2
 PHYSICAL_AUDIO_CAT_ACCEPTANCE=PENDING
 RF_TX_ACCEPTANCE=NOT_AUTHORIZED

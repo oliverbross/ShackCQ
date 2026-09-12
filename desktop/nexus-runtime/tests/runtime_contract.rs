@@ -16,7 +16,15 @@ fn identity_is_exact_and_has_no_legacy_fallback() {
     assert_eq!(snapshot.identity.upstream_commit, NEXUS_COMMIT);
     assert_eq!(
         snapshot.identity.compiled_modes,
-        vec![DigiMode::Ft8, DigiMode::Ft4]
+        vec![
+            DigiMode::Ft8,
+            DigiMode::Ft4,
+            DigiMode::Ft2,
+            DigiMode::Fst4,
+            DigiMode::Q65,
+            DigiMode::Msk144,
+            DigiMode::Jt65,
+        ]
     );
     assert!(!snapshot.identity.legacy_fallback);
     assert!(!snapshot.capabilities.tx_enabled);
@@ -35,6 +43,7 @@ fn configuration_is_inert_and_stop_fails_closed() {
             channel: 1,
             input_rate_hz: 48_000,
             mode: DigiMode::Ft8,
+            submode: None,
         })
         .unwrap();
     assert_eq!(runtime.snapshot().state, RuntimeState::Configured);
@@ -116,6 +125,7 @@ fn generation_and_launch_nonce_are_enforced_but_stop_is_never_stale() {
             channel: 0,
             input_rate_hz: 12_000,
             mode: DigiMode::Ft4,
+            submode: None,
         }),
     };
     assert!(runtime.process(configure, "nonce").ok);

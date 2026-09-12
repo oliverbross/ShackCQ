@@ -138,9 +138,16 @@ fn transport(request: Vec<u8>) -> Value {
     classify_response(&response)
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 fn transport(_: Vec<u8>) -> Value {
     json!({"ok":false,"code":"AGENT_NATIVE_INGRESS_UNAVAILABLE"})
+}
+
+#[cfg(windows)]
+fn transport(request: Vec<u8>) -> Value {
+    plain_request(&request)
+        .and_then(|value| value.get("result").cloned())
+        .unwrap_or_else(|| json!({"ok":false,"code":"AGENT_NATIVE_DELIVERY_UNKNOWN"}))
 }
 
 fn classify_response(bytes: &[u8]) -> Value {
@@ -168,7 +175,121 @@ fn plain_request(request: &[u8]) -> Option<Value> {
         .flatten()
 }
 
-#[cfg(unix)]
+#[cfg(windows)]
+fn plain_request(request: &[u8]) -> Option<Value> {
+    use std::ffi::OsStr;
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Storage::FileSystem::{
+        CreateFileW, ReadFile, WriteFile, FILE_ATTRIBUTE_NORMAL, GENERIC_READ, GENERIC_WRITE,
+        OPEN_EXISTING,
+    };
+    use windows_sys::Win32::System::Pipes::WaitNamedPipeW;
+
+    let path = OsStr::new(r"\\.\pipe\shackcq-stationd-v1")
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    unsafe {
+        if WaitNamedPipeW(path.as_ptr(), 3_000) == 0 {
+            return None;
+        }
+        let handle = CreateFileW(
+            path.as_ptr(),
+            GENERIC_READ | GENERIC_WRITE,
+            0,
+            std::ptr::null(),
+            OPEN_EXISTING,
+            FILE_ATTRIBUTE_NORMAL,
+            std::ptr::null_mut(),
+        );
+        if handle == INVALID_HANDLE_VALUE {
+            return None;
+        }
+        let result = (|| {
+            let mut written_total = 0usize;
+            while written_total < request.len() {
+                let mut written = 0u32;
+                if WriteFile(
+                    handle,
+                    request[written_total..].as_ptr(),
+                    (request.len() - written_total).min(u32::MAX as usize) as u32,
+                    &mut written,
+                    std::ptr::null_mut(),
+                ) == 0
+                    || written == 0
+                {
+                    return None;
+                }
+                written_total += written as usize;
+            }
+            let mut response = Vec::with_capacity(1024);
+            loop {
+                let mut buffer = [0u8; 1024];
+                let mut read = 0u32;
+                if ReadFile(
+                    handle,
+                    buffer.as_mut_ptr(),
+                    buffer.len() as u32,
+                    &mut read,
+                    std::ptr::null_mut(),
+                ) == 0
+                    || read == 0
+                {
+                    return None;
+                }
+                response.extend_from_slice(&buffer[..read as usize]);
+                if response.len() > MAX_RESPONSE {
+                    return None;
+                }
+                if let Some(end) = response.iter().position(|byte| *byte == b'\n') {
+                    response.truncate(end + 1);
+                    return serde_json::from_slice(&response).ok();
+                }
+            }
+        })();
+        CloseHandle(handle);
+        result
+    }
+}
+
+#[cfg(any(unix, windows))]
+pub fn setup_request(action: &str, owner_token: &str, fields: Value) -> Value {
+    let mut request = serde_json::Map::new();
+    request.insert("action".into(), Value::String(action.into()));
+    request.insert("ownerToken".into(), Value::String(owner_token.into()));
+    if let Some(extra) = fields.as_object() {
+        for (key, value) in extra {
+            request.insert(key.clone(), value.clone());
+        }
+    }
+    let mut encoded = match serde_json::to_vec(&Value::Object(request)) {
+        Ok(value) if value.len() < MAX_REQUEST => value,
+        _ => return json!({"ok":false,"code":"AGENT_SETUP_INVALID"}),
+    };
+    encoded.push(b'\n');
+    plain_request(&encoded)
+        .and_then(|value| value.get("result").cloned())
+        .unwrap_or_else(|| json!({"ok":false,"code":"AGENT_NATIVE_INGRESS_UNAVAILABLE"}))
+}
+
+#[cfg(not(any(unix, windows)))]
+pub fn setup_request(_: &str, _: &str, _: Value) -> Value {
+    json!({"ok":false,"code":"AGENT_NATIVE_INGRESS_UNAVAILABLE"})
+}
+
+pub fn setup_status() -> Value {
+    #[cfg(any(unix, windows))]
+    {
+        return plain_request(b"{\"action\":\"status\"}\n")
+            .and_then(|value| value.get("result").cloned())
+            .unwrap_or_else(|| json!({"ok":false,"code":"AGENT_NATIVE_INGRESS_UNAVAILABLE"}));
+    }
+    #[cfg(not(any(unix, windows)))]
+    json!({"ok":false,"code":"AGENT_NATIVE_INGRESS_UNAVAILABLE"})
+}
+
+#[cfg(any(unix, windows))]
 pub fn probe() -> AgentProbe {
     let Some(value) = plain_request(b"{\"action\":\"status\"}\n") else {
         return AgentProbe::Missing;
@@ -184,13 +305,13 @@ pub fn probe() -> AgentProbe {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(not(any(unix, windows)))]
 pub fn probe() -> AgentProbe {
     AgentProbe::Missing
 }
 
 pub fn request_owned_stop(owner_token: &str) {
-    #[cfg(unix)]
+    #[cfg(any(unix, windows))]
     let _ = plain_request(
         format!("{{\"action\":\"stop\",\"ownerToken\":\"{owner_token}\"}}\n").as_bytes(),
     );
@@ -243,5 +364,23 @@ mod tests {
             classify_result(classify_response(b"not-json"))["state"],
             "DELIVERY_UNKNOWN"
         );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_named_pipe_reaches_the_isolated_qt_agent() {
+        if std::env::var("SHACKCQ_TEST_WINDOWS_AGENT_PIPE").as_deref() != Ok("1") {
+            return;
+        }
+        let owner_token = std::env::var("SHACKCQ_TEST_WINDOWS_AGENT_OWNER_TOKEN")
+            .expect("isolated Agent owner token");
+        assert_eq!(probe(), AgentProbe::NativeIngress);
+        assert_eq!(
+            setup_request("native-setup.unpair", &"0".repeat(64), json!({}))["code"],
+            "OWNER_TOKEN_REJECTED"
+        );
+        let stopped = setup_request("stop", &owner_token, json!({}));
+        assert_eq!(stopped["code"], "GLOBAL_STOPPED");
+        assert_eq!(stopped["stopped"], true);
     }
 }

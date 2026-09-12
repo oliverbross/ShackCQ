@@ -254,6 +254,17 @@ impl AgentSupervisor {
         let _ = child.wait();
         Err("AGENT_NATIVE_INGRESS_UNAVAILABLE".into())
     }
+
+    fn owns_child(&self) -> bool {
+        self.child.is_some() && self.owner_token.len() == 64
+    }
+
+    fn setup_request(&self, action: &str, fields: Value) -> Value {
+        if !self.owns_child() {
+            return json!({"ok":false,"code":"AGENT_SETUP_EXTERNAL_REQUIRED"});
+        }
+        agent_ingress::setup_request(action, &self.owner_token, fields)
+    }
 }
 impl Drop for AgentSupervisor {
     fn drop(&mut self) {
@@ -382,8 +393,14 @@ fn runtime_presence(p: &RuntimePresence) -> Value {
         .map(|x| match x.mode {
             DigiMode::Ft8 => "FT8",
             DigiMode::Ft4 => "FT4",
+            DigiMode::Ft2 => "FT2",
+            DigiMode::Fst4 => "FST4",
+            DigiMode::Q65 => "Q65",
+            DigiMode::Msk144 => "MSK144",
+            DigiMode::Jt65 => "JT65",
         })
         .unwrap_or("FT8");
+    let submode = profile.and_then(|value| value.submode.clone());
     let state = match s.state {
         RuntimeState::Receiving => "RX",
         RuntimeState::Stopped => "RX_VERIFIED",
@@ -408,19 +425,120 @@ fn runtime_presence(p: &RuntimePresence) -> Value {
         _ => "UNCONFIGURED",
     };
     json!({"state":"online","generation":s.generation,"serverDigiTxEnabled":false,"path":"LOCAL",
- "snapshot":{"type":"digi.snapshot","protocol":{"major":1,"minor":2},"agentId":AGENT_ID,"deviceId":DEVICE_ID,"generation":s.generation,"sequence":s.event_sequence.max(1),"observedUtc":now(),"sessionId":session,"contextGeneration":s.generation,"state":state,"mode":mode,"submode":null,"dialFrequencyHz":null,"rxAudioHz":1500,"txAudioHz":1500,
+ "snapshot":{"type":"digi.snapshot","protocol":{"major":1,"minor":2},"agentId":AGENT_ID,"deviceId":DEVICE_ID,"generation":s.generation,"sequence":s.event_sequence.max(1),"observedUtc":now(),"sessionId":session,"contextGeneration":s.generation,"state":state,"mode":mode,"submode":submode,"dialFrequencyHz":null,"rxAudioHz":1500,"txAudioHz":1500,
  "audio":{"state":audio_state,"inputDeviceId":profile.map(|x|x.device_id.clone()),"outputDeviceId":profile.and_then(|x|x.output_device_id.clone()),"sampleRate":profile.map(|x|x.input_rate_hz).unwrap_or(12000),"channels":1,"rms":0,"peak":0,"clipped":false,"detail":"Receive-only Nexus capture; levels update is pending"},
  "clock":{"state":"UNKNOWN","utcUncertaintyMs":null,"sampleUncertaintyMs":null,"nextSlotUtc":null},"lease":{"state":"NONE","controlInstanceId":null,"expiresUtc":null},
  "tx":{"implemented":false,"serverPermitted":false,"locallyPermitted":false,"hardwareAccepted":false,"armed":false,"transmitting":false,"rxVerified":matches!(s.state,RuntimeState::Stopped),"detail":s.capabilities.tx_lock_reason},
- "capabilities":{"modes":["FT8","FT4"],"autoSequenceModes":[],"spectrumBins":1024,"waterfallRowsPerSecond":0,"recordingLocalOnly":true,"companionAuthoritative":false},"decodes":decodes,"waterfall":waterfall,"sstv":{}},
- "runtime":{"contract":{"major":1,"minor":0},"engine":{"name":s.identity.engine,"upstreamRevision":s.identity.upstream_commit,"patchSet":"shackcq-rx-only-v1","componentVersion":s.identity.adapter_version,"compiledModes":["FT8","FT4"],"execution":"VERIFIED_NATIVE"},"audioDevices":devices,
+ "capabilities":{"modes":["FT8","FT4","FT2","FST4","Q65","MSK144","JT65"],"autoSequenceModes":[],"spectrumBins":1024,"waterfallRowsPerSecond":0,"recordingLocalOnly":true,"companionAuthoritative":false},"decodes":decodes,"waterfall":waterfall,"sstv":{}},
+ "runtime":{"contract":{"major":1,"minor":0},"engine":{"name":s.identity.engine,"upstreamRevision":s.identity.upstream_commit,"patchSet":"shackcq-rx-only-v1","componentVersion":s.identity.adapter_version,"compiledModes":["FT8","FT4","FT2","FST4","Q65","MSK144","JT65"],"execution":"VERIFIED_NATIVE"},"audioDevices":devices,
  "audio":{"state":audio_state,"inputDeviceId":profile.map(|x|x.device_id.clone()),"inputLabel":null,"inputChannel":profile.map(|x|x.channel),"outputDeviceId":profile.and_then(|x|x.output_device_id.clone()),"outputLabel":null,"openedSampleRate":if matches!(s.state,RuntimeState::Receiving){profile.map(|x|x.input_rate_hz)}else{None},"channels":if matches!(s.state,RuntimeState::Receiving){Some(1)}else{None},"rmsDbfs":null,"peakDbfs":null,"clipped":false,"detail":"No device is opened until Start RX"},
  "clock":{"state":"UNKNOWN","utcUncertaintyMs":null,"sampleUncertaintyMs":null,"nextSlotUtc":null,"evidence":"No bounded clock measurement yet"},"safety":{"state":state,"serverPermitted":false,"locallyPermitted":false,"hardwareAccepted":false,"armed":false,"transmitting":false,"reason":s.capabilities.tx_lock_reason},"session":{"sessionId":session,"generation":s.generation,"sequence":s.event_sequence,"state":if matches!(s.state,RuntimeState::Receiving){"RECEIVING"}else{"IDLE"},"mode":mode,"startedUtc":null,"endedUtc":null,"detail":"Exact slot timing unavailable"},"queue":{"pendingContacts":s.pending_contacts,"maximumContacts":5000,"pendingBytes":0,"maximumBytes":33554432,"oldestUtc":null,"saturated":s.pending_contacts>=5000}}})
 }
 
+fn targets_from_agent(status: &Value, binding: &Value) -> Value {
+    let cloud = status.get("cloudAgent").unwrap_or(&Value::Null);
+    let paired = cloud
+        .get("paired")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let station_profile_id = cloud
+        .get("stationProfileId")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("local-unbound");
+    let station_label = cloud
+        .get("stationLabel")
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("No ShackCQ station paired");
+    let callsign = station_label
+        .rsplit('·')
+        .next()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or(station_label);
+    let binding_ready = binding.get("ok").and_then(Value::as_bool).unwrap_or(false)
+        && binding.get("stationProfileId").and_then(Value::as_str) == Some(station_profile_id);
+    let stations = if paired {
+        vec![
+            json!({"id":station_profile_id,"name":station_label,"callsign":callsign,"gridLocator":null}),
+        ]
+    } else {
+        Vec::new()
+    };
+    json!({"agents":[{"id":AGENT_ID,"name":if paired {station_label} else {"ShackCQ Desktop local runtime"},"stationProfileId":station_profile_id,"protocolMinor":2,"presence":"online","canonicalBindingReady":binding_ready}],"radios":[{"id":DEVICE_ID,"agentId":AGENT_ID,"deviceId":DEVICE_ID,"name":"Nexus native receive runtime","manufacturer":"ShackCQ","model":"Nexus v1.10.3 RX-only"}],"stations":stations})
+}
+
 #[tauri::command]
-fn digi_list_targets() -> Value {
-    json!({"agents":[{"id":AGENT_ID,"name":"ShackCQ Desktop local runtime","stationProfileId":"local-unbound","protocolMinor":2,"presence":"online"}],"radios":[{"id":DEVICE_ID,"agentId":AGENT_ID,"deviceId":DEVICE_ID,"name":"Nexus native receive runtime","manufacturer":"ShackCQ","model":"Nexus v1.10.3 RX-only"}],"stations":[]})
+fn digi_list_targets(_state: State<'_, AppState>) -> Value {
+    list_targets_backend()
+}
+
+fn list_targets_backend() -> Value {
+    let status = agent_ingress::setup_status();
+    let binding = agent_ingress::binding("desktop-targets");
+    targets_from_agent(&status, &binding)
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AgentPairingInput {
+    code: String,
+    name: String,
+}
+
+fn valid_pairing_input(input: &AgentPairingInput) -> bool {
+    let normalized = input
+        .code
+        .chars()
+        .filter(|ch| !ch.is_ascii_whitespace() && *ch != '-')
+        .collect::<String>();
+    normalized.len() == 12
+        && normalized.chars().all(|ch| ch.is_ascii_alphanumeric())
+        && !input.name.trim().is_empty()
+        && input.name.len() <= 80
+        && bounded_json(input, 1024)
+}
+
+#[tauri::command]
+fn digi_read_agent_setup(state: State<'_, AppState>) -> Value {
+    let mut status = agent_ingress::setup_status();
+    status["desktopOwnership"] = json!(state
+        ._agent
+        .lock()
+        .map(|agent| if agent.owns_child() {
+            "OWNED"
+        } else {
+            "EXTERNAL"
+        })
+        .unwrap_or("UNAVAILABLE"));
+    status
+}
+
+#[tauri::command]
+fn digi_pair_agent(state: State<'_, AppState>, input: AgentPairingInput) -> Value {
+    if !valid_pairing_input(&input) {
+        return json!({"ok":false,"code":"AGENT_SETUP_INVALID"});
+    }
+    state
+        ._agent
+        .lock()
+        .map(|agent| {
+            agent.setup_request(
+                "native-setup.pair",
+                json!({"code":input.code,"name":input.name}),
+            )
+        })
+        .unwrap_or_else(|_| json!({"ok":false,"code":"AGENT_SETUP_UNAVAILABLE"}))
+}
+
+#[tauri::command]
+fn digi_unpair_agent(state: State<'_, AppState>) -> Value {
+    state
+        ._agent
+        .lock()
+        .map(|agent| agent.setup_request("native-setup.unpair", json!({})))
+        .unwrap_or_else(|_| json!({"ok":false,"code":"AGENT_SETUP_UNAVAILABLE"}))
 }
 fn presence_backend(state: &Backend, target: Target) -> Result<Value, String> {
     if !valid_target(&target.agent_id, &target.device_id) {
@@ -459,6 +577,7 @@ fn configure_backend(state: &Backend, selection: AudioSelection) -> Result<Value
     let mode = current
         .snapshot
         .rx_profile
+        .as_ref()
         .map(|p| p.mode)
         .unwrap_or(DigiMode::Ft8);
     let result = call_named_state(
@@ -470,6 +589,10 @@ fn configure_backend(state: &Backend, selection: AudioSelection) -> Result<Value
             // Decoder-domain rate only. The opened hardware rate is learned at Start RX.
             input_rate_hz: 12000,
             mode,
+            submode: current
+                .snapshot
+                .rx_profile
+                .and_then(|profile| profile.submode),
         }),
         selection.command_id.clone(),
         selection.expected_generation,
@@ -539,6 +662,11 @@ fn submit_backend(state: &Backend, frame: CommandFrame) -> Result<CommandReply, 
             let mode = match frame.parameters.get("mode").and_then(Value::as_str) {
                 Some("FT8") => DigiMode::Ft8,
                 Some("FT4") => DigiMode::Ft4,
+                Some("FT2") => DigiMode::Ft2,
+                Some("FST4") => DigiMode::Fst4,
+                Some("Q65") => DigiMode::Q65,
+                Some("MSK144") => DigiMode::Msk144,
+                Some("JT65") => DigiMode::Jt65,
                 _ => {
                     return Ok(CommandReply {
                         ok: false,
@@ -554,6 +682,11 @@ fn submit_backend(state: &Backend, frame: CommandFrame) -> Result<CommandReply, 
                 });
             };
             profile.mode = mode;
+            profile.submode = frame
+                .parameters
+                .get("submode")
+                .and_then(Value::as_str)
+                .map(str::to_owned);
             RuntimeCommand::ConfigureRx(profile)
         }
         action
@@ -821,7 +954,10 @@ fn main() {
             digi_emergency_stop,
             digi_submit_completed_contact,
             digi_close_session,
-            digi_set_browser_local_enabled
+            digi_set_browser_local_enabled,
+            digi_read_agent_setup,
+            digi_pair_agent,
+            digi_unpair_agent
         ])
         .run(tauri::generate_context!())
         .expect("ShackCQ Desktop runtime failed");
@@ -840,5 +976,32 @@ mod tests {
     fn stale_non_stop_fails_but_stop_is_generation_exempt() {
         assert!(!generation_matches(9, 8, false));
         assert!(generation_matches(9, 8, true));
+    }
+
+    #[test]
+    fn agent_targets_are_derived_from_trusted_status_and_binding() {
+        let status = json!({"cloudAgent":{"paired":true,"stationProfileId":"station-1","stationLabel":"Home station · VK8ABC"}});
+        let binding = json!({"ok":true,"stationProfileId":"station-1"});
+        let targets = targets_from_agent(&status, &binding);
+        assert_eq!(targets["agents"][0]["stationProfileId"], "station-1");
+        assert_eq!(targets["agents"][0]["canonicalBindingReady"], true);
+        assert_eq!(targets["stations"][0]["callsign"], "VK8ABC");
+        assert_eq!(targets["stations"][0]["gridLocator"], Value::Null);
+    }
+
+    #[test]
+    fn agent_pairing_input_is_strictly_bounded() {
+        assert!(valid_pairing_input(&AgentPairingInput {
+            code: "ABCD-EFGH-IJKL".into(),
+            name: "Home shack".into(),
+        }));
+        assert!(!valid_pairing_input(&AgentPairingInput {
+            code: "too-short".into(),
+            name: "Home shack".into(),
+        }));
+        assert!(!valid_pairing_input(&AgentPairingInput {
+            code: "ABCD-EFGH-IJKL".into(),
+            name: "x".repeat(81),
+        }));
     }
 }

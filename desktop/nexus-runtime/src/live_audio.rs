@@ -43,11 +43,17 @@ impl LiveReceiver {
         let capture_cancel = cancel.clone();
         let decode_events = event_tx.clone();
         let mode = profile.mode;
+        let capture_submode = profile.submode.clone();
+        let decode_submode = profile.submode.clone();
         std::thread::Builder::new()
             .name("shackcq-rx-capture".into())
             .spawn(move || {
                 let mut input = input;
-                let mut aligner = SlotFrameAligner::new(mode);
+                let mut aligner =
+                    match SlotFrameAligner::with_submode(mode, capture_submode.as_deref()) {
+                        Ok(value) => value,
+                        Err(_) => return,
+                    };
                 while !capture_cancel.load(Ordering::Acquire) {
                     if input.failed.load(Ordering::Relaxed) {
                         let _ = event_tx.try_send(WorkerEvent::DeviceLost);
@@ -80,7 +86,12 @@ impl LiveReceiver {
             .name("shackcq-nexus-decode".into())
             .spawn(move || {
                 while let Ok((slot_start, exact, frame)) = frame_rx.recv() {
-                    if let Ok(output) = FrameDecoder::process_capture_frame(mode, &frame) {
+                    if let Ok(output) = FrameDecoder::process_configured_capture_frame(
+                        mode,
+                        decode_submode.as_deref(),
+                        &frame,
+                        slot_start,
+                    ) {
                         let _ = decode_events.try_send(WorkerEvent::Waterfall(WaterfallFrame {
                             sequence: 0,
                             observed_unix_millis: slot_start,

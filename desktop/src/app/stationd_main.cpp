@@ -323,6 +323,55 @@ int main(int argc, char **argv) {
             status.insert("digi", digi.snapshot(QString{}, QString{}, 0).toVariantMap());
           }
           response = status;
+        } else if (action == "native-setup.pair" && nativeIngressOnly) {
+          const bool ownerMatches = request.value("ownerToken").toString() == nativeOwnerToken;
+          const QString code = request.value("code").toString();
+          const QString name = request.value("name").toString().trimmed();
+          if (!ownerMatches) {
+            ok = false;
+            response = QVariantMap{{"code", "OWNER_TOKEN_REJECTED"}};
+          } else if (code.size() > 32 || name.isEmpty() || name.size() > 80) {
+            ok = false;
+            response = QVariantMap{{"code", "AGENT_SETUP_INVALID"}};
+          } else if (!cloudAgent.pair(QUrl(QStringLiteral("https://shackcq.com")),
+                                      code, name, &error)) {
+            ok = false;
+            response = QVariantMap{{"code", "AGENT_PAIRING_FAILED"},
+                                   {"detail", error.left(240)}};
+          } else {
+            configuration.setSection("cloudAgent", cloudAgent.configuration());
+            if (!configuration.save(&error)) {
+              cloudAgent.unpair();
+              ok = false;
+              response = QVariantMap{{"code", "AGENT_SETUP_SAVE_FAILED"}};
+            } else {
+              cloudAgent.start();
+              QVariantMap map = cloudAgent.health();
+              map.insert("code", "AGENT_PAIRED");
+              response = map;
+            }
+          }
+        } else if (action == "native-setup.unpair" && nativeIngressOnly) {
+          const bool ownerMatches = request.value("ownerToken").toString() == nativeOwnerToken;
+          if (!ownerMatches) {
+            ok = false;
+            response = QVariantMap{{"code", "OWNER_TOKEN_REJECTED"}};
+          } else if (!cloudAgent.unpair(&error)) {
+            ok = false;
+            response = QVariantMap{{"code", "AGENT_UNPAIR_FAILED"},
+                                   {"detail", error.left(240)}};
+          } else {
+            configuration.setSection("cloudAgent", cloudAgent.configuration());
+            if (!configuration.save(&error)) {
+              ok = false;
+              response = QVariantMap{{"code", "AGENT_SETUP_SAVE_FAILED"}};
+            } else {
+              response = cloudAgent.health();
+              QVariantMap map = response.toMap();
+              map.insert("code", "AGENT_UNPAIRED");
+              response = map;
+            }
+          }
         } else if (action == "list-clients" && !nativeIngressOnly) response = service.pairedDevices();
         else if (action == "pairing-offer" && !nativeIngressOnly) response = service.createPairingOffer();
         else if (action == "revoke" && !nativeIngressOnly) { service.revokeDevice(request.value("deviceId").toString()); response = QVariantMap{{"revoked", true}}; }

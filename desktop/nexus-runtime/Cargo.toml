@@ -25,6 +25,11 @@ chacha20poly1305 = "0.10"
 cpal = { version = "0.18", optional = true }
 ft4 = { path = "../../third_party/nexus/crates/ft4" }
 ft8 = { path = "../../third_party/nexus/crates/ft8" }
+ft2 = { path = "../../third_party/nexus/crates/ft2" }
+fst4 = { path = "../../third_party/nexus/crates/fst4" }
+jt65 = { path = "../../third_party/nexus/crates/jt65" }
+msk144 = { path = "../../third_party/nexus/crates/msk144" }
+q65 = { path = "../../third_party/nexus/crates/q65" }
 getrandom = "0.3"
 hex = "0.4"
 rustfft = "6"
