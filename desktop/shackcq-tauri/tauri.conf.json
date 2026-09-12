@@ -4,7 +4,7 @@
   "version": "0.2.0",
   "identifier": "online.shackcq.desktop",
   "build": {
-    "beforeBuildCommand": "python3 shackcq-tauri/scripts/verify-shared-ui.py",
+    "beforeBuildCommand": "sh shackcq-tauri/scripts/build-stationd-sidecar.sh && python3 shackcq-tauri/scripts/verify-shared-ui.py",
     "frontendDist": "../shared-digi-ui-snapshot"
   },
   "app": {
@@ -26,7 +26,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "externalBin": ["binaries/shackcq-nexus-runtime"],
+    "externalBin": ["binaries/shackcq-nexus-runtime", "binaries/shackcq-stationd"],
     "icon": [
       "../../assets/branding/shackcq-mark-1024.png",
       "../../desktop/resources/app-icon.icns"

@@ -34,6 +34,12 @@ impl QueueKey {
 #[serde(rename_all = "camelCase")]
 pub struct ReviewedContact {
     pub event_id: String,
+    #[serde(default)]
+    pub operation_identity: String,
+    #[serde(default)]
+    pub profile_id: String,
+    #[serde(default)]
+    pub source_revision: u32,
     pub account_id: String,
     pub station_profile_id: String,
     pub destination_authority: String,
@@ -55,6 +61,9 @@ impl ReviewedContact {
             || self.station_profile_id.len() > 160
             || !matches!(self.destination_authority.as_str(), "WEB_LOCAL" | "WAVELOG")
             || self.authority_revision == 0
+            || self.operation_identity.is_empty()
+            || self.profile_id.is_empty()
+            || self.source_revision == 0
             || self.provenance != "NEXUS_NATIVE"
         {
             return Err(QueueError::InvalidContact);
@@ -141,7 +150,13 @@ impl ContactQueue {
                 [
                     contact.account_id.as_bytes(),
                     contact.station_profile_id.as_bytes(),
-                    contact.event_id.as_bytes(),
+                    contact.operation_identity.as_bytes(),
+                    contact.profile_id.as_bytes(),
+                    &contact.source_revision.to_be_bytes(),
+                    contact.destination_authority.as_bytes(),
+                    &contact.authority_revision.to_be_bytes(),
+                    &contact.mapping_revision.unwrap_or(0).to_be_bytes(),
+                    contact.captured_utc.as_bytes(),
                     &canonical
                 ]
                 .concat()

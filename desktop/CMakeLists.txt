@@ -57,6 +57,7 @@ set(SHACKCQ_DESKTOP_SERVICE_SOURCES
     src/network/ClusterController.cpp
     src/network/CloudAgentClient.cpp
     src/network/LoggerIngestion.cpp
+    src/network/NativeAgentIngress.cpp
     src/network/AgentDigiController.cpp
     src/network/RemoteStationService.cpp
     src/network/RemoteStationClient.cpp

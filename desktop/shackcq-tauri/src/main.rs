@@ -2,14 +2,16 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use shackcq_nexus_runtime::{
-    CommandEnvelope, CommandResult, DigiMode, RuntimeCommand, RuntimePresence, RuntimeState,
-    RxProfile, CONTRACT_VERSION,
+    CommandEnvelope, CommandResult, DigiMode, ReviewedContact, RuntimeCommand, RuntimePresence,
+    RuntimeState, RxProfile, CONTRACT_VERSION,
 };
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tauri::{Manager, State};
+mod agent_ingress;
 mod loopback;
 
 const AGENT_ID: &str = "shackcq-desktop-local";
@@ -180,10 +182,89 @@ struct Backend {
     runtime: Arc<Mutex<RuntimeSupervisor>>,
     emergency: Arc<EmergencyStop>,
     browser_local_available: Arc<AtomicBool>,
+    agent_state: Mutex<String>,
 }
 struct AppState {
     backend: Arc<Backend>,
     loopback: Arc<loopback::Controller>,
+    _agent: Mutex<AgentSupervisor>,
+}
+
+struct AgentSupervisor {
+    child: Option<Child>,
+    owner_token: String,
+}
+impl AgentSupervisor {
+    fn ensure(_app: &tauri::AppHandle) -> Result<(Self, String), String> {
+        match agent_ingress::probe() {
+            agent_ingress::AgentProbe::NativeIngress => {
+                return Ok((
+                    Self {
+                        child: None,
+                        owner_token: String::new(),
+                    },
+                    "EXTERNAL_NATIVE_INGRESS".into(),
+                ))
+            }
+            agent_ingress::AgentProbe::Legacy => {
+                return Ok((
+                    Self {
+                        child: None,
+                        owner_token: String::new(),
+                    },
+                    "LEGACY_AGENT_HANDOVER_REQUIRED".into(),
+                ))
+            }
+            agent_ingress::AgentProbe::Missing => {}
+        }
+        let current = std::env::current_exe().map_err(|_| "desktop executable unavailable")?;
+        let executable = current
+            .parent()
+            .ok_or("desktop directory unavailable")?
+            .join(if cfg!(windows) {
+                "shackcq-stationd.exe"
+            } else {
+                "shackcq-stationd"
+            });
+        let mut token = [0u8; 32];
+        getrandom::fill(&mut token).map_err(|_| "AGENT_NATIVE_INGRESS_UNAVAILABLE")?;
+        let owner_token = hex::encode(token);
+        let child = Command::new(executable)
+            .arg("--native-ingress-only")
+            .arg("--native-owner-token")
+            .arg(&owner_token)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|_| "AGENT_NATIVE_INGRESS_UNAVAILABLE")?;
+        for _ in 0..40 {
+            if agent_ingress::probe() == agent_ingress::AgentProbe::NativeIngress {
+                return Ok((
+                    Self {
+                        child: Some(child),
+                        owner_token,
+                    },
+                    "OWNED_NATIVE_INGRESS".into(),
+                ));
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        Err("AGENT_NATIVE_INGRESS_UNAVAILABLE".into())
+    }
+}
+impl Drop for AgentSupervisor {
+    fn drop(&mut self) {
+        if let Some(child) = self.child.as_mut() {
+            agent_ingress::request_owned_stop(&self.owner_token);
+            for _ in 0..40 {
+                if child.try_wait().ok().flatten().is_some() {
+                    return;
+                }
+                std::thread::sleep(Duration::from_millis(25));
+            }
+        }
+    }
 }
 fn call_state(state: &Backend, command: RuntimeCommand) -> Result<CommandResult, String> {
     state
@@ -249,7 +330,7 @@ struct Contract {
     major: u8,
     minor: u8,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CompletedContactIntent {
     station_profile_id: String,
@@ -533,11 +614,57 @@ fn emergency_backend(state: &Backend, scope: StopScope) -> CommandReply {
         },
     }
 }
+
+fn native_agent_payload(contact: &ReviewedContact) -> Value {
+    json!({
+        "profileId": contact.profile_id,
+        "operationIdentity": contact.operation_identity,
+        "sourceRevision": contact.source_revision,
+        "capturedUtc": contact.captured_utc,
+        "destinationAuthority": contact.destination_authority,
+        "authorityRevision": contact.authority_revision,
+        "mappingRevision": contact.mapping_revision,
+        "stationProfileId": contact.station_profile_id,
+        "contact": contact.contact
+    })
+}
+
+fn retry_pending_contacts(backend: &Backend) {
+    let pending = backend.runtime.lock().ok().and_then(|mut runtime| {
+        runtime
+            .request(RuntimeCommand::PendingReviewedContacts)
+            .ok()
+            .and_then(|result| serde_json::from_value::<Vec<ReviewedContact>>(result.payload).ok())
+    });
+    for contact in pending.unwrap_or_default().into_iter().take(8) {
+        let receipt = agent_ingress::submit(&contact.event_id, &native_agent_payload(&contact));
+        if receipt.get("durableHandoff") != Some(&Value::Bool(true)) {
+            break;
+        }
+        let _ = backend.runtime.lock().ok().and_then(|mut runtime| {
+            runtime
+                .request(RuntimeCommand::AcknowledgeContact {
+                    event_id: contact.event_id,
+                    durable_receipt: true,
+                })
+                .ok()
+        });
+    }
+}
 #[tauri::command]
 fn digi_emergency_stop(state: State<'_, AppState>, scope: StopScope) -> CommandReply {
     emergency_backend(state.backend.as_ref(), scope)
 }
-fn completed_backend(intent: CompletedContactIntent) -> Value {
+fn completed_backend(backend: &Backend, intent: CompletedContactIntent) -> Value {
+    if backend
+        .agent_state
+        .lock()
+        .map(|s| s.as_str() == "LEGACY_AGENT_HANDOVER_REQUIRED")
+        .unwrap_or(true)
+    {
+        return json!({"state":"PENDING","providerState":"NOT_SENT","code":"LEGACY_AGENT_HANDOVER_REQUIRED","retryable":false});
+    }
+    retry_pending_contacts(backend);
     let valid = intent.completed
         && intent.user_authorized
         && !intent.station_profile_id.is_empty()
@@ -547,16 +674,82 @@ fn completed_backend(intent: CompletedContactIntent) -> Value {
         && valid_id(&intent.radio_device_id)
         && valid_id(&intent.operation_identity)
         && intent.qso.is_object()
-        && bounded_json(&intent.qso, 12 * 1024);
-    if valid {
-        json!({"state":"NEEDS_ACCOUNT_BINDING","providerState":"NOT_SENT"})
-    } else {
-        json!({"state":"REJECTED","providerState":"NOT_SENT"})
+        && bounded_json(&intent, agent_ingress::MAX_PAYLOAD);
+    if !valid {
+        return json!({"state":"REJECTED","providerState":"NOT_SENT","code":"NATIVE_CONTACT_INVALID"});
     }
+    let binding = agent_ingress::binding(&intent.operation_identity);
+    if !binding.get("ok").and_then(Value::as_bool).unwrap_or(false) {
+        let code = binding
+            .get("code")
+            .and_then(Value::as_str)
+            .unwrap_or("AGENT_NATIVE_INGRESS_UNAVAILABLE");
+        return json!({"state":"NEEDS_ACCOUNT_BINDING","providerState":"NOT_SENT","code":code,"retryable":true});
+    }
+    if binding.get("stationProfileId") != Some(&Value::String(intent.station_profile_id.clone())) {
+        return json!({"state":"REJECTED","providerState":"NOT_SENT","code":"LOGGER_DESTINATION_CHANGED"});
+    }
+    let captured_utc = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let reviewed = ReviewedContact {
+        event_id: intent.operation_identity.clone(),
+        operation_identity: intent.operation_identity.clone(),
+        profile_id: binding["profileId"].as_str().unwrap_or_default().to_owned(),
+        source_revision: binding["sourceRevision"].as_u64().unwrap_or(0) as u32,
+        account_id: binding["accountId"].as_str().unwrap_or_default().to_owned(),
+        station_profile_id: intent.station_profile_id.clone(),
+        destination_authority: binding["destinationAuthority"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned(),
+        authority_revision: binding["authorityRevision"].as_u64().unwrap_or(0) as u32,
+        mapping_revision: binding["mappingRevision"]
+            .as_u64()
+            .map(|v| v as u32)
+            .filter(|v| *v > 0),
+        captured_utc: captured_utc.clone(),
+        provenance: "NEXUS_NATIVE".into(),
+        fixture: false,
+        contact: intent.qso.clone(),
+    };
+    if !bounded_json(&native_agent_payload(&reviewed), agent_ingress::MAX_PAYLOAD) {
+        return json!({"state":"REJECTED","providerState":"NOT_SENT","code":"AGENT_NATIVE_INGRESS_INVALID"});
+    }
+    let queued = match backend.runtime.lock() {
+        Ok(mut runtime) => runtime.request(RuntimeCommand::QueueReviewedContact(reviewed.clone())),
+        Err(_) => {
+            return json!({"state":"REJECTED","providerState":"NOT_SENT","code":"RUNTIME_UNAVAILABLE"})
+        }
+    };
+    let Ok(queued) = queued else {
+        return json!({"state":"REJECTED","providerState":"NOT_SENT","code":"QUEUE_WRITE_FAILED"});
+    };
+    if !queued.ok {
+        return json!({"state":"REJECTED","providerState":"NOT_SENT","code":queued.code});
+    }
+    let event_id = queued.payload.as_str().unwrap_or_default().to_owned();
+    let mut result = agent_ingress::submit(&event_id, &native_agent_payload(&reviewed));
+    result["eventId"] = Value::String(event_id.clone());
+    if result.get("durableHandoff") == Some(&Value::Bool(true)) {
+        let receipt = backend.runtime.lock().ok().and_then(|mut runtime| {
+            runtime
+                .request(RuntimeCommand::AcknowledgeContact {
+                    event_id,
+                    durable_receipt: true,
+                })
+                .ok()
+        });
+        if !receipt.map(|value| value.ok).unwrap_or(false) {
+            result = json!({"state":"DELIVERY_UNKNOWN","providerState":"AGENT_PENDING","code":"LOCAL_RECEIPT_WRITE_FAILED","retryable":false});
+        }
+    }
+    result
 }
 #[tauri::command]
-fn digi_submit_completed_contact(intent: CompletedContactIntent) -> Value {
-    completed_backend(intent)
+fn digi_submit_completed_contact(
+    state: State<'_, AppState>,
+    intent: CompletedContactIntent,
+) -> Value {
+    completed_backend(state.backend.as_ref(), intent)
 }
 #[tauri::command]
 fn digi_close_session(state: State<'_, AppState>) -> Result<(), String> {
@@ -600,14 +793,18 @@ fn main() {
             });
             let runtime = RuntimeSupervisor::spawn(app.handle(), &emergency.pid)?;
             let browser_local_available = Arc::new(AtomicBool::new(false));
+            let (agent, agent_state) = AgentSupervisor::ensure(app.handle())?;
             let backend = Arc::new(Backend {
                 runtime: Arc::new(Mutex::new(runtime)),
                 emergency,
                 browser_local_available: browser_local_available.clone(),
+                agent_state: Mutex::new(agent_state),
             });
+            retry_pending_contacts(backend.as_ref());
             let state = AppState {
                 backend,
                 loopback: Arc::new(loopback::Controller::new()),
+                _agent: Mutex::new(agent),
             };
             app.manage(state);
             Ok(())

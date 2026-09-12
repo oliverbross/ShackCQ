@@ -243,6 +243,8 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
   m_connectUrl = connectUrl;
   m_credential = credential;
   m_userId = userId;
+  if (m_logger)
+    m_logger->setAccountScope(m_userId);
   m_stationProfileId = stationProfileId;
   m_accountLabel = accountLabel;
   m_stationLabel = stationLabel;
@@ -258,6 +260,8 @@ bool CloudAgentClient::unpair(QString *error) {
   m_agentId.clear();
   m_credential.clear();
   m_userId.clear();
+  if (m_logger)
+    m_logger->setAccountScope({});
   m_stationProfileId.clear();
   m_accountLabel.clear();
   m_stationLabel.clear();
@@ -293,6 +297,8 @@ void CloudAgentClient::start() {
     m_accountLabel.clear();
     m_stationLabel.clear();
   }
+  if (m_logger)
+    m_logger->setAccountScope(m_userId);
   if (parse.error != QJsonParseError::NoError || !boundedId(m_agentId) ||
       m_connectUrl.scheme() != "wss" || m_connectUrl.host().isEmpty() ||
       m_credential.size() < 32 || m_credential.size() > 256) {

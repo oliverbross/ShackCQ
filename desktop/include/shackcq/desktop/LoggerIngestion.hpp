@@ -19,6 +19,11 @@ public:
   ~LoggerIngestion() override;
 
   QJsonObject applyProfile(const QJsonObject &profile);
+  void setAccountScope(const QString &accountId);
+  QJsonObject nativeBinding() const;
+  QJsonObject submitNativeContact(const QJsonObject &intent);
+  QJsonObject resolveNativeEvent(const QString &eventId,
+                                 const QString &action);
   void acknowledge(const QJsonArray &receipts);
   QJsonArray pendingEvents(int maximum = 32) const;
   QVariantMap health() const;
@@ -44,6 +49,7 @@ private:
   QJsonArray m_journal;
   QJsonObject m_profileConfigs;
   QString m_lastError;
+  QString m_accountId;
 };
 
 } // namespace shackcq::desktop

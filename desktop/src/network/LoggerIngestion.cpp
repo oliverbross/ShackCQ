@@ -4,6 +4,7 @@
 #include "kx3/wsjtx_protocol.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <variant>
 
 #include <QCryptographicHash>
@@ -12,7 +13,9 @@
 #include <QFileInfo>
 #include <QHostAddress>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QSaveFile>
+#include <QSet>
 #include <QTimeZone>
 #include <QUdpSocket>
 #include <QXmlStreamReader>
@@ -27,6 +30,38 @@ constexpr qint64 MaxAgeSeconds = 30LL * 24 * 60 * 60;
 QString digest(const QByteArray &value) {
   return QString::fromLatin1(
       QCryptographicHash::hash(value, QCryptographicHash::Sha256).toHex());
+}
+bool boundedId(const QString &value, int maximum = 160) {
+  static const QRegularExpression pattern(
+      QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._:-]*$"));
+  return value.size() <= maximum && pattern.match(value).hasMatch();
+}
+bool validUtc(const QString &value) {
+  const QDateTime parsed = QDateTime::fromString(value, Qt::ISODate);
+  return parsed.isValid() && parsed.offsetFromUtc() == 0 &&
+         (value.endsWith('Z') || value.endsWith("+00:00"));
+}
+bool validNativeContact(const QJsonObject &contact) {
+  static const QRegularExpression callsign(
+      QStringLiteral("^[A-Z0-9]+(?:/[A-Z0-9]+)*$"));
+  static const QRegularExpression mode(QStringLiteral("^[A-Z0-9]{1,20}$"));
+  static const QSet<QString> allowed{
+      "callsign",       "ownCallsign",      "contactStartUtc",
+      "contactEndUtc",  "frequencyHz",      "band",
+      "mode",           "submode",          "grid",
+      "rstSent",        "rstReceived",      "exchangeSent",
+      "exchangeReceived", "powerWatts",     "adif"};
+  for (auto it = contact.begin(); it != contact.end(); ++it)
+    if (!allowed.contains(it.key()))
+      return false;
+  const QString call = contact.value("callsign").toString();
+  const QString nativeMode = contact.value("mode").toString();
+  const double frequency = contact.value("frequencyHz").toDouble(-1);
+  return call.size() <= 32 && callsign.match(call).hasMatch() &&
+         mode.match(nativeMode).hasMatch() &&
+         validUtc(contact.value("contactStartUtc").toString()) &&
+         frequency >= 1 && frequency <= 10'500'000'000.0 &&
+         std::floor(frequency) == frequency;
 }
 QString safeId(const QByteArray &value) {
   return QStringLiteral("le-") + digest(value).left(48);
@@ -111,9 +146,11 @@ QJsonObject LoggerIngestion::applyProfile(const QJsonObject &value) {
   };
   if (id.isEmpty() || id.size() > 160 || instance.isEmpty() ||
       instance.size() > 128 || station.isEmpty() || station.size() > 160 ||
-      (source != "WSJTX" && source != "N1MM") ||
+      (source != "WSJTX" && source != "N1MM" &&
+       source != "NEXUS_NATIVE") ||
       (authority != "WEB_LOCAL" && authority != "WAVELOG") || revision < 1 ||
-      port < 1024 || port > 65535)
+      (source != "NEXUS_NATIVE" && (port < 1024 || port > 65535)) ||
+      (source == "NEXUS_NATIVE" && port != 0))
     return result(false, "LOGGER_PROFILE_INVALID");
   Profile *profile = m_profiles.value(id, nullptr);
   if (!profile) {
@@ -126,7 +163,8 @@ QJsonObject LoggerIngestion::applyProfile(const QJsonObject &value) {
         other->port == quint16(port))
       return result(false, "LOGGER_PORT_IN_USE");
   QUdpSocket *replacement = nullptr;
-  if (enabled && (!profile->socket || profile->port != quint16(port))) {
+  if (enabled && source != "NEXUS_NATIVE" &&
+      (!profile->socket || profile->port != quint16(port))) {
     replacement = new QUdpSocket;
     if (!replacement->bind(QHostAddress::LocalHost, quint16(port),
                            QUdpSocket::DontShareAddress)) {
@@ -156,14 +194,161 @@ QJsonObject LoggerIngestion::applyProfile(const QJsonObject &value) {
   profile->mappingRevision = value.value("mappingRevision").toInt();
   profile->port = quint16(port);
   profile->error.clear();
-  profile->state = enabled ? "STARTING" : "PAUSED";
+  profile->state = enabled ? (source == "NEXUS_NATIVE" ? "NATIVE_READY"
+                                                       : "STARTING")
+                           : "PAUSED";
   m_profileConfigs.insert(id, value);
   if (!saveProfiles())
     return result(false, "LOGGER_PROFILE_SAVE_FAILED");
   if (!enabled)
     return result(true, "LOGGER_PAUSED");
-  profile->state = "LISTENING";
-  return result(true, "LOGGER_LISTENING");
+  if (source != "NEXUS_NATIVE")
+    profile->state = "LISTENING";
+  return result(true, source == "NEXUS_NATIVE" ? "LOGGER_NATIVE_READY"
+                                                : "LOGGER_LISTENING");
+}
+
+void LoggerIngestion::setAccountScope(const QString &accountId) {
+  m_accountId = boundedId(accountId) ? accountId : QString{};
+}
+
+QJsonObject LoggerIngestion::nativeBinding() const {
+  if (m_accountId.isEmpty())
+    return {{"ok", false}, {"code", "LOGGER_ACCOUNT_SCOPE_REQUIRED"}};
+  const Profile *selected = nullptr;
+  for (const Profile *profile : m_profiles) {
+    if (profile->source != "NEXUS_NATIVE" || profile->state != "NATIVE_READY")
+      continue;
+    if (selected)
+      return {{"ok", false}, {"code", "LOGGER_NATIVE_BINDING_AMBIGUOUS"}};
+    selected = profile;
+  }
+  if (!selected)
+    return {{"ok", false}, {"code", "LOGGER_NATIVE_PROFILE_UNAVAILABLE"}};
+  return {{"ok", true},
+          {"code", "LOGGER_NATIVE_BINDING_READY"},
+          {"accountId", m_accountId},
+          {"profileId", selected->id},
+          {"stationProfileId", selected->stationProfileId},
+          {"destinationAuthority", selected->destinationAuthority},
+          {"authorityRevision", selected->authorityRevision},
+          {"mappingRevision", selected->mappingRevision},
+          {"sourceRevision", 1}};
+}
+
+QJsonObject LoggerIngestion::submitNativeContact(const QJsonObject &intent) {
+  auto result = [](bool ok, const QString &code, const QString &eventId = {}) {
+    QJsonObject value{{"ok", ok}, {"code", code}};
+    if (!eventId.isEmpty())
+      value.insert("eventId", eventId);
+    return value;
+  };
+  const QString profileId = intent.value("profileId").toString();
+  const QString operationId = intent.value("operationIdentity").toString();
+  const QString station = intent.value("stationProfileId").toString();
+  const QString authority = intent.value("destinationAuthority").toString();
+  const int authorityRevision = intent.value("authorityRevision").toInt();
+  const int mappingRevision = intent.value("mappingRevision").toInt();
+  const int sourceRevision = intent.value("sourceRevision").toInt(1);
+  const QString capturedUtc = intent.value("capturedUtc").toString();
+  const QJsonObject contact = intent.value("contact").toObject();
+  Profile *profile = m_profiles.value(profileId, nullptr);
+  const QByteArray contactBytes =
+      QJsonDocument(contact).toJson(QJsonDocument::Compact);
+  if (!profile || profile->source != "NEXUS_NATIVE" ||
+      profile->state != "NATIVE_READY")
+    return result(false, "LOGGER_NATIVE_PROFILE_UNAVAILABLE");
+  if (m_accountId.isEmpty())
+    return result(false, "LOGGER_ACCOUNT_SCOPE_REQUIRED");
+  if (!boundedId(operationId) || !boundedId(station) ||
+      sourceRevision < 1 || !validUtc(capturedUtc) || contact.isEmpty() ||
+      contactBytes.size() > 16 * 1024 || !validNativeContact(contact))
+    return result(false, "LOGGER_NATIVE_EVENT_INVALID");
+  if (station != profile->stationProfileId ||
+      authority != profile->destinationAuthority ||
+      authorityRevision != profile->authorityRevision ||
+      (authority == "WAVELOG" &&
+       (mappingRevision < 1 || mappingRevision != profile->mappingRevision)))
+    return result(false, "LOGGER_DESTINATION_CHANGED");
+  const QString eventId =
+      safeId((m_accountId + "|" + station + "|" + operationId).toUtf8());
+  const QJsonObject immutable{{"accountId", m_accountId},
+                              {"stationProfileId", station},
+                              {"operationIdentity", operationId},
+                              {"sourceRevision", sourceRevision},
+                              {"destinationAuthority", authority},
+                              {"authorityRevision", authorityRevision},
+                              {"mappingRevision", mappingRevision},
+                              {"capturedUtc", capturedUtc},
+                              {"contact", contact}};
+  const QString payloadDigest = digest(
+      QJsonDocument(immutable).toJson(QJsonDocument::Compact));
+  QJsonObject event{{"eventId", eventId},
+                    {"payloadDigest", payloadDigest},
+                    {"profileId", profile->id},
+                    {"source", "NEXUS_NATIVE"},
+                    {"instanceId", profile->instanceId},
+                    {"sourceContactId", operationId},
+                    {"sourceRevision", sourceRevision},
+                    {"kind", "create"},
+                    {"capturedUtc", capturedUtc},
+                    {"destinationAuthority", authority},
+                    {"authorityRevision", authorityRevision},
+                    {"stationProfileId", station},
+                    {"contact", contact}};
+  if (mappingRevision > 0)
+    event.insert("mappingRevision", mappingRevision);
+  const bool existed = std::any_of(m_journal.begin(), m_journal.end(),
+                                   [&](const QJsonValue &row) {
+                                     return row.toObject().value("eventId") ==
+                                            eventId;
+                                   });
+  if (!storeEvent(event))
+    return result(false, m_lastError.isEmpty() ? "LOGGER_NATIVE_QUEUE_FAILED"
+                                               : m_lastError,
+                  eventId);
+  if (!existed)
+    emit eventsReady();
+  return result(true, existed ? "LOGGER_NATIVE_DUPLICATE"
+                              : "LOGGER_NATIVE_QUEUED",
+                eventId);
+}
+
+QJsonObject LoggerIngestion::resolveNativeEvent(const QString &eventId,
+                                                const QString &action) {
+  for (qsizetype i = 0; i < m_journal.size(); ++i) {
+    QJsonObject row = m_journal[i].toObject();
+    if (row.value("eventId").toString() != eventId ||
+        row.value("accountId").toString() != m_accountId)
+      continue;
+    if (action == "retry" &&
+        (row.value("state") == "DELIVERY_UNKNOWN" ||
+         row.value("state") == "REJECTED")) {
+      const QJsonArray before = m_journal;
+      row.insert("state", "PENDING");
+      row.remove("lastError");
+      m_journal[i] = row;
+      if (!saveJournal()) {
+        m_journal = before;
+        return {{"ok", false}, {"code", "LOGGER_JOURNAL_WRITE_FAILED"}};
+      }
+      emit eventsReady();
+      return {{"ok", true}, {"code", "LOGGER_NATIVE_RETRY_QUEUED"}};
+    }
+    if (action == "discard") {
+      const QJsonArray before = m_journal;
+      m_journal.removeAt(i);
+      if (!saveJournal()) {
+        m_journal = before;
+        return {{"ok", false}, {"code", "LOGGER_JOURNAL_WRITE_FAILED"}};
+      }
+      if (m_vault)
+        m_vault->remove(row.value("alias").toString());
+      return {{"ok", true}, {"code", "LOGGER_NATIVE_DISCARDED"}};
+    }
+    return {{"ok", false}, {"code", "LOGGER_NATIVE_ACTION_INVALID"}};
+  }
+  return {{"ok", false}, {"code", "LOGGER_NATIVE_EVENT_NOT_FOUND"}};
 }
 
 void LoggerIngestion::receive(Profile *profile) {
@@ -393,8 +578,9 @@ bool LoggerIngestion::storeEvent(const QJsonObject &event) {
   qint64 bytes = 0;
   for (const QJsonValue &item : m_journal) {
     const QJsonObject row = item.toObject();
-    if (QDateTime::fromString(row.value("capturedUtc").toString(),
-                              Qt::ISODate) >= cutoff) {
+    const bool native = row.value("source") == "NEXUS_NATIVE";
+    if (native || QDateTime::fromString(row.value("capturedUtc").toString(),
+                                        Qt::ISODate) >= cutoff) {
       kept.append(row);
       bytes += row.value("bytes").toInteger();
     } else if (m_vault)
@@ -404,9 +590,21 @@ bool LoggerIngestion::storeEvent(const QJsonObject &event) {
   const QByteArray encoded =
       QJsonDocument(event).toJson(QJsonDocument::Compact);
   const QString eventId = event.value("eventId").toString();
-  for (const QJsonValue &item : m_journal)
-    if (item.toObject().value("eventId").toString() == eventId)
-      return true;
+  for (const QJsonValue &item : m_journal) {
+    const QJsonObject row = item.toObject();
+    if (row.value("eventId").toString() != eventId)
+      continue;
+    const auto secret = m_vault ? m_vault->read(row.value("alias").toString())
+                                : std::nullopt;
+    const QJsonObject stored =
+        secret ? QJsonDocument::fromJson(secret->toUtf8()).object()
+               : QJsonObject{};
+    if (stored.value("payloadDigest") != event.value("payloadDigest")) {
+      m_lastError = "LOGGER_EVENT_ID_REUSED";
+      return false;
+    }
+    return true;
+  }
   if (m_journal.size() >= MaxPendingEvents ||
       bytes + encoded.size() > MaxPendingBytes) {
     m_lastError = "LOGGER_JOURNAL_FULL";
@@ -422,6 +620,11 @@ bool LoggerIngestion::storeEvent(const QJsonObject &event) {
   m_journal.append(QJsonObject{{"eventId", eventId},
                                {"alias", alias},
                                {"capturedUtc", event.value("capturedUtc")},
+                               {"accountId", m_accountId},
+                               {"stationProfileId",
+                                event.value("stationProfileId")},
+                               {"source", event.value("source")},
+                               {"state", "PENDING"},
                                {"bytes", encoded.size()}});
   if (!saveJournal()) {
     m_vault->remove(alias);
@@ -438,8 +641,13 @@ QJsonArray LoggerIngestion::pendingEvents(int maximum) const {
   for (const QJsonValue &item : m_journal) {
     if (result.size() >= std::clamp(maximum, 1, 32))
       break;
+    const QJsonObject row = item.toObject();
+    if ((row.value("source") == "NEXUS_NATIVE" &&
+         (!m_accountId.isEmpty() && row.value("accountId") != m_accountId)) ||
+        (row.contains("state") && row.value("state") != "PENDING"))
+      continue;
     const auto secret =
-        m_vault ? m_vault->read(item.toObject().value("alias").toString())
+        m_vault ? m_vault->read(row.value("alias").toString())
                 : std::nullopt;
     if (secret) {
       QJsonParseError error;
@@ -453,24 +661,44 @@ QJsonArray LoggerIngestion::pendingEvents(int maximum) const {
 }
 void LoggerIngestion::acknowledge(const QJsonArray &receipts) {
   QSet<QString> accepted;
+  QHash<QString, QJsonObject> rejected;
   for (const QJsonValue &item : receipts) {
     const QJsonObject row = item.toObject();
     if (row.value("accepted").toBool())
       accepted.insert(row.value("eventId").toString());
+    else
+      rejected.insert(row.value("eventId").toString(), row);
   }
-  if (accepted.isEmpty())
+  if (accepted.isEmpty() && rejected.isEmpty())
     return;
   QJsonArray kept;
+  QStringList removeAliases;
   for (const QJsonValue &item : m_journal) {
-    const QJsonObject row = item.toObject();
+    QJsonObject row = item.toObject();
     if (accepted.contains(row.value("eventId").toString())) {
-      if (m_vault)
-        m_vault->remove(row.value("alias").toString());
-    } else
+      removeAliases.append(row.value("alias").toString());
+    } else {
+      const QJsonObject receipt = rejected.value(row.value("eventId").toString());
+      if (!receipt.isEmpty()) {
+        row.insert("state", receipt.value("disposition") == "delivery_unknown"
+                                ? "DELIVERY_UNKNOWN"
+                                : "REJECTED");
+        row.insert("lastError", receipt.value("code").toString().left(160));
+      }
       kept.append(row);
+    }
   }
+  const QJsonArray before = m_journal;
   m_journal = kept;
-  saveJournal();
+  if (!saveJournal()) {
+    m_journal = before;
+    m_lastError = "LOGGER_JOURNAL_WRITE_FAILED";
+    return;
+  }
+  for (const QString &alias : removeAliases)
+    if (m_vault)
+      m_vault->remove(alias);
+  m_lastError.clear();
 }
 bool LoggerIngestion::loadJournal() {
   QFile file(m_journalPath);

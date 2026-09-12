@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shackcq/desktop/CloudAgentClient.hpp"
 #include "shackcq/desktop/LoggerIngestion.hpp"
+#include "shackcq/desktop/NativeAgentIngress.hpp"
 #include "shackcq/desktop/AgentDigiController.hpp"
 #include "shackcq/desktop/DesktopPanadapter.hpp"
 #include "shackcq/desktop/DesktopPlatform.hpp"
@@ -13,6 +14,7 @@
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QTextStream>
@@ -62,6 +64,8 @@ int main(int argc, char **argv) {
   parser.setApplicationDescription("ShackCQ Remote Station Service v1");
   parser.addHelpOption(); parser.addVersionOption();
   parser.addOption(QCommandLineOption({"f", "foreground"}, "Run the explicitly enabled service in the foreground"));
+  parser.addOption(QCommandLineOption(QStringLiteral("native-ingress-only"), "Run cloud/logger native ingress with every hardware autoconnect path disabled"));
+  parser.addOption(QCommandLineOption(QStringLiteral("native-owner-token"), "Ephemeral owner token for graceful native-only shutdown", "token"));
   parser.addOption(QCommandLineOption({"s", "status"}, "Print bounded service status"));
   parser.addOption(QCommandLineOption({"p", "pairing-offer"}, "Create a short-lived pairing offer"));
   parser.addOption(QCommandLineOption(QStringLiteral("list-clients"), "List paired public device metadata"));
@@ -99,7 +103,16 @@ int main(int argc, char **argv) {
       parser.isSet("unpair-shackcq") || parser.isSet("list-audio-devices") ||
       parser.isSet("configure-digi-audio") || parser.isSet("authorize-digi-tx") ||
       parser.isSet("disable-digi-tx");
-  if (!parser.isSet("foreground") && !setupAction) parser.showHelp(1);
+  const bool nativeIngressOnly = parser.isSet("native-ingress-only");
+  const QString nativeOwnerToken = parser.value("native-owner-token");
+  if (nativeIngressOnly &&
+      !QRegularExpression(QStringLiteral("^[0-9a-f]{64}$"))
+           .match(nativeOwnerToken)
+           .hasMatch()) {
+    QTextStream(stderr) << "A valid ephemeral native owner token is required\n";
+    return 2;
+  }
+  if (!parser.isSet("foreground") && !nativeIngressOnly && !setupAction) parser.showHelp(1);
 
   DesktopPaths paths;
   QString error;
@@ -110,18 +123,24 @@ int main(int argc, char **argv) {
   DesktopRadioController radio;
   AgentDigiController digi(&radio);
   LoggerIngestion logger(&vault, paths.databases() + "/logger-events-v1.json");
-  CloudAgentClient cloudAgent(&vault, &radio, &digi, &logger);
+  NativeAgentIngress nativeIngress(&vault, &logger);
+  QString nativeIngressError;
+  nativeIngress.initialize(&nativeIngressError);
+  CloudAgentClient cloudAgent(&vault, &radio, nativeIngressOnly ? nullptr : &digi,
+                              &logger);
   DesktopRotatorController rotator;
   DesktopPanadapter panadapter;
-  if (!radio.restoreConfiguration(configuration.section("radioProfiles"), &error) ||
+  if (!nativeIngressOnly &&
+      (!radio.restoreConfiguration(configuration.section("radioProfiles"), &error) ||
       !rotator.restoreConfiguration(configuration.section("rotatorProfiles"), &error) ||
-      !panadapter.restoreConfiguration(configuration.section("panadapter"), &error)) {
+       !panadapter.restoreConfiguration(configuration.section("panadapter"), &error))) {
     QTextStream(stderr) << error << '\n'; return 2;
   }
   if (!cloudAgent.restoreConfiguration(configuration.section("cloudAgent"), &error)) {
     QTextStream(stderr) << error << '\n'; return 2;
   }
-  if (!digi.restoreConfiguration(configuration.section("digiAgent"), &error)) {
+  if (!nativeIngressOnly &&
+      !digi.restoreConfiguration(configuration.section("digiAgent"), &error)) {
     QTextStream(stderr) << error << '\n'; return 2;
   }
   if (parser.isSet("list-audio-devices")) {
@@ -234,11 +253,17 @@ int main(int argc, char **argv) {
   });
   QObject::connect(&application, &QCoreApplication::aboutToQuit, &application, [&] {
     cloudAgent.stop();
-    digi.stop("Agent shutdown");
-    service.globalStop(); service.stop();
+    if (!nativeIngressOnly) {
+      digi.stop("Agent shutdown");
+      service.globalStop();
+      service.stop();
+    }
     configuration.setSection("remoteStation", service.configuration()); configuration.save();
     configuration.setSection("cloudAgent", cloudAgent.configuration()); configuration.save();
-    configuration.setSection("digiAgent", digi.configuration()); configuration.save();
+    if (!nativeIngressOnly) {
+      configuration.setSection("digiAgent", digi.configuration());
+      configuration.save();
+    }
   });
 
   QLocalServer admin;
@@ -251,40 +276,42 @@ int main(int argc, char **argv) {
   }
   QLocalServer::removeServer(AdminSocket);
   if (!admin.listen(AdminSocket)) { QTextStream(stderr) << admin.errorString() << '\n'; return 4; }
-  const bool remoteStationEnabled = service.configuration().value("enabled").toBool();
+  const bool remoteStationEnabled = !nativeIngressOnly && service.configuration().value("enabled").toBool();
   if (remoteStationEnabled && !service.start(&error)) {
     QTextStream(stderr) << error << '\n';
     return 3;
   }
-  radio.startConfiguredAutoConnect();
+  if (!nativeIngressOnly)
+    radio.startConfiguredAutoConnect();
   cloudAgent.start();
-  QObject::connect(&admin, &QLocalServer::newConnection, &application, [&] {
-    while (QLocalSocket *socket = admin.nextPendingConnection()) {
-      QObject::connect(socket, &QLocalSocket::readyRead, socket, [&, socket] {
-        const QJsonDocument document = QJsonDocument::fromJson(socket->readLine(16 * 1024));
-        const QJsonObject request = document.object();
+  NativeAgentIngressServer ingressServer(
+      &admin, &nativeIngress,
+      [&](const QJsonObject &request) {
         const QString action = request.value("action").toString();
         QVariant response;
         bool ok = true;
-        if (action == "status") response = QVariantMap{{"remoteStation", service.health()},
-                                                        {"cloudAgent", cloudAgent.health()},
-                                                        {"radio", radio.health()},
-                                                        {"digi", digi.snapshot(QString{},QString{},0).toVariantMap()}};
-        else if (action == "list-clients") response = service.pairedDevices();
-        else if (action == "pairing-offer") response = service.createPairingOffer();
-        else if (action == "revoke") { service.revokeDevice(request.value("deviceId").toString()); response = QVariantMap{{"revoked", true}}; }
-        else if (action == "stop") { const bool stopped = service.globalStop(); ok = stopped; response = QVariantMap{{"stopped", stopped}, {"code", stopped ? "GLOBAL_STOPPED" : "RX_UNCONFIRMED"}}; }
-        else if (action == "digi-stop") { const auto outcome = digi.stop("local operator STOP"); const bool stopped = outcome == AgentDigiController::StopOutcome::RxVerified; ok = stopped; const QString code = stopped ? "STOPPED_RX_VERIFIED" : outcome == AgentDigiController::StopOutcome::InProgress ? "STOP_IN_PROGRESS_RX_UNCONFIRMED" : "RX_UNCONFIRMED"; response = QVariantMap{{"stopped", stopped}, {"code", code}}; }
-        else { ok = false; response = QVariantMap{{"error", "unknown admin action"}}; }
-        socket->write(QJsonDocument(QJsonObject{{"ok", ok}, {"result", QJsonValue::fromVariant(response)}})
-                          .toJson(QJsonDocument::Compact) +
-                      '\n');
-        socket->flush(); socket->disconnectFromServer();
-        if (action == "stop" && ok) QMetaObject::invokeMethod(&application, "quit", Qt::QueuedConnection);
-      });
-      QObject::connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
-    }
-  });
+        if (action == "status") {
+          QVariantMap status{{"cloudAgent", cloudAgent.health()},
+                             {"nativeIngress", nativeIngress.capability().toVariantMap()},
+                             {"hardwareAutoconnect", !nativeIngressOnly}};
+          if (!nativeIngressOnly) {
+            status.insert("remoteStation", service.health());
+            status.insert("radio", radio.health());
+            status.insert("digi", digi.snapshot(QString{}, QString{}, 0).toVariantMap());
+          }
+          response = status;
+        } else if (action == "list-clients" && !nativeIngressOnly) response = service.pairedDevices();
+        else if (action == "pairing-offer" && !nativeIngressOnly) response = service.createPairingOffer();
+        else if (action == "revoke" && !nativeIngressOnly) { service.revokeDevice(request.value("deviceId").toString()); response = QVariantMap{{"revoked", true}}; }
+        else if (action == "stop") { const bool ownerMatches = !nativeIngressOnly || request.value("ownerToken").toString() == nativeOwnerToken; const bool stopped = ownerMatches && (nativeIngressOnly || service.globalStop()); ok = stopped; response = QVariantMap{{"stopped", stopped}, {"code", stopped ? "GLOBAL_STOPPED" : ownerMatches ? "RX_UNCONFIRMED" : "OWNER_TOKEN_REJECTED"}}; }
+        else if (action == "digi-stop" && !nativeIngressOnly) { const auto outcome = digi.stop("local operator STOP"); const bool stopped = outcome == AgentDigiController::StopOutcome::RxVerified; ok = stopped; const QString code = stopped ? "STOPPED_RX_VERIFIED" : outcome == AgentDigiController::StopOutcome::InProgress ? "STOP_IN_PROGRESS_RX_UNCONFIRMED" : "RX_UNCONFIRMED"; response = QVariantMap{{"stopped", stopped}, {"code", code}}; }
+        else { ok = false; response = QVariantMap{{"code", nativeIngressOnly ? "HARDWARE_DISABLED" : "AGENT_ADMIN_ACTION_UNKNOWN"}}; }
+        if (action == "stop" && ok)
+          QMetaObject::invokeMethod(&application, "quit", Qt::QueuedConnection);
+        QJsonObject outcome = QJsonObject::fromVariantMap(response.toMap());
+        outcome.insert("ok", ok);
+        return outcome;
+      }, &application);
   if (parser.isSet("pairing-offer"))
     QTextStream(stdout) << QJsonDocument::fromVariant(service.createPairingOffer()).toJson(QJsonDocument::Indented);
   return application.exec();

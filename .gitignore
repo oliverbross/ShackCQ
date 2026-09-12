@@ -18,4 +18,5 @@ third_party/*/target/
 desktop/nexus-runtime/target/
 desktop/shackcq-tauri/target/
 desktop/shackcq-tauri/binaries/shackcq-nexus-runtime-*
+desktop/shackcq-tauri/binaries/shackcq-stationd-*
 desktop/shackcq-tauri/gen/

@@ -419,7 +419,7 @@ fn serve_validated(mut req: tiny_http::Request, state: &Backend, access: &Mutex<
             match serde_json::from_value::<CompletedContactIntent>(
                 value.get("intent").cloned().unwrap_or(Value::Null),
             ) {
-                Ok(v) => respond(req, 200, completed_backend(v)),
+                Ok(v) => respond(req, 200, completed_backend(state, v)),
                 Err(_) => respond(req, 400, json!({"error":"INVALID_CONTACT"})),
             }
         }

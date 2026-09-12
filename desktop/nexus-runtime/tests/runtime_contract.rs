@@ -66,6 +66,9 @@ fn encrypted_review_queue_is_partitioned_deduplicated_and_receipt_gated() {
     let mut queue = ContactQueue::open(&path, key.clone()).unwrap();
     let contact = ReviewedContact {
         event_id: "fixture-completed-1".into(),
+        operation_identity: "fixture-completed-1".into(),
+        profile_id: "native-profile".into(),
+        source_revision: 1,
         account_id: "test-account".into(),
         station_profile_id: "test-station".into(),
         destination_authority: "WEB_LOCAL".into(),
@@ -77,8 +80,14 @@ fn encrypted_review_queue_is_partitioned_deduplicated_and_receipt_gated() {
         contact: json!({"callsign":"W1AW","mode":"FT8"}),
     };
     let id = queue.enqueue(contact.clone()).unwrap();
-    assert_eq!(id, queue.enqueue(contact).unwrap());
+    assert_eq!(id, queue.enqueue(contact.clone()).unwrap());
     assert_eq!(queue.len(), 1);
+    let mut migrated = contact;
+    migrated.profile_id = "native-profile-2".into();
+    migrated.authority_revision = 4;
+    let migrated_id = queue.enqueue(migrated).unwrap();
+    assert_ne!(id, migrated_id);
+    assert_eq!(queue.len(), 2);
     let raw = std::fs::read_to_string(&path).unwrap();
     assert!(!raw.contains("W1AW"));
     assert!(matches!(
@@ -87,8 +96,9 @@ fn encrypted_review_queue_is_partitioned_deduplicated_and_receipt_gated() {
     ));
     drop(queue);
     let mut reopened = ContactQueue::open(&path, key).unwrap();
-    assert_eq!(reopened.len(), 1);
+    assert_eq!(reopened.len(), 2);
     reopened.acknowledge(&id, true).unwrap();
+    reopened.acknowledge(&migrated_id, true).unwrap();
     assert_eq!(reopened.len(), 0);
 }
 

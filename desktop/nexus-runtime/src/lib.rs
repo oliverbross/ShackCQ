@@ -386,6 +386,7 @@ pub enum RuntimeCommand {
         radio_rx_readback: Option<bool>,
     },
     QueueReviewedContact(ReviewedContact),
+    PendingReviewedContacts,
     AcknowledgeContact {
         event_id: String,
         durable_receipt: bool,
@@ -735,6 +736,13 @@ impl StationRuntime {
                 .enqueue(contact)
                 .map(|id| ("CONTACT_DURABLE_PENDING".into(), Value::String(id)))
                 .map_err(RuntimeError::from),
+            RuntimeCommand::PendingReviewedContacts => Ok((
+                "CONTACT_PENDING_LIST".into(),
+                serde_json::to_value(
+                    self.queue.pending().iter().take(8).cloned().collect::<Vec<_>>(),
+                )
+                .unwrap(),
+            )),
             RuntimeCommand::AcknowledgeContact {
                 event_id,
                 durable_receipt,
