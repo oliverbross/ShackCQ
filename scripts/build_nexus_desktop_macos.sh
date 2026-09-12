@@ -37,6 +37,18 @@ cleanup() {
     kill "$mounted_main_pid" 2>/dev/null || true
     wait "$mounted_main_pid" 2>/dev/null || true
   fi
+  if [ -n "$mount_point" ]; then
+    mounted_processes=$(pgrep -f "$mount_point/.*/shackcq-(desktop|stationd|nexus-runtime)" 2>/dev/null || true)
+    if [ -n "$mounted_processes" ]; then
+      kill $mounted_processes 2>/dev/null || true
+      sleep 0.2
+      remaining_processes=$(pgrep -f "$mount_point/.*/shackcq-(desktop|stationd|nexus-runtime)" 2>/dev/null || true)
+      [ -z "$remaining_processes" ] || kill -9 $remaining_processes 2>/dev/null || true
+      for owned_pid in $mounted_processes $remaining_processes; do
+        wait "$owned_pid" 2>/dev/null || true
+      done
+    fi
+  fi
   if [ -n "$mounted_stationd_pid" ]; then
     "$mounted_stationd" --admin-socket "$mounted_socket" --stop \
       --native-owner-token "$mounted_owner" >/dev/null 2>&1 || true

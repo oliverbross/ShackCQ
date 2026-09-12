@@ -33,7 +33,11 @@ cleanup() {
   cleanup_status=$?
   set +e
   if [ -n "$main_pid" ]; then
-    kill "$main_pid" 2>/dev/null || true
+    if [ "${platform:-}" = windows-x64 ]; then
+      taskkill.exe /PID "$main_pid" /T /F >/dev/null 2>&1 || true
+    else
+      kill "$main_pid" 2>/dev/null || true
+    fi
     wait "$main_pid" 2>/dev/null || true
     main_pid=
   fi
@@ -409,7 +413,6 @@ accept_windows_payload() {
       wait "$main_pid"
       main_rc=$?
       set -e
-      main_pid=
       break
     fi
     sleep 0.1
@@ -420,6 +423,7 @@ accept_windows_payload() {
   fi
   sleep 1
   ! tasklist.exe | tr -d '\r' | grep -Eiq 'shackcq-(desktop|stationd|nexus-runtime)\.exe'
+  main_pid=
   echo 'PACKAGED_WINDOWS_SAFE_LAUNCH_OK hardware=not-opened tx=disabled'
   rm -rf "$payload_tmp"
 }
