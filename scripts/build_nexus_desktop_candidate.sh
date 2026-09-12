@@ -14,7 +14,43 @@ stationd_executable=
 owned_stationd_token=
 owned_stationd_socket=
 main_pid=
+windows_owned_agent_pid=
+windows_owned_agent_path=
+windows_owned_agent_socket=
 cleanup_paths=()
+capture_windows_owned_agent() {
+  local native_path observed_pid
+  native_path=$(cygpath -w "$1")
+  observed_pid=$(SHACKCQ_ACCEPT_AGENT_PATH="$native_path" \
+    SHACKCQ_ACCEPT_AGENT_SOCKET="$2" powershell.exe -NoProfile -NonInteractive \
+      -Command '$p=Get-CimInstance Win32_Process | Where-Object { [StringComparer]::OrdinalIgnoreCase.Equals($_.ExecutablePath,$env:SHACKCQ_ACCEPT_AGENT_PATH) -and $_.CommandLine -like ("*"+$env:SHACKCQ_ACCEPT_AGENT_SOCKET+"*") } | Select-Object -First 1 -ExpandProperty ProcessId; if($p){$p}' \
+      | tr -d '\r' | head -n 1)
+  case "$observed_pid" in
+    ''|*[!0-9]*) return 0 ;;
+    *)
+      windows_owned_agent_pid=$observed_pid
+      windows_owned_agent_path=$native_path
+      windows_owned_agent_socket=$2
+      ;;
+  esac
+}
+windows_owned_agent_is_live() {
+  [ -n "$windows_owned_agent_pid" ] || return 1
+  test "$(SHACKCQ_ACCEPT_AGENT_PID="$windows_owned_agent_pid" \
+    SHACKCQ_ACCEPT_AGENT_PATH="$windows_owned_agent_path" \
+    SHACKCQ_ACCEPT_AGENT_SOCKET="$windows_owned_agent_socket" \
+    powershell.exe -NoProfile -NonInteractive \
+      -Command '$p=Get-CimInstance Win32_Process -Filter ("ProcessId="+$env:SHACKCQ_ACCEPT_AGENT_PID); if($p -and [StringComparer]::OrdinalIgnoreCase.Equals($p.ExecutablePath,$env:SHACKCQ_ACCEPT_AGENT_PATH) -and $p.CommandLine -like ("*"+$env:SHACKCQ_ACCEPT_AGENT_SOCKET+"*")){"LIVE"}' \
+      | tr -d '\r')" = LIVE
+}
+stop_windows_owned_agent() {
+  if windows_owned_agent_is_live; then
+    taskkill.exe /PID "$windows_owned_agent_pid" /T /F >/dev/null 2>&1 || true
+  fi
+  windows_owned_agent_pid=
+  windows_owned_agent_path=
+  windows_owned_agent_socket=
+}
 stop_owned_stationd() {
   if [ -n "$stationd_pid" ]; then
     if [ -n "$owned_stationd_socket" ]; then
@@ -40,6 +76,9 @@ cleanup() {
     fi
     wait "$main_pid" 2>/dev/null || true
     main_pid=
+  fi
+  if [ "${platform:-}" = windows-x64 ]; then
+    stop_windows_owned_agent
   fi
   stop_owned_stationd
   if [ "$nexus_patch_applied" = 1 ]; then
@@ -363,7 +402,7 @@ accept_linux_payload() {
 
 accept_windows_payload() {
   local payload_root=$1
-  local payload_tmp agent_path nexus_path main_path socket_name owner_token main_rc
+  local payload_tmp agent_path nexus_path main_path socket_name owner_token main_rc main_socket
   payload_tmp=$(mktemp -d)
   cleanup_paths+=("$payload_tmp")
   agent_path=$(find "$payload_root" -type f -iname shackcq-stationd.exe -print -quit)
@@ -398,9 +437,10 @@ accept_windows_payload() {
   probe_nexus_identity "$nexus_path" "$payload_tmp/nexus"
 
   mkdir -p "$payload_tmp/home"
+  main_socket="shackcq-package-main-$RANDOM-$RANDOM"
   env HOME="$payload_tmp/home" APPDATA="$payload_tmp/home/AppData/Roaming" \
     LOCALAPPDATA="$payload_tmp/home/AppData/Local" \
-    SHACKCQ_AGENT_ADMIN_SOCKET="shackcq-package-main-$RANDOM-$RANDOM" \
+    SHACKCQ_AGENT_ADMIN_SOCKET="$main_socket" \
     SHACKCQ_AGENT_EPHEMERAL_ROOT="$payload_tmp/main-agent" \
     SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
     SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 "$main_path" \
@@ -408,11 +448,14 @@ accept_windows_payload() {
   main_pid=$!
   main_rc=125
   for _ in {1..80}; do
+    capture_windows_owned_agent "$agent_path" "$main_socket"
     if ! kill -0 "$main_pid" 2>/dev/null; then
+      capture_windows_owned_agent "$agent_path" "$main_socket"
       set +e
       wait "$main_pid"
       main_rc=$?
       set -e
+      main_pid=
       break
     fi
     sleep 0.1
@@ -422,8 +465,12 @@ accept_windows_payload() {
     return 1
   fi
   sleep 1
-  ! tasklist.exe | tr -d '\r' | grep -Eiq 'shackcq-(desktop|stationd|nexus-runtime)\.exe'
-  main_pid=
+  capture_windows_owned_agent "$agent_path" "$main_socket"
+  if windows_owned_agent_is_live; then
+    echo "packaged Windows Agent remained after GUI exit" >&2
+    return 1
+  fi
+  stop_windows_owned_agent
   echo 'PACKAGED_WINDOWS_SAFE_LAUNCH_OK hardware=not-opened tx=disabled'
   rm -rf "$payload_tmp"
 }

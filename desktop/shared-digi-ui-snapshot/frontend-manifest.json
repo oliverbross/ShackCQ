@@ -6,7 +6,7 @@
     "major": 1,
     "minor": 0
   },
-  "sourceRevision": "07ba35614167cbd3f63faaec7dd4453844b8d3b5",
+  "sourceRevision": "b15daaaad8da996872359d00d8f35f473f6f4f3e",
   "entrypoint": "index.html",
   "tauriBinding": "fixed-invoke-v1",
   "tauriCommands": [
