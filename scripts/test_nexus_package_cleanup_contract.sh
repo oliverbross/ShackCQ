@@ -85,6 +85,17 @@ grep -F 'pgrep -f "$mount_point/.*/shackcq-(desktop|stationd|nexus-runtime)"' "$
 
 grep -F 'socket_name="shackcq-package-${RANDOM}-${RANDOM}.sock"' "$candidate" >/dev/null
 ! sed -n '/^accept_linux_payload()/,/^}/p' "$candidate" | grep -Eq -- '--admin-socket "\$payload_tmp/'
+linux_acceptance=$(sed -n '/^accept_linux_payload()/,/^}/p' "$candidate")
+printf '%s\n' "$linux_acceptance" | grep -F 'if [ "$label" = APPIMAGE ]; then' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F 'launch_path="$payload_root/AppRun"' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F 'launch_path=$main_path' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F 'launch_cwd="$payload_tmp/home"' >/dev/null
+test "$(printf '%s\n' "$linux_acceptance" | grep -Fc 'launch_cwd=$payload_root')" = 1
+printf '%s\n' "$linux_acceptance" | grep -F 'cd "$launch_cwd"' >/dev/null
+test "$(printf '%s\n' "$linux_acceptance" | grep -Fc 'launch_env+=("APPDIR=$payload_root")')" = 1
+printf '%s\n' "$linux_acceptance" | grep -F '"${launch_env[@]}"' >/dev/null
+! printf '%s\n' "$linux_acceptance" | grep -F '${LD_LIBRARY_PATH:+' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F 'LD_LIBRARY_PATH="$lib_path"' >/dev/null
 socket_name=shackcq-package-32767-32767.sock
 case "$socket_name" in
   [A-Za-z0-9]* ) ;;

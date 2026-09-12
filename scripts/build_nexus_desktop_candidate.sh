@@ -528,13 +528,22 @@ PY
 
 accept_linux_payload() {
   local payload_root=$1 label=$2
-  local payload_tmp agent_path nexus_path main_path socket_name owner_token lib_path main_rc
+  local payload_tmp agent_path nexus_path main_path launch_path launch_cwd socket_name owner_token lib_path main_rc
+  local -a launch_env=()
   payload_tmp=$(mktemp -d)
   cleanup_paths+=("$payload_tmp")
   agent_path=$(find "$payload_root" -type f -name shackcq-stationd -perm -111 -print -quit)
   nexus_path=$(find "$payload_root" -type f -name shackcq-nexus-runtime -perm -111 -print -quit)
   main_path=$(find "$payload_root" -type f -name shackcq-desktop -perm -111 -print -quit)
   test -n "$agent_path" && test -n "$nexus_path" && test -n "$main_path"
+  launch_path=$main_path
+  launch_cwd="$payload_tmp/home"
+  if [ "$label" = APPIMAGE ]; then
+    launch_path="$payload_root/AppRun"
+    launch_cwd=$payload_root
+    launch_env+=("APPDIR=$payload_root")
+    test -x "$launch_path"
+  fi
   lib_path=$(find "$payload_root" -type d \( -name lib -o -name lib64 \) -print | paste -sd: -)
   # stationd resolves this bounded logical name beneath its private runtime
   # directory; it intentionally rejects path separators supplied by callers.
@@ -551,7 +560,7 @@ accept_linux_payload() {
   esac
   test "${#socket_name}" -le 96
   owner_token=$(printf 'b%.0s' {1..64})
-  LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  LD_LIBRARY_PATH="$lib_path" \
     "$agent_path" --foreground --native-ingress-only \
       --native-owner-token "$owner_token" --admin-socket "$socket_name" \
       --ephemeral-root "$payload_tmp/agent" --ephemeral-credentials &
@@ -560,16 +569,16 @@ accept_linux_payload() {
   owned_stationd_socket=$socket_name
   owned_stationd_token=$owner_token
   for _ in {1..50}; do
-    LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    LD_LIBRARY_PATH="$lib_path" \
       "$agent_path" --admin-socket "$socket_name" --status >/dev/null 2>&1 && break
     sleep 0.1
   done
-  LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  LD_LIBRARY_PATH="$lib_path" \
     "$agent_path" --admin-socket "$socket_name" --status >/dev/null
-  ! LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  ! LD_LIBRARY_PATH="$lib_path" \
     "$agent_path" --admin-socket "$socket_name" --stop \
       --native-owner-token "$(printf 'c%.0s' {1..64})" >/dev/null 2>&1
-  LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+  LD_LIBRARY_PATH="$lib_path" \
     "$agent_path" --admin-socket "$socket_name" --stop \
       --native-owner-token "$owner_token" >/dev/null
   wait "$stationd_pid"
@@ -580,15 +589,19 @@ accept_linux_payload() {
 
   mkdir -p "$payload_tmp/home" "$payload_tmp/runtime" "$payload_tmp/config" "$payload_tmp/data"
   set +e
-  timeout --signal=TERM --kill-after=2s 8s xvfb-run -a env \
-    HOME="$payload_tmp/home" XDG_RUNTIME_DIR="$payload_tmp/runtime" \
-    XDG_CONFIG_HOME="$payload_tmp/config" XDG_DATA_HOME="$payload_tmp/data" \
-    SHACKCQ_AGENT_ADMIN_SOCKET="shackcq-package-main-$RANDOM-$RANDOM" \
-    SHACKCQ_AGENT_EPHEMERAL_ROOT="$payload_tmp/main-agent" \
-    SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
-    SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 \
-    LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    "$main_path" >"$payload_tmp/main.log" 2>&1
+  (
+    cd "$launch_cwd"
+    timeout --signal=TERM --kill-after=2s 8s xvfb-run -a env \
+      HOME="$payload_tmp/home" XDG_RUNTIME_DIR="$payload_tmp/runtime" \
+      XDG_CONFIG_HOME="$payload_tmp/config" XDG_DATA_HOME="$payload_tmp/data" \
+      "${launch_env[@]}" \
+      SHACKCQ_AGENT_ADMIN_SOCKET="shackcq-package-main-$RANDOM-$RANDOM" \
+      SHACKCQ_AGENT_EPHEMERAL_ROOT="$payload_tmp/main-agent" \
+      SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
+      SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 \
+      LD_LIBRARY_PATH="$lib_path" \
+      "$launch_path"
+  ) >"$payload_tmp/main.log" 2>&1
   main_rc=$?
   set -e
   if [ "$main_rc" -ne 0 ]; then
