@@ -108,6 +108,27 @@ jq -e '.ok == true and .result.hardwareAutoconnect == false and .result.nativeIn
   --native-owner-token "$owner_token" --stop >/dev/null
 wait "$stationd_pid"
 printf 'PACKAGED_NATIVE_INGRESS_ONLY_OK hardwareAutoconnect=false\n'
+
+fixture="$repo/third_party/nexus/crates/ft8/tests/fixtures/ft8_sample.wav"
+fixture_sha=$(shasum -a 256 "$fixture" | awk '{print $1}')
+test "$fixture_sha" = 9feb99c275770a6618538026da7decc6b09eb6cf63121e5168fa86dcdf00c2f5
+python3 - "$fixture" "$fixture_sha" <<'PY' >"$acceptance_root/reference-request.json"
+import json
+import sys
+print(json.dumps({"version":1,"commandId":"package-reference-decode","generation":1,
+  "launchNonce":"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+  "command":{"type":"DECODE_RECORDING_FILE","parameters":{"path":sys.argv[1],
+  "sha256":sys.argv[2],"mode":"FT8"}}}, separators=(",", ":")))
+PY
+SHACKCQ_RUNTIME_NONCE=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn \
+SHACKCQ_QUEUE_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000 \
+SHACKCQ_QUEUE_PATH="$acceptance_root/reference-queue.json" \
+  "$nexus" <"$acceptance_root/reference-request.json" \
+  >"$acceptance_root/reference-result.json"
+jq -e '.ok == true and .code == "REFERENCE_RECORDING_DECODED" and
+  .payload.decodeCount >= 1 and (.payload.messages | index("CQ F5RXL IN94") != null)' \
+  "$acceptance_root/reference-result.json" >/dev/null
+printf 'PACKAGED_REFERENCE_RECORDING_OK source=REFERENCE_RECORDING expected="CQ F5RXL IN94"\n'
 rm -rf "$acceptance_root"
 
 stage=$(mktemp -d "${TMPDIR:-/tmp}/shackcq-nexus-desktop.XXXXXX")

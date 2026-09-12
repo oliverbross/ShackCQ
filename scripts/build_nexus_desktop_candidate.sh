@@ -155,15 +155,170 @@ case "$sidecar_name" in
 esac
 cp "$sidecar" "$staged_sidecar"
 
+probe_nexus_identity() {
+  local packaged_nexus=$1 probe_root=$2 result fixture fixture_json fixture_sha request
+  mkdir -p "$probe_root"
+  result=$(printf '%s\n' \
+    '{"version":1,"commandId":"package-identity","generation":0,"launchNonce":"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn","command":{"type":"IDENTITY"}}' |
+    SHACKCQ_RUNTIME_NONCE=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn \
+    SHACKCQ_QUEUE_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000 \
+    SHACKCQ_QUEUE_PATH="$probe_root/queue.json" "$packaged_nexus")
+  python3 - "$result" <<'PY'
+import json
+import sys
+
+result = json.loads(sys.argv[1])
+assert result["ok"] is True
+assert result["code"] == "ENGINE_IDENTITY"
+assert result["payload"]["engine"] == "kd9taw/Nexus native libtempo"
+assert result["payload"]["legacyFallback"] is False
+assert result["payload"]["upstreamCommit"] == "7618390658f8f92431dec0ac65979b84f2c0fb76"
+assert {"FT8", "FT4", "FST4W", "WSPR"}.issubset(result["payload"]["compiledModes"])
+PY
+  fixture="$repo/third_party/nexus/crates/ft8/tests/fixtures/ft8_sample.wav"
+  fixture_sha=$(sha256sum "$fixture" | awk '{print $1}')
+  test "$fixture_sha" = 9feb99c275770a6618538026da7decc6b09eb6cf63121e5168fa86dcdf00c2f5
+  fixture_json=$fixture
+  if [ "$platform" = windows-x64 ]; then
+    fixture_json=$(cygpath -w "$fixture")
+    case "$fixture_json" in
+      [A-Za-z]:\\*) ;;
+      *) echo "Windows recording path was not converted for native JSON: $fixture_json" >&2; exit 1 ;;
+    esac
+  fi
+  request=$(python3 - "$fixture_json" "$fixture_sha" <<'PY'
+import json
+import sys
+print(json.dumps({
+    "version": 1,
+    "commandId": "package-reference-decode",
+    "generation": 1,
+    "launchNonce": "nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+    "command": {"type": "DECODE_RECORDING_FILE", "parameters": {
+        "path": sys.argv[1], "sha256": sys.argv[2], "mode": "FT8"
+    }},
+}, separators=(",", ":")))
+PY
+)
+  result=$(printf '%s\n' "$request" |
+    SHACKCQ_RUNTIME_NONCE=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn \
+    SHACKCQ_QUEUE_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000 \
+    SHACKCQ_QUEUE_PATH="$probe_root/reference-queue.json" "$packaged_nexus")
+  python3 - "$result" <<'PY'
+import json
+import sys
+result = json.loads(sys.argv[1])
+assert result["ok"] is True
+assert result["code"] == "REFERENCE_RECORDING_DECODED"
+assert result["payload"]["decodeCount"] >= 1
+assert "CQ F5RXL IN94" in result["payload"]["messages"]
+PY
+}
+
+accept_linux_payload() {
+  local payload_root=$1 label=$2
+  local payload_tmp agent_path nexus_path main_path socket_path owner_token lib_path main_rc
+  payload_tmp=$(mktemp -d)
+  agent_path=$(find "$payload_root" -type f -name shackcq-stationd -perm -111 -print -quit)
+  nexus_path=$(find "$payload_root" -type f -name shackcq-nexus-runtime -perm -111 -print -quit)
+  main_path=$(find "$payload_root" -type f -name shackcq-desktop -perm -111 -print -quit)
+  test -n "$agent_path" && test -n "$nexus_path" && test -n "$main_path"
+  lib_path=$(find "$payload_root" -type d \( -name lib -o -name lib64 \) -print | paste -sd: -)
+  socket_path="$payload_tmp/stationd.sock"
+  owner_token=$(printf 'b%.0s' {1..64})
+  LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    "$agent_path" --foreground --native-ingress-only \
+      --native-owner-token "$owner_token" --admin-socket "$socket_path" \
+      --ephemeral-root "$payload_tmp/agent" --ephemeral-credentials &
+  local agent_pid=$!
+  for _ in {1..50}; do
+    LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+      "$agent_path" --admin-socket "$socket_path" --status >/dev/null 2>&1 && break
+    sleep 0.1
+  done
+  LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    "$agent_path" --admin-socket "$socket_path" --status >/dev/null
+  ! LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    "$agent_path" --admin-socket "$socket_path" --stop \
+      --native-owner-token "$(printf 'c%.0s' {1..64})" >/dev/null 2>&1
+  LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    "$agent_path" --admin-socket "$socket_path" --stop \
+      --native-owner-token "$owner_token" >/dev/null
+  wait "$agent_pid"
+  probe_nexus_identity "$nexus_path" "$payload_tmp/nexus"
+
+  mkdir -p "$payload_tmp/home" "$payload_tmp/runtime" "$payload_tmp/config" "$payload_tmp/data"
+  set +e
+  timeout --signal=TERM --kill-after=2s 8s xvfb-run -a env \
+    HOME="$payload_tmp/home" XDG_RUNTIME_DIR="$payload_tmp/runtime" \
+    XDG_CONFIG_HOME="$payload_tmp/config" XDG_DATA_HOME="$payload_tmp/data" \
+    LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
+    "$main_path" >"$payload_tmp/main.log" 2>&1
+  main_rc=$?
+  set -e
+  test "$main_rc" -eq 0 -o "$main_rc" -eq 124
+  sleep 1
+  ! pgrep -f "$payload_root/.*/shackcq-(desktop|stationd|nexus-runtime)" >/dev/null
+  printf 'PACKAGED_%s_SAFE_LAUNCH_OK hardware=not-opened tx=disabled\n' "$label"
+  rm -rf "$payload_tmp"
+}
+
+accept_windows_payload() {
+  local payload_root=$1
+  local payload_tmp agent_path nexus_path main_path socket_name owner_token main_rc
+  payload_tmp=$(mktemp -d)
+  agent_path=$(find "$payload_root" -type f -iname shackcq-stationd.exe -print -quit)
+  nexus_path=$(find "$payload_root" -type f -iname shackcq-nexus-runtime.exe -print -quit)
+  main_path=$(find "$payload_root" -type f -iname shackcq-desktop.exe -print -quit)
+  if [ -z "$main_path" ]; then
+    main_path=$(find "$payload_root" -type f -iname 'ShackCQ Desktop.exe' -print -quit)
+  fi
+  test -n "$agent_path" && test -n "$nexus_path" && test -n "$main_path"
+  socket_name="shackcq-package-$RANDOM-$RANDOM"
+  owner_token=$(printf 'b%.0s' {1..64})
+  "$agent_path" --foreground --native-ingress-only \
+    --native-owner-token "$owner_token" --admin-socket "$socket_name" \
+    --ephemeral-root "$payload_tmp/agent" --ephemeral-credentials &
+  local agent_pid=$!
+  for _ in {1..50}; do
+    "$agent_path" --admin-socket "$socket_name" --status >/dev/null 2>&1 && break
+    sleep 0.1
+  done
+  "$agent_path" --admin-socket "$socket_name" --status >/dev/null
+  ! "$agent_path" --admin-socket "$socket_name" --stop \
+      --native-owner-token "$(printf 'c%.0s' {1..64})" >/dev/null 2>&1
+  "$agent_path" --admin-socket "$socket_name" --stop \
+    --native-owner-token "$owner_token" >/dev/null
+  wait "$agent_pid"
+  probe_nexus_identity "$nexus_path" "$payload_tmp/nexus"
+
+  mkdir -p "$payload_tmp/home"
+  set +e
+  timeout 8s env HOME="$payload_tmp/home" APPDATA="$payload_tmp/home/AppData/Roaming" \
+    LOCALAPPDATA="$payload_tmp/home/AppData/Local" "$main_path" \
+    >"$payload_tmp/main.log" 2>&1
+  main_rc=$?
+  set -e
+  test "$main_rc" -eq 0 -o "$main_rc" -eq 124
+  sleep 1
+  ! tasklist.exe | tr -d '\r' | grep -Eiq 'shackcq-(desktop|stationd|nexus-runtime)\.exe'
+  echo 'PACKAGED_WINDOWS_SAFE_LAUNCH_OK hardware=not-opened tx=disabled'
+  rm -rf "$payload_tmp"
+}
+
 case "$platform" in
   windows-x64)
     mapfile -d '' packages < <(find "$bundle_root/nsis" -maxdepth 1 -type f -name '*.exe' -print0)
     [ "${#packages[@]}" -eq 1 ] || { echo "expected one NSIS installer, found ${#packages[@]}" >&2; exit 1; }
     package_name=$(basename "${packages[0]}" .exe)
     cp "${packages[0]}" "$output/${package_name}-UNSIGNED-UNNOTARIZED.exe"
+    nsis_extract=$(mktemp -d)
+    7z x -y -o"$nsis_extract" "${packages[0]}" >/dev/null
     for packaged in shackcq-nexus-runtime.exe shackcq-stationd.exe shackcq-hamlib-helper.exe; do
       7z l "${packages[0]}" | grep -Fq "$packaged"
     done
+    accept_windows_payload "$nsis_extract"
+    rm -rf "$nsis_extract"
     {
       echo 'MAIN_EXECUTABLE'
       x86_64-w64-mingw32-objdump -p "$main_executable" | grep 'DLL Name:' || true
@@ -194,7 +349,11 @@ case "$platform" in
       "${appimages[0]}" --appimage-extract >/dev/null
       find squashfs-root -print | LC_ALL=C sort
     ) > "$output/APPIMAGE_CONTENTS.txt"
-    rm -rf "$appimage_extract"
+    accept_linux_payload "$appimage_extract/squashfs-root" APPIMAGE
+    deb_extract=$(mktemp -d)
+    dpkg-deb -x "${debs[0]}" "$deb_extract"
+    accept_linux_payload "$deb_extract" DEB
+    rm -rf "$appimage_extract" "$deb_extract"
     for packaged in shackcq-nexus-runtime shackcq-stationd shackcq-hamlib-helper; do
       grep -Fq "$packaged" "$output/DEBIAN_CONTENTS.txt"
       grep -Fq "$packaged" "$output/APPIMAGE_CONTENTS.txt"
@@ -238,7 +397,7 @@ SHARED_DIGI_WEB_SHA=$(python3 -c 'import json,sys; print(json.load(open(sys.argv
 SIGNING_STATUS=UNSIGNED
 NOTARIZATION_STATUS=UNNOTARIZED
 DISTRIBUTION=GITHUB_WORKFLOW_ARTIFACT_ONLY
-RUN_ACCEPTANCE=NOT_PERFORMED
+RUN_ACCEPTANCE=PACKAGED_PAYLOAD_NATIVE_INGRESS_NEXUS_IDENTITY_AND_BOUNDED_GUI_SMOKE
 PACKAGE_SCOPE=TAURI_DIGI_DESKTOP_WITH_OWNED_NATIVE_INGRESS_AGENT_AND_HAMLIB_HELPER
 CANONICAL_LOGBOOK_AGENT=BUNDLED_CONNECT_EXISTING_OR_OWNED_NO_HARDWARE_AUTOCONNECT
 WINDOWS_CANONICAL_LOGBOOK_AGENT_BUILD=CI_PROOF_REQUIRED_NATIVE_MINGW_QT_6_10_2

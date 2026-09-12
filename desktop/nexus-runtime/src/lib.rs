@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
+use std::io::Cursor;
 use std::path::Path;
 use tempo_audio::capture_resample::CaptureResampler;
 use thiserror::Error;
@@ -29,6 +30,7 @@ pub const TX_ENABLED: bool = false;
 pub const MAX_COMMAND_BYTES: usize = 64 * 1024;
 pub const MAX_EVENT_HISTORY: usize = 512;
 pub const MAX_DECODE_ROWS: usize = 200;
+pub const MAX_RECORDING_BYTES: usize = 4 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
@@ -585,6 +587,11 @@ pub enum RuntimeCommand {
     },
     QueueReviewedContact(ReviewedContact),
     PendingReviewedContacts,
+    DecodeRecordingFile {
+        path: String,
+        sha256: String,
+        mode: DigiMode,
+    },
     AcknowledgeContact {
         event_id: String,
         durable_receipt: bool,
@@ -614,6 +621,10 @@ pub enum RuntimeError {
     StaleGeneration,
     #[error("invalid IPC envelope")]
     InvalidEnvelope,
+    #[error("invalid reference recording")]
+    InvalidRecording,
+    #[error("runtime is busy")]
+    Busy,
     #[error("transmit is locked")]
     TxLocked,
     #[error("queue error: {0}")]
@@ -751,6 +762,55 @@ impl StationRuntime {
             bins: output.waterfall_bins,
         });
         Ok(result)
+    }
+
+    fn decode_recording_file(
+        &mut self,
+        path: &str,
+        expected_sha256: &str,
+        mode: DigiMode,
+    ) -> Result<Vec<DecodeEvent>, RuntimeError> {
+        if matches!(self.state, RuntimeState::Receiving)
+            || path.is_empty()
+            || path.len() > 1024
+            || expected_sha256.len() != 64
+            || !expected_sha256
+                .bytes()
+                .all(|value| value.is_ascii_digit() || (b'a'..=b'f').contains(&value))
+        {
+            return Err(if matches!(self.state, RuntimeState::Receiving) {
+                RuntimeError::Busy
+            } else {
+                RuntimeError::InvalidRecording
+            });
+        }
+        let metadata = std::fs::metadata(path).map_err(|_| RuntimeError::InvalidRecording)?;
+        if metadata.len() < 44 || metadata.len() > MAX_RECORDING_BYTES as u64 {
+            return Err(RuntimeError::InvalidRecording);
+        }
+        let bytes = std::fs::read(path).map_err(|_| RuntimeError::InvalidRecording)?;
+        if hex::encode(Sha256::digest(&bytes)) != expected_sha256 {
+            return Err(RuntimeError::InvalidRecording);
+        }
+        let mut reader = hound::WavReader::new(Cursor::new(bytes))
+            .map_err(|_| RuntimeError::InvalidRecording)?;
+        let spec = reader.spec();
+        if spec.channels != 1
+            || spec.sample_rate != 12_000
+            || spec.bits_per_sample != 16
+            || spec.sample_format != hound::SampleFormat::Int
+        {
+            return Err(RuntimeError::InvalidRecording);
+        }
+        let samples = reader
+            .samples::<i16>()
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| RuntimeError::InvalidRecording)?;
+        let (_, expected_samples) = mode_shape(mode, None)?;
+        if samples.len() != expected_samples {
+            return Err(RuntimeError::InvalidRecording);
+        }
+        self.decode_pcm(mode, &samples, true)
     }
 
     pub fn recent_events(&self, after_sequence: u64, maximum: usize) -> Vec<DecodeEvent> {
@@ -967,6 +1027,19 @@ impl StationRuntime {
                 )
                 .unwrap(),
             )),
+            RuntimeCommand::DecodeRecordingFile { path, sha256, mode } => self
+                .decode_recording_file(&path, &sha256, mode)
+                .map(|events| {
+                    let messages = events
+                        .iter()
+                        .take(8)
+                        .map(|event| event.message.clone())
+                        .collect::<Vec<_>>();
+                    (
+                        "REFERENCE_RECORDING_DECODED".into(),
+                        serde_json::json!({"decodeCount":events.len(),"messages":messages}),
+                    )
+                }),
             RuntimeCommand::AcknowledgeContact {
                 event_id,
                 durable_receipt,

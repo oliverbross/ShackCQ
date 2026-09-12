@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-only
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use shackcq_nexus_runtime::{
     CommandEnvelope, CommandResult, DigiMode, ReviewedContact, RuntimeCommand, RuntimePresence,
-    RuntimeState, RxProfile, CONTRACT_VERSION,
+    RuntimeState, RxProfile, CONTRACT_VERSION, MAX_RECORDING_BYTES,
 };
+use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
@@ -16,6 +21,7 @@ mod loopback;
 
 const AGENT_ID: &str = "shackcq-desktop-local";
 const DEVICE_ID: &str = "nexus-native-rx";
+const RECORDING_LOCAL_ONLY: bool = true;
 
 struct RuntimeSupervisor {
     _child: Child,
@@ -431,7 +437,7 @@ fn runtime_presence(p: &RuntimePresence) -> Value {
  "audio":{"state":audio_state,"inputDeviceId":profile.map(|x|x.device_id.clone()),"outputDeviceId":profile.and_then(|x|x.output_device_id.clone()),"sampleRate":profile.map(|x|x.input_rate_hz).unwrap_or(12000),"channels":1,"rms":0,"peak":0,"clipped":false,"detail":"Receive-only Nexus capture; levels update is pending"},
  "clock":{"state":"UNKNOWN","utcUncertaintyMs":null,"sampleUncertaintyMs":null,"nextSlotUtc":null},"lease":{"state":"NONE","controlInstanceId":null,"expiresUtc":null},
  "tx":{"implemented":false,"serverPermitted":false,"locallyPermitted":false,"hardwareAccepted":false,"armed":false,"transmitting":false,"rxVerified":matches!(s.state,RuntimeState::Stopped),"detail":s.capabilities.tx_lock_reason},
- "capabilities":{"modes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"autoSequenceModes":[],"spectrumBins":1024,"waterfallRowsPerSecond":0,"recordingLocalOnly":true,"companionAuthoritative":false},"decodes":decodes,"waterfall":waterfall,"sstv":{}},
+ "capabilities":{"modes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"autoSequenceModes":[],"spectrumBins":1024,"waterfallRowsPerSecond":0,"recordingLocalOnly":RECORDING_LOCAL_ONLY,"companionAuthoritative":false},"decodes":decodes,"waterfall":waterfall,"sstv":{}},
  "runtime":{"contract":{"major":1,"minor":0},"engine":{"name":s.identity.engine,"upstreamRevision":s.identity.upstream_commit,"patchSet":"shackcq-rx-only-v1","componentVersion":s.identity.adapter_version,"compiledModes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"execution":"VERIFIED_NATIVE"},"audioDevices":devices,
  "audio":{"state":audio_state,"inputDeviceId":profile.map(|x|x.device_id.clone()),"inputLabel":null,"inputChannel":profile.map(|x|x.channel),"outputDeviceId":profile.and_then(|x|x.output_device_id.clone()),"outputLabel":null,"openedSampleRate":if matches!(s.state,RuntimeState::Receiving){profile.map(|x|x.input_rate_hz)}else{None},"channels":if matches!(s.state,RuntimeState::Receiving){Some(1)}else{None},"rmsDbfs":null,"peakDbfs":null,"clipped":false,"detail":"No device is opened until Start RX"},
  "clock":{"state":"UNKNOWN","utcUncertaintyMs":null,"sampleUncertaintyMs":null,"nextSlotUtc":null,"evidence":"No bounded clock measurement yet"},"safety":{"state":state,"serverPermitted":false,"locallyPermitted":false,"hardwareAccepted":false,"armed":false,"transmitting":false,"reason":s.capabilities.tx_lock_reason},"session":{"sessionId":session,"generation":s.generation,"sequence":s.event_sequence,"state":if matches!(s.state,RuntimeState::Receiving){"RECEIVING"}else{"IDLE"},"mode":mode,"startedUtc":null,"endedUtc":null,"detail":"Exact slot timing unavailable"},"queue":{"pendingContacts":s.pending_contacts,"maximumContacts":5000,"pendingBytes":0,"maximumBytes":33554432,"oldestUtc":null,"saturated":s.pending_contacts>=5000}}})
@@ -489,6 +495,21 @@ struct AgentPairingInput {
     name: String,
 }
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RecordingInput {
+    name: String,
+    mode: DigiMode,
+    bytes_base64: String,
+}
+
+fn valid_recording_input(input: &RecordingInput) -> bool {
+    !input.name.is_empty()
+        && input.name.len() <= 128
+        && input.name.chars().all(|value| !value.is_control())
+        && input.bytes_base64.len() <= ((MAX_RECORDING_BYTES + 2) / 3) * 4
+}
+
 fn valid_pairing_input(input: &AgentPairingInput) -> bool {
     let normalized = input
         .code
@@ -541,6 +562,71 @@ fn digi_unpair_agent(state: State<'_, AppState>) -> Value {
         .lock()
         .map(|agent| agent.setup_request("native-setup.unpair", json!({})))
         .unwrap_or_else(|_| json!({"ok":false,"code":"AGENT_SETUP_UNAVAILABLE"}))
+}
+
+struct PrivateRecording(std::path::PathBuf);
+
+impl Drop for PrivateRecording {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+fn write_private_recording(
+    path: &std::path::Path,
+    bytes: &[u8],
+) -> std::io::Result<PrivateRecording> {
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    options.open(path)?.write_all(bytes)?;
+    Ok(PrivateRecording(path.to_path_buf()))
+}
+
+#[tauri::command]
+fn digi_decode_recording(state: State<'_, AppState>, input: RecordingInput) -> Value {
+    if !valid_recording_input(&input) {
+        return json!({"ok":false,"code":"REFERENCE_RECORDING_INVALID","decodeCount":0});
+    }
+    let Ok(bytes) = B64.decode(input.bytes_base64.as_bytes()) else {
+        return json!({"ok":false,"code":"REFERENCE_RECORDING_INVALID","decodeCount":0});
+    };
+    if bytes.len() < 44 || bytes.len() > MAX_RECORDING_BYTES {
+        return json!({"ok":false,"code":"REFERENCE_RECORDING_INVALID","decodeCount":0});
+    }
+    let mut random = [0u8; 16];
+    if getrandom::fill(&mut random).is_err() {
+        return json!({"ok":false,"code":"REFERENCE_RECORDING_TEMP_UNAVAILABLE","decodeCount":0});
+    }
+    let path = std::env::temp_dir().join(format!("shackcq-reference-{}.wav", hex::encode(random)));
+    let Ok(recording) = write_private_recording(&path, &bytes) else {
+        return json!({"ok":false,"code":"REFERENCE_RECORDING_TEMP_UNAVAILABLE","decodeCount":0});
+    };
+    let digest = hex::encode(Sha256::digest(&bytes));
+    let outcome = state
+        .backend
+        .runtime
+        .lock()
+        .map_err(|_| ())
+        .and_then(|mut runtime| {
+            runtime
+                .request(RuntimeCommand::DecodeRecordingFile {
+                    path: recording.0.to_string_lossy().into_owned(),
+                    sha256: digest,
+                    mode: input.mode,
+                })
+                .map_err(|_| ())
+        });
+    match outcome {
+        Ok(result) if result.ok => {
+            json!({"ok":true,"code":result.code,"decodeCount":result.payload["decodeCount"].as_u64().unwrap_or(0)})
+        }
+        Ok(result) => json!({"ok":false,"code":result.code,"decodeCount":0}),
+        Err(()) => {
+            json!({"ok":false,"code":"REFERENCE_RECORDING_RUNTIME_UNAVAILABLE","decodeCount":0})
+        }
+    }
 }
 fn presence_backend(state: &Backend, target: Target) -> Result<Value, String> {
     if !valid_target(&target.agent_id, &target.device_id) {
@@ -961,7 +1047,8 @@ fn main() {
             digi_set_browser_local_enabled,
             digi_read_agent_setup,
             digi_pair_agent,
-            digi_unpair_agent
+            digi_unpair_agent,
+            digi_decode_recording
         ])
         .run(tauri::generate_context!())
         .expect("ShackCQ Desktop runtime failed");
@@ -980,6 +1067,21 @@ mod tests {
     fn stale_non_stop_fails_but_stop_is_generation_exempt() {
         assert!(!generation_matches(9, 8, false));
         assert!(generation_matches(9, 8, true));
+    }
+
+    #[test]
+    fn local_recording_import_is_advertised_after_runtime_command_is_wired() {
+        assert!(RECORDING_LOCAL_ONLY);
+        assert!(valid_recording_input(&RecordingInput {
+            name: "ft8.wav".into(),
+            mode: DigiMode::Ft8,
+            bytes_base64: "A".repeat(64),
+        }));
+        assert!(!valid_recording_input(&RecordingInput {
+            name: "ft8.wav".into(),
+            mode: DigiMode::Ft8,
+            bytes_base64: "A".repeat(((MAX_RECORDING_BYTES + 2) / 3) * 4 + 1),
+        }));
     }
 
     #[test]
@@ -1007,5 +1109,25 @@ mod tests {
             code: "ABCD-EFGH-IJKL".into(),
             name: "x".repeat(81),
         }));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn recording_temp_file_is_owner_only() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mut random = [0u8; 16];
+        getrandom::fill(&mut random).unwrap();
+        let path = std::env::temp_dir().join(format!(
+            "shackcq-recording-permissions-{}",
+            hex::encode(random)
+        ));
+        let recording = write_private_recording(&path, b"RIFF").unwrap();
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        drop(recording);
+        assert!(!path.exists());
     }
 }

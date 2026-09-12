@@ -2,8 +2,8 @@
   "schema": 1,
   "sourceRepository": "https://github.com/oliverbross/ShackCQ-Web",
   "sourcePath": "packages/shared-digi-ui",
-  "webCommit": "bf28fad4879aff8b310fe1712a026acd9c2e9927",
-  "contentSha256": "c169f9e1b88602e1ff7c3991e73c99229508aabf01ea80b9766e1bb9e86cc978",
+  "webCommit": "6360fb4740171b218445dcd0d4cfd9b7bc54b58f",
+  "contentSha256": "882f186a9b1163ec76bdbcff401f62a3124507af924c9eda4b81b7a5375d7d04",
   "snapshotPath": "desktop/shared-digi-ui-snapshot",
   "contractVersion": 1,
   "nativeCommands": [
@@ -17,6 +17,7 @@
     "digi_set_browser_local_enabled",
     "digi_read_agent_setup",
     "digi_pair_agent",
-    "digi_unpair_agent"
+    "digi_unpair_agent",
+    "digi_decode_recording"
   ]
 }

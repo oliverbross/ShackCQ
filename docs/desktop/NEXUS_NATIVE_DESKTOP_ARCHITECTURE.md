@@ -7,7 +7,7 @@ Status: Accepted for the `feature/nexus-native-desktop-shared-digi-v1` implement
 ShackCQ Desktop is one installed product with two bundled processes:
 
 1. A Tauri v2 shell renders trusted, bundled ShackCQ React assets and exposes only a typed `DigiSessionClient` command/event surface.
-2. A supervised, per-user station runtime owns the Nexus audio/DSP/decoder/encoder/sequence lifecycle, durable local session state, operating leases, clock-quality decisions and pending reviewed-contact delivery.
+2. A supervised, per-user station runtime owns the Nexus audio/DSP/decoder/encoder/sequence lifecycle, active session state, operating leases, clock-quality decisions and durable pending reviewed-contact delivery.
 
 The runtime links the selected Nexus source at immutable upstream commit `7618390658f8f92431dec0ac65979b84f2c0fb76` (`v1.10.3`) through a small ShackCQ adapter. It does not rebrand `mfsk-core`, run an external WSJT-X/JTDX process, or silently fall back to the legacy Digi engine. Nexus's upstream Tauri shell is not embedded wholesale: its unrelated loggers, propagation/network features, updater identity and radio auto-discovery are outside this product boundary.
 
@@ -24,6 +24,17 @@ The runtime links the selected Nexus source at immutable upstream commit `761839
 | Shared Digi presentation and transport-neutral client contract | `ShackCQ-Web/packages/shared-digi-ui` |
 
 The active Nexus session disables the legacy Qt Digi audio/decoder path. The adapter cannot start `rigctld`, native CI-V, OmniRig, Flex or another CAT owner. Radio requests cross the existing bounded helper boundary and require its generation/readback rules.
+
+The Tauri/Rust runtime exposes a bounded local recording-import command. Tauri
+accepts at most 4 MiB of base64 input, writes a random one-shot private temporary
+file, and sends only that internally generated path plus its SHA-256 to the
+nonce-authenticated runtime. The runtime revalidates size, digest, PCM16 mono
+12 kHz WAV shape and exact mode-frame length before using the same
+`FrameDecoder::process_capture_frame` path as live capture. It emits
+`REFERENCE_RECORDING` rows with inexact timing, never creates a contact, and the
+temporary file is removed after the synchronous request. Retained audio session
+storage, replay, and restart-safe re-decode remain unwired; existing C++ Agent
+recording facilities are not silently presented as Nexus-runtime capabilities.
 
 ## Frontend revision boundary
 

@@ -1163,6 +1163,7 @@ dependencies = [
  "ft8",
  "getrandom 0.3.4",
  "hex",
+ "hound",
  "jt65",
  "msk144",
  "q65",

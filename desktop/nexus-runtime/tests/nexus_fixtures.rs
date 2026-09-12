@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-only
 use sha2::{Digest, Sha256};
-use shackcq_nexus_runtime::{DigiMode, FrameDecoder};
+use shackcq_nexus_runtime::{
+    CommandEnvelope, DigiMode, FrameDecoder, QueueKey, RuntimeCommand, StationRuntime,
+    CONTRACT_VERSION,
+};
 
 fn read_wav(path: &std::path::Path) -> Vec<i16> {
     let bytes = std::fs::read(path).unwrap();
@@ -56,4 +59,55 @@ fn nexus_capture_resampler_is_stateful_across_chunks() {
     assert_eq!(once, chunked);
     // Nexus documents a fixed FIR tail latency of about 16 output samples.
     assert!((once.len() as isize - 12_000).abs() <= 20);
+}
+
+#[test]
+fn runtime_file_command_decodes_the_off_air_recording_as_reference_only() {
+    let root =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../third_party/nexus/crates");
+    let fixture = root.join("ft8/tests/fixtures/ft8_sample.wav");
+    assert_eq!(read_wav(&fixture).len(), ft8::NMAX);
+    let digest = hex::encode(Sha256::digest(std::fs::read(&fixture).unwrap()));
+    let dir = tempfile::tempdir().unwrap();
+    let mut runtime =
+        StationRuntime::new(dir.path().join("queue"), QueueKey::from_bytes([7; 32])).unwrap();
+    let pending_before = runtime.snapshot().pending_contacts;
+    let result = runtime.process(
+        CommandEnvelope {
+            version: CONTRACT_VERSION,
+            command_id: "reference-file-1".into(),
+            generation: 1,
+            launch_nonce: "test-nonce".into(),
+            command: RuntimeCommand::DecodeRecordingFile {
+                path: fixture.to_string_lossy().into_owned(),
+                sha256: digest,
+                mode: DigiMode::Ft8,
+            },
+        },
+        "test-nonce",
+    );
+    assert!(result.ok, "{}", result.code);
+    assert_eq!(result.code, "REFERENCE_RECORDING_DECODED");
+    assert!(runtime.recent_events(0, 200).iter().any(|event| {
+        event.fixture && !event.exact_slot_timing && event.message == "CQ F5RXL IN94"
+    }));
+    assert_eq!(runtime.recent_waterfall().last().unwrap().bins.len(), 1024);
+    assert_eq!(runtime.snapshot().pending_contacts, pending_before);
+
+    let wrong_digest = runtime.process(
+        CommandEnvelope {
+            version: CONTRACT_VERSION,
+            command_id: "reference-file-wrong-digest".into(),
+            generation: 1,
+            launch_nonce: "test-nonce".into(),
+            command: RuntimeCommand::DecodeRecordingFile {
+                path: fixture.to_string_lossy().into_owned(),
+                sha256: "0".repeat(64),
+                mode: DigiMode::Ft8,
+            },
+        },
+        "test-nonce",
+    );
+    assert!(!wrong_digest.ok);
+    assert_eq!(wrong_digest.code, "INVALID_REFERENCE_RECORDING");
 }

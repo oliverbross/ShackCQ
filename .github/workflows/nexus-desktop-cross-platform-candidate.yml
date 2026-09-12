@@ -75,6 +75,8 @@ jobs:
         run: |
           rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal
           rustup target add --toolchain $env:RUST_TOOLCHAIN x86_64-pc-windows-gnu
+          $cargo = (Get-Command cargo.exe -ErrorAction Stop).Source
+          "SHACKCQ_CARGO_BIN_WINDOWS=$(Split-Path -Parent $cargo)" >> $env:GITHUB_ENV
       - name: Build unsigned Windows x64 candidate
         env:
           RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
@@ -84,9 +86,11 @@ jobs:
         run: |
           node_bin=$(cygpath -u "$SHACKCQ_NODE_BIN_WINDOWS")
           nsis_bin=$(cygpath -u "$SHACKCQ_NSIS_BIN_WINDOWS")
-          export PATH="$node_bin:$nsis_bin:$PATH"
+          cargo_bin=$(cygpath -u "$SHACKCQ_CARGO_BIN_WINDOWS")
+          export PATH="$node_bin:$nsis_bin:$cargo_bin:$PATH"
           command -v npx.cmd
           command -v makensis.exe
+          command -v cargo.exe
           sh scripts/build_nexus_desktop_candidate.sh windows-x64 "$GITHUB_WORKSPACE/artifacts/windows-x64"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -135,7 +139,9 @@ jobs:
             ninja-build \
             patchelf \
             p7zip-full \
-            pkg-config
+            pkg-config \
+            xauth \
+            xvfb
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
