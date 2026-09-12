@@ -6,6 +6,8 @@ use serde_json::{json, Value};
 use sha2::Sha256;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::time::Duration;
+#[cfg(windows)]
+use std::time::Instant;
 
 const SERVICE: &str = "app.shackcq.desktop";
 const ALIAS: &str = "shackcq-native-ingress-v1";
@@ -184,7 +186,7 @@ fn plain_request(request: &[u8]) -> Option<Value> {
         CreateFileW, ReadFile, WriteFile, FILE_ATTRIBUTE_NORMAL, GENERIC_READ, GENERIC_WRITE,
         OPEN_EXISTING,
     };
-    use windows_sys::Win32::System::Pipes::WaitNamedPipeW;
+    use windows_sys::Win32::System::Pipes::{PeekNamedPipe, WaitNamedPipeW};
 
     let path = OsStr::new(r"\\.\pipe\shackcq-stationd-v1")
         .encode_wide()
@@ -224,13 +226,33 @@ fn plain_request(request: &[u8]) -> Option<Value> {
                 written_total += written as usize;
             }
             let mut response = Vec::with_capacity(1024);
+            let deadline = Instant::now() + Duration::from_secs(3);
             loop {
+                let mut available = 0u32;
+                if PeekNamedPipe(
+                    handle,
+                    std::ptr::null_mut(),
+                    0,
+                    std::ptr::null_mut(),
+                    &mut available,
+                    std::ptr::null_mut(),
+                ) == 0
+                {
+                    return None;
+                }
+                if available == 0 {
+                    if Instant::now() >= deadline {
+                        return None;
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                    continue;
+                }
                 let mut buffer = [0u8; 1024];
                 let mut read = 0u32;
                 if ReadFile(
                     handle,
                     buffer.as_mut_ptr(),
-                    buffer.len() as u32,
+                    available.min(buffer.len() as u32),
                     &mut read,
                     std::ptr::null_mut(),
                 ) == 0
