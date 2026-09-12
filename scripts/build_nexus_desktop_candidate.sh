@@ -385,7 +385,7 @@ PY
 
 accept_linux_payload() {
   local payload_root=$1 label=$2
-  local payload_tmp agent_path nexus_path main_path socket_path owner_token lib_path main_rc
+  local payload_tmp agent_path nexus_path main_path socket_name owner_token lib_path main_rc
   payload_tmp=$(mktemp -d)
   cleanup_paths+=("$payload_tmp")
   agent_path=$(find "$payload_root" -type f -name shackcq-stationd -perm -111 -print -quit)
@@ -393,28 +393,41 @@ accept_linux_payload() {
   main_path=$(find "$payload_root" -type f -name shackcq-desktop -perm -111 -print -quit)
   test -n "$agent_path" && test -n "$nexus_path" && test -n "$main_path"
   lib_path=$(find "$payload_root" -type d \( -name lib -o -name lib64 \) -print | paste -sd: -)
-  socket_path="$payload_tmp/stationd.sock"
+  # stationd resolves this bounded logical name beneath its private runtime
+  # directory; it intentionally rejects path separators supplied by callers.
+  socket_name="shackcq-package-${RANDOM}-${RANDOM}.sock"
+  case "$socket_name" in
+    [A-Za-z0-9]* ) ;;
+    * ) echo "invalid generated stationd socket name" >&2; return 1 ;;
+  esac
+  case "$socket_name" in
+    *[!A-Za-z0-9._-]* )
+      echo "invalid generated stationd socket name" >&2
+      return 1
+      ;;
+  esac
+  test "${#socket_name}" -le 96
   owner_token=$(printf 'b%.0s' {1..64})
   LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
     "$agent_path" --foreground --native-ingress-only \
-      --native-owner-token "$owner_token" --admin-socket "$socket_path" \
+      --native-owner-token "$owner_token" --admin-socket "$socket_name" \
       --ephemeral-root "$payload_tmp/agent" --ephemeral-credentials &
   stationd_pid=$!
   stationd_executable=$agent_path
-  owned_stationd_socket=$socket_path
+  owned_stationd_socket=$socket_name
   owned_stationd_token=$owner_token
   for _ in {1..50}; do
     LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-      "$agent_path" --admin-socket "$socket_path" --status >/dev/null 2>&1 && break
+      "$agent_path" --admin-socket "$socket_name" --status >/dev/null 2>&1 && break
     sleep 0.1
   done
   LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    "$agent_path" --admin-socket "$socket_path" --status >/dev/null
+    "$agent_path" --admin-socket "$socket_name" --status >/dev/null
   ! LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    "$agent_path" --admin-socket "$socket_path" --stop \
+    "$agent_path" --admin-socket "$socket_name" --stop \
       --native-owner-token "$(printf 'c%.0s' {1..64})" >/dev/null 2>&1
   LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-    "$agent_path" --admin-socket "$socket_path" --stop \
+    "$agent_path" --admin-socket "$socket_name" --stop \
       --native-owner-token "$owner_token" >/dev/null
   wait "$stationd_pid"
   stationd_pid=
