@@ -21,9 +21,11 @@ fn identity_is_exact_and_has_no_legacy_fallback() {
             DigiMode::Ft4,
             DigiMode::Ft2,
             DigiMode::Fst4,
+            DigiMode::Fst4w,
             DigiMode::Q65,
             DigiMode::Msk144,
             DigiMode::Jt65,
+            DigiMode::Wspr,
         ]
     );
     assert!(!snapshot.identity.legacy_fallback);

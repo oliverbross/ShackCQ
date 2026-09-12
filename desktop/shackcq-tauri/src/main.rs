@@ -395,9 +395,11 @@ fn runtime_presence(p: &RuntimePresence) -> Value {
             DigiMode::Ft4 => "FT4",
             DigiMode::Ft2 => "FT2",
             DigiMode::Fst4 => "FST4",
+            DigiMode::Fst4w => "FST4W",
             DigiMode::Q65 => "Q65",
             DigiMode::Msk144 => "MSK144",
             DigiMode::Jt65 => "JT65",
+            DigiMode::Wspr => "WSPR",
         })
         .unwrap_or("FT8");
     let submode = profile.and_then(|value| value.submode.clone());
@@ -429,8 +431,8 @@ fn runtime_presence(p: &RuntimePresence) -> Value {
  "audio":{"state":audio_state,"inputDeviceId":profile.map(|x|x.device_id.clone()),"outputDeviceId":profile.and_then(|x|x.output_device_id.clone()),"sampleRate":profile.map(|x|x.input_rate_hz).unwrap_or(12000),"channels":1,"rms":0,"peak":0,"clipped":false,"detail":"Receive-only Nexus capture; levels update is pending"},
  "clock":{"state":"UNKNOWN","utcUncertaintyMs":null,"sampleUncertaintyMs":null,"nextSlotUtc":null},"lease":{"state":"NONE","controlInstanceId":null,"expiresUtc":null},
  "tx":{"implemented":false,"serverPermitted":false,"locallyPermitted":false,"hardwareAccepted":false,"armed":false,"transmitting":false,"rxVerified":matches!(s.state,RuntimeState::Stopped),"detail":s.capabilities.tx_lock_reason},
- "capabilities":{"modes":["FT8","FT4","FT2","FST4","Q65","MSK144","JT65"],"autoSequenceModes":[],"spectrumBins":1024,"waterfallRowsPerSecond":0,"recordingLocalOnly":true,"companionAuthoritative":false},"decodes":decodes,"waterfall":waterfall,"sstv":{}},
- "runtime":{"contract":{"major":1,"minor":0},"engine":{"name":s.identity.engine,"upstreamRevision":s.identity.upstream_commit,"patchSet":"shackcq-rx-only-v1","componentVersion":s.identity.adapter_version,"compiledModes":["FT8","FT4","FT2","FST4","Q65","MSK144","JT65"],"execution":"VERIFIED_NATIVE"},"audioDevices":devices,
+ "capabilities":{"modes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"autoSequenceModes":[],"spectrumBins":1024,"waterfallRowsPerSecond":0,"recordingLocalOnly":true,"companionAuthoritative":false},"decodes":decodes,"waterfall":waterfall,"sstv":{}},
+ "runtime":{"contract":{"major":1,"minor":0},"engine":{"name":s.identity.engine,"upstreamRevision":s.identity.upstream_commit,"patchSet":"shackcq-rx-only-v1","componentVersion":s.identity.adapter_version,"compiledModes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"execution":"VERIFIED_NATIVE"},"audioDevices":devices,
  "audio":{"state":audio_state,"inputDeviceId":profile.map(|x|x.device_id.clone()),"inputLabel":null,"inputChannel":profile.map(|x|x.channel),"outputDeviceId":profile.and_then(|x|x.output_device_id.clone()),"outputLabel":null,"openedSampleRate":if matches!(s.state,RuntimeState::Receiving){profile.map(|x|x.input_rate_hz)}else{None},"channels":if matches!(s.state,RuntimeState::Receiving){Some(1)}else{None},"rmsDbfs":null,"peakDbfs":null,"clipped":false,"detail":"No device is opened until Start RX"},
  "clock":{"state":"UNKNOWN","utcUncertaintyMs":null,"sampleUncertaintyMs":null,"nextSlotUtc":null,"evidence":"No bounded clock measurement yet"},"safety":{"state":state,"serverPermitted":false,"locallyPermitted":false,"hardwareAccepted":false,"armed":false,"transmitting":false,"reason":s.capabilities.tx_lock_reason},"session":{"sessionId":session,"generation":s.generation,"sequence":s.event_sequence,"state":if matches!(s.state,RuntimeState::Receiving){"RECEIVING"}else{"IDLE"},"mode":mode,"startedUtc":null,"endedUtc":null,"detail":"Exact slot timing unavailable"},"queue":{"pendingContacts":s.pending_contacts,"maximumContacts":5000,"pendingBytes":0,"maximumBytes":33554432,"oldestUtc":null,"saturated":s.pending_contacts>=5000}}})
 }
@@ -664,9 +666,11 @@ fn submit_backend(state: &Backend, frame: CommandFrame) -> Result<CommandReply, 
                 Some("FT4") => DigiMode::Ft4,
                 Some("FT2") => DigiMode::Ft2,
                 Some("FST4") => DigiMode::Fst4,
+                Some("FST4W") => DigiMode::Fst4w,
                 Some("Q65") => DigiMode::Q65,
                 Some("MSK144") => DigiMode::Msk144,
                 Some("JT65") => DigiMode::Jt65,
+                Some("WSPR") => DigiMode::Wspr,
                 _ => {
                     return Ok(CommandReply {
                         ok: false,

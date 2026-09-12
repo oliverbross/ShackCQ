@@ -30,6 +30,7 @@ fst4 = { path = "../../third_party/nexus/crates/fst4" }
 jt65 = { path = "../../third_party/nexus/crates/jt65" }
 msk144 = { path = "../../third_party/nexus/crates/msk144" }
 q65 = { path = "../../third_party/nexus/crates/q65" }
+wspr = { path = "../../third_party/nexus/crates/wspr" }
 getrandom = "0.3"
 hex = "0.4"
 rustfft = "6"

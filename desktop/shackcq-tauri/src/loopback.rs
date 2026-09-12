@@ -468,7 +468,21 @@ mod tests {
     use std::sync::OnceLock;
     fn fixed_port_guard() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(())).lock().unwrap()
+        LOCK.get_or_init(|| Mutex::new(()))
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+    fn exact_port_is_closed() -> bool {
+        let deadline = Instant::now() + Duration::from_millis(500);
+        loop {
+            if TcpStream::connect("127.0.0.1:17654").is_err() {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
     }
     #[test]
     fn capability_compare_is_exact() {
@@ -706,7 +720,7 @@ mod tests {
         let _guard = fixed_port_guard();
         let controller = Controller::new();
         assert!(!controller.enabled());
-        assert!(TcpStream::connect("127.0.0.1:17654").is_err());
+        assert!(exact_port_is_closed());
         let first = controller.enable(None).unwrap().unwrap();
         assert_eq!(first.len(), 32);
         assert!(first
@@ -717,13 +731,13 @@ mod tests {
         assert!(TcpStream::connect("127.0.0.1:17654").is_ok());
         controller.disable().unwrap();
         assert!(!controller.enabled());
-        assert!(TcpStream::connect("127.0.0.1:17654").is_err());
+        assert!(exact_port_is_closed());
         let second = controller.enable(None).unwrap().unwrap();
         assert_ne!(first, second);
         controller.disable().unwrap();
         let restarted = Controller::new();
         assert!(!restarted.enabled());
-        assert!(TcpStream::connect("127.0.0.1:17654").is_err());
+        assert!(exact_port_is_closed());
     }
     #[test]
     fn controller_reports_bind_collision_without_changing_disabled_state() {

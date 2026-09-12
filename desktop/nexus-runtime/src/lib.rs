@@ -37,9 +37,11 @@ pub enum DigiMode {
     Ft4,
     Ft2,
     Fst4,
+    Fst4w,
     Q65,
     Msk144,
     Jt65,
+    Wspr,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -150,9 +152,11 @@ fn supported_modes() -> Vec<DigiMode> {
         DigiMode::Ft4,
         DigiMode::Ft2,
         DigiMode::Fst4,
+        DigiMode::Fst4w,
         DigiMode::Q65,
         DigiMode::Msk144,
         DigiMode::Jt65,
+        DigiMode::Wspr,
     ]
 }
 
@@ -214,6 +218,10 @@ fn mode_shape(mode: DigiMode, submode: Option<&str>) -> Result<(u64, usize), Run
             let period = parse_period(submode, 15, &fst4::PERIODS)?;
             Ok((u64::from(period) * 1000, fst4::nmax(period)))
         }
+        DigiMode::Fst4w => {
+            let period = parse_period(submode, 120, &[120, 300, 900, 1800])?;
+            Ok((u64::from(period) * 1000, fst4::nmax(period)))
+        }
         DigiMode::Q65 => {
             let (period, _) = q65_shape(submode)?;
             Ok((u64::from(period) * 1000, q65::nmax(period)))
@@ -226,6 +234,7 @@ fn mode_shape(mode: DigiMode, submode: Option<&str>) -> Result<(u64, usize), Run
             jt65_submode(submode)?;
             Ok((60_000, jt65::NMAX))
         }
+        DigiMode::Wspr => Ok((u64::from(wspr::PERIOD_S) * 1000, wspr::NMAX)),
     }
 }
 
@@ -344,6 +353,20 @@ impl FrameDecoder {
                     })
                     .collect()
             }
+            DigiMode::Fst4w => {
+                let period = parse_period(submode, 120, &[120, 300, 900, 1800])?;
+                fst4::decode_frame(samples, period, true, 100, 2900, 3, "", "", 0, 1500)
+                    .into_iter()
+                    .take(MAX_DECODE_ROWS)
+                    .map(|d| FrameDecode {
+                        message: d.message,
+                        snr_db: d.snr,
+                        dt_seconds: d.dt,
+                        audio_hz: d.freq,
+                        quality: d.qual,
+                    })
+                    .collect()
+            }
             DigiMode::Q65 => {
                 let (period, variant) = q65_shape(submode)?;
                 q65::decode_frame(samples, period, variant, 100, 5500, 3, "", "", "", 0, 1500)
@@ -387,6 +410,17 @@ impl FrameDecoder {
                     })
                     .collect()
             }
+            DigiMode::Wspr => wspr::decode_frame(samples, 0.0, false, 3, false, false, false)
+                .into_iter()
+                .take(MAX_DECODE_ROWS)
+                .map(|d| FrameDecode {
+                    message: d.message,
+                    snr_db: d.snr.round() as i32,
+                    dt_seconds: d.dt,
+                    audio_hz: (d.freq_mhz * 1_000_000.0) as f32,
+                    quality: d.sync,
+                })
+                .collect(),
         };
         let size = 2048usize.min(samples.len());
         let mut input: Vec<Complex<f32>> = samples[..size]
@@ -818,6 +852,9 @@ impl StationRuntime {
             DigiMode::Fst4 => fst4::encode(message, false)
                 .and_then(|tones| fst4::gen_wave(&tones, 15, 1, fst4::SAMPLE_RATE, 1500.0))
                 .unwrap_or_default(),
+            DigiMode::Fst4w => fst4::encode(message, true)
+                .and_then(|tones| fst4::gen_wave(&tones, 120, 1, fst4::SAMPLE_RATE, 1500.0))
+                .unwrap_or_default(),
             DigiMode::Q65 => q65::encode(message)
                 .and_then(|tones| q65::gen_wave(&tones, 30, 0, q65::SAMPLE_RATE, 1500.0))
                 .unwrap_or_default(),
@@ -826,6 +863,9 @@ impl StationRuntime {
                 .unwrap_or_default(),
             DigiMode::Jt65 => jt65::encode(message)
                 .and_then(|tones| jt65::gen_wave(&tones, 0, jt65::SAMPLE_RATE, 1500.0))
+                .unwrap_or_default(),
+            DigiMode::Wspr => wspr::encode(message)
+                .and_then(|tones| wspr::gen_wave(&tones, wspr::SAMPLE_RATE, 1500.0))
                 .unwrap_or_default(),
         };
         if samples.is_empty() {

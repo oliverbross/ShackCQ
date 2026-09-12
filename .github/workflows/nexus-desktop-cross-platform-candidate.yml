@@ -65,7 +65,10 @@ jobs:
         shell: pwsh
         run: |
           choco install nsis --version=3.11 --yes --no-progress
-          $makensis = (Get-Command makensis.exe -ErrorAction Stop).Source
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not (Test-Path -LiteralPath $makensis)) {
+            throw "pinned NSIS installed without expected makensis.exe: $makensis"
+          }
           "SHACKCQ_NSIS_BIN_WINDOWS=$(Split-Path -Parent $makensis)" >> $env:GITHUB_ENV
       - name: Install pinned Rust target
         shell: pwsh

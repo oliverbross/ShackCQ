@@ -142,6 +142,10 @@ fn invalid_mode_periods_fail_closed_before_decoder_entry() {
             .is_err()
     );
     assert!(
+        FrameDecoder::process_configured_capture_frame(DigiMode::Fst4w, Some("15"), &[], 0,)
+            .is_err()
+    );
+    assert!(
         FrameDecoder::process_configured_capture_frame(DigiMode::Q65, Some("💥A"), &[], 0,)
             .is_err()
     );
@@ -149,4 +153,47 @@ fn invalid_mode_periods_fail_closed_before_decoder_entry() {
         FrameDecoder::process_configured_capture_frame(DigiMode::Jt65, Some("AA"), &[], 0,)
             .is_err()
     );
+}
+
+#[test]
+fn fst4w_and_wspr_beacons_use_the_production_capture_adapter() {
+    const BEACON: &str = "K1ABC EN37 30";
+
+    let fst4w_wave = fst4::gen_wave(
+        &fst4::encode(BEACON, true).unwrap(),
+        120,
+        1,
+        fst4::SAMPLE_RATE,
+        1500.0,
+    )
+    .unwrap();
+    let mut fst4w_frame = vec![0i16; fst4::nmax(120)];
+    let fst4w_start = (fst4::lead_in_secs(120) * fst4::SAMPLE_RATE) as usize;
+    for (index, sample) in fst4w_wave.iter().enumerate() {
+        if fst4w_start + index < fst4w_frame.len() {
+            fst4w_frame[fst4w_start + index] = (sample * 8000.0) as i16;
+        }
+    }
+    let fst4w = FrameDecoder::process_configured_capture_frame(
+        DigiMode::Fst4w,
+        Some("120"),
+        &fst4w_frame,
+        120_000,
+    )
+    .unwrap();
+    assert!(fst4w.decodes.iter().any(|row| row.message.trim() == BEACON));
+
+    let wspr_wave =
+        wspr::gen_wave(&wspr::encode(BEACON).unwrap(), wspr::SAMPLE_RATE, 1500.0).unwrap();
+    let mut wspr_frame = vec![0i16; wspr::NMAX];
+    let wspr_start = (wspr::LEAD_IN_SECS * wspr::SAMPLE_RATE) as usize;
+    for (index, sample) in wspr_wave.iter().enumerate() {
+        if wspr_start + index < wspr_frame.len() {
+            wspr_frame[wspr_start + index] = (sample * 8000.0) as i16;
+        }
+    }
+    let wspr =
+        FrameDecoder::process_configured_capture_frame(DigiMode::Wspr, None, &wspr_frame, 120_000)
+            .unwrap();
+    assert!(wspr.decodes.iter().any(|row| row.message.trim() == BEACON));
 }
