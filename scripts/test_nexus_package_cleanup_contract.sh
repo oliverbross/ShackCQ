@@ -9,10 +9,14 @@ macos="$repo/scripts/build_nexus_desktop_macos.sh"
 bash -n "$candidate"
 sh -n "$macos"
 test "$(grep -c '^trap cleanup EXIT' "$candidate")" = 1
+grep -F "trap 'exit 143' TERM" "$candidate" >/dev/null
 test "$(grep -c '^trap cleanup EXIT HUP INT TERM$' "$macos")" = 1
 ! grep -F 'rm -rf "$repo/desktop/shackcq-tauri/binaries"' "$candidate" "$macos"
 grep -F 'rm -f -- "$generated_sidecar"' "$candidate" "$macos" >/dev/null
 grep -F 'rmdir "$generated_sidecar_dir"' "$candidate" "$macos" >/dev/null
+grep -F '.shackcq-package-$target.lock' "$candidate" >/dev/null
+grep -F '.shackcq-package-aarch64-apple-darwin.lock' "$macos" >/dev/null
+grep -F '[ -e "$candidate" ] || [ -L "$candidate" ]' "$candidate" >/dev/null
 grep -F 'taskkill.exe /PID "$main_pid" /T /F' "$candidate" >/dev/null
 grep -F 'pgrep -f "$mount_point/.*/shackcq-(desktop|stationd|nexus-runtime)"' "$macos" >/dev/null
 ! grep -Eq 'taskkill\.exe .* /IM|(^|[[:space:]])pkill([[:space:]]|$)' "$candidate" "$macos"

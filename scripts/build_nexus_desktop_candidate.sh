@@ -24,6 +24,7 @@ windows_owned_agent_path=
 windows_owned_agent_socket=
 cleanup_paths=()
 generated_sidecar_dir=
+generated_sidecar_lock=
 generated_sidecars=()
 capture_windows_owned_agent() {
   local native_path observed_pid
@@ -74,6 +75,7 @@ stop_owned_stationd() {
 }
 cleanup() {
   cleanup_status=$?
+  trap - EXIT HUP INT TERM
   set +e
   if [ -n "$main_pid" ]; then
     if [ "${platform:-}" = windows-x64 ]; then
@@ -121,25 +123,43 @@ cleanup() {
     for generated_sidecar in "${generated_sidecars[@]}"; do
       rm -f -- "$generated_sidecar"
     done
+  fi
+  if [ -n "$generated_sidecar_lock" ]; then
+    if ! rmdir "$generated_sidecar_lock"; then
+      echo "generated sidecar ownership lock retained: $generated_sidecar_lock" >&2
+      cleanup_status=1
+    fi
+  fi
+  if [ -n "$generated_sidecar_dir" ]; then
     rmdir "$generated_sidecar_dir" 2>/dev/null || true
   fi
   exit "$cleanup_status"
 }
 trap cleanup EXIT
+trap 'exit 129' HUP
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 claim_generated_sidecars() {
-  local suffix= candidate
+  local suffix= candidate candidate_lock
   [ "$platform" = windows-x64 ] && suffix=.exe
-  generated_sidecar_dir="$repo/desktop/shackcq-tauri/binaries"
+  local candidate_dir="$repo/desktop/shackcq-tauri/binaries"
+  mkdir -p "$candidate_dir"
+  candidate_lock="$candidate_dir/.shackcq-package-$target.lock"
+  if ! mkdir "$candidate_lock"; then
+    echo "another package build owns target $target: $candidate_lock" >&2
+    return 1
+  fi
+  generated_sidecar_dir=$candidate_dir
+  generated_sidecar_lock=$candidate_lock
   local candidates=(
     "$generated_sidecar_dir/shackcq-nexus-runtime-$target$suffix"
     "$generated_sidecar_dir/shackcq-stationd-$target$suffix"
     "$generated_sidecar_dir/shackcq-hamlib-helper-$target$suffix"
   )
   for candidate in "${candidates[@]}"; do
-    if [ -e "$candidate" ]; then
+    if [ -e "$candidate" ] || [ -L "$candidate" ]; then
       echo "refusing to overwrite pre-existing generated sidecar: $candidate" >&2
-      generated_sidecar_dir=
       return 1
     fi
   done
@@ -223,6 +243,20 @@ claim_generated_sidecars
 if [ "${SHACKCQ_TEST_WINDOWS_FFTW_LINK:-}" = 1 ]; then
   configure_windows_fftw_rust_link
   printf 'RUSTFLAGS=%s\n' "$RUSTFLAGS"
+  exit 0
+fi
+
+if [ -n "${SHACKCQ_TEST_SIDECAR_LOCK_READY:-}" ]; then
+  printf 'locked\n' >"$SHACKCQ_TEST_SIDECAR_LOCK_READY"
+  lock_released=0
+  for _ in {1..100}; do
+    if [ -e "$SHACKCQ_TEST_SIDECAR_LOCK_READY.release" ]; then
+      lock_released=1
+      break
+    fi
+    sleep 0.05
+  done
+  test "$lock_released" = 1
   exit 0
 fi
 

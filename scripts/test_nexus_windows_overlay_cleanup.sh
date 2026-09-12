@@ -1,6 +1,6 @@
-#!/bin/sh
+#!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-only
-set -eu
+set -euo pipefail
 
 repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 candidate="$repo/scripts/build_nexus_desktop_candidate.sh"
@@ -9,9 +9,18 @@ source_file="$repo/third_party/nexus/crates/tempo-fast-sys/build.rs"
 scratch=$(mktemp -d)
 test_sidecar_dir="$repo/desktop/shackcq-tauri/binaries"
 test_sidecar_sentinel="$test_sidecar_dir/unrelated-sentinel.keep"
+test_exact_sidecar=
+lock_holder_pid=
+lock_ready="$scratch/sidecar-lock-ready"
 cleanup_test() {
+  if [ -n "$lock_holder_pid" ]; then
+    printf 'release\n' >"$lock_ready.release"
+    kill "$lock_holder_pid" 2>/dev/null || true
+    wait "$lock_holder_pid" 2>/dev/null || true
+  fi
   rm -rf "$scratch"
   rm -f -- "$test_sidecar_sentinel"
+  [ -z "$test_exact_sidecar" ] || rm -f -- "$test_exact_sidecar"
   rmdir "$test_sidecar_dir" 2>/dev/null || true
 }
 trap cleanup_test EXIT
@@ -73,6 +82,75 @@ for failure in relative whitespace missing mismatch; do
   set -e
   test "$failure_status" != 0
 done
+
+SHACKCQ_TEST_SIDECAR_LOCK_READY="$lock_ready" \
+  "$candidate" windows-x64 "$scratch/lock-holder" &
+lock_holder_pid=$!
+lock_observed=0
+for _ in {1..100}; do
+  if [ -s "$lock_ready" ]; then
+    lock_observed=1
+    break
+  fi
+  sleep 0.05
+done
+test "$lock_observed" = 1
+set +e
+SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
+  "$candidate" windows-x64 "$scratch/lock-contender" >/dev/null 2>&1
+contender_status=$?
+set -e
+test "$contender_status" != 0
+printf 'release\n' >"$lock_ready.release"
+wait "$lock_holder_pid"
+lock_holder_pid=
+test ! -e "$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
+
+lock_ready="$scratch/sidecar-abort-ready"
+SHACKCQ_TEST_SIDECAR_LOCK_READY="$lock_ready" \
+  "$candidate" windows-x64 "$scratch/lock-abort" &
+lock_holder_pid=$!
+lock_observed=0
+for _ in {1..100}; do
+  if [ -s "$lock_ready" ]; then
+    lock_observed=1
+    break
+  fi
+  sleep 0.05
+done
+test "$lock_observed" = 1
+set +e
+kill -TERM "$lock_holder_pid"
+wait "$lock_holder_pid"
+abort_status=$?
+set -e
+lock_holder_pid=
+test "$abort_status" = 143
+test ! -e "$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
+
+mkdir -p "$test_sidecar_dir"
+exact_sidecar="$test_sidecar_dir/shackcq-nexus-runtime-x86_64-pc-windows-gnu.exe"
+test_exact_sidecar=$exact_sidecar
+for preexisting_kind in file dangling-symlink; do
+  case "$preexisting_kind" in
+    file) printf 'pre-existing\n' >"$exact_sidecar" ;;
+    dangling-symlink) ln -s "$scratch/missing-sidecar" "$exact_sidecar" ;;
+  esac
+  set +e
+  SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
+    "$candidate" windows-x64 "$scratch/preexisting-$preexisting_kind" >/dev/null 2>&1
+  preexisting_status=$?
+  set -e
+  test "$preexisting_status" != 0
+  if [ "$preexisting_kind" = file ]; then
+    test "$(cat "$exact_sidecar")" = pre-existing
+  else
+    test -L "$exact_sidecar"
+  fi
+  rm -f -- "$exact_sidecar"
+done
+test_exact_sidecar=
+test ! -e "$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
 
 for style in lf crlf; do
   fixture="$scratch/build-$style.rs"
@@ -249,4 +327,4 @@ python3 "$overlay_tool" restore "$source_file" "$retained_dir/build.rs.preimage"
 rm -rf "$retained_dir"
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 
-echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean recovery-retained=proven fftw-link-path=executable generated-sidecars=exact-owned"
+echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean recovery-retained=proven fftw-link-path=executable generated-sidecars=exact-owned-lock-contended-term-clean"

@@ -30,6 +30,7 @@ mounted_socket=
 owner_token=
 mounted_owner=
 generated_sidecar_dir=
+generated_sidecar_lock=
 generated_nexus=
 generated_stationd=
 generated_hamlib_helper=
@@ -74,6 +75,12 @@ cleanup() {
   for generated_sidecar in "$generated_nexus" "$generated_stationd" "$generated_hamlib_helper"; do
     [ -z "$generated_sidecar" ] || rm -f -- "$generated_sidecar"
   done
+  if [ -n "$generated_sidecar_lock" ]; then
+    if ! rmdir "$generated_sidecar_lock"; then
+      echo "generated sidecar ownership lock retained: $generated_sidecar_lock" >&2
+      cleanup_status=1
+    fi
+  fi
   [ -z "$generated_sidecar_dir" ] || rmdir "$generated_sidecar_dir" 2>/dev/null || true
   exit "$cleanup_status"
 }
@@ -89,16 +96,23 @@ test -d "$brotli_prefix/lib"
 python3 "$repo/scripts/check_nexus_native_desktop.py"
 python3 "$repo/desktop/shackcq-tauri/scripts/verify-shared-ui.py"
 sidecar_dir="$repo/desktop/shackcq-tauri/binaries"
+mkdir -p "$sidecar_dir"
+sidecar_lock="$sidecar_dir/.shackcq-package-aarch64-apple-darwin.lock"
+if ! mkdir "$sidecar_lock"; then
+  echo "another package build owns target aarch64-apple-darwin: $sidecar_lock" >&2
+  exit 1
+fi
+generated_sidecar_dir=$sidecar_dir
+generated_sidecar_lock=$sidecar_lock
 candidate_nexus="$sidecar_dir/shackcq-nexus-runtime-aarch64-apple-darwin"
 candidate_stationd="$sidecar_dir/shackcq-stationd-aarch64-apple-darwin"
 candidate_hamlib_helper="$sidecar_dir/shackcq-hamlib-helper-aarch64-apple-darwin"
 for candidate_sidecar in "$candidate_nexus" "$candidate_stationd" "$candidate_hamlib_helper"; do
-  test ! -e "$candidate_sidecar" || {
+  { test ! -e "$candidate_sidecar" && test ! -L "$candidate_sidecar"; } || {
     echo "refusing to overwrite pre-existing generated sidecar: $candidate_sidecar" >&2
     exit 1
   }
 done
-generated_sidecar_dir=$sidecar_dir
 generated_nexus=$candidate_nexus
 generated_stationd=$candidate_stationd
 generated_hamlib_helper=$candidate_hamlib_helper
