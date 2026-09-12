@@ -1,0 +1,119 @@
+name: Nexus Desktop Cross-Platform Candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN: '1.91.0'
+  TAURI_CLI_VERSION: '2.11.4'
+
+jobs:
+  windows-x64-gnu-cross:
+    name: Windows x64 GNU cross candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Verify exact checkout and Nexus pin
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 68cebdc2991cf9754477e29ac82228de6f8b8107 "$GITHUB_SHA"
+          test "$(git -C third_party/nexus rev-parse HEAD)" = "7618390658f8f92431dec0ac65979b84f2c0fb76"
+          python3 scripts/check_nexus_native_desktop.py
+          python3 desktop/shackcq-tauri/scripts/verify-shared-ui.py
+      - name: Install documented GNU cross and NSIS packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            binutils-mingw-w64-x86-64 \
+            build-essential \
+            ca-certificates \
+            cmake \
+            curl \
+            g++-mingw-w64-x86-64 \
+            gcc-mingw-w64-x86-64 \
+            gfortran-mingw-w64-x86-64 \
+            libboost-dev \
+            ninja-build \
+            nsis \
+            pkg-config
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Install pinned Rust target
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup target add --toolchain "$RUST_TOOLCHAIN" x86_64-pc-windows-gnu
+      - name: Build unsigned Windows x64 candidate
+        env:
+          RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
+        run: scripts/build_nexus_desktop_candidate.sh windows-x64 "$GITHUB_WORKSPACE/artifacts/windows-x64"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ShackCQ-Nexus-Desktop-Windows-x64-UNSIGNED-UNNOTARIZED-${{ github.sha }}
+          path: artifacts/windows-x64
+          if-no-files-found: error
+          retention-days: 14
+
+  linux-x86-64:
+    name: Linux x86_64 candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Verify exact checkout and Nexus pin
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 68cebdc2991cf9754477e29ac82228de6f8b8107 "$GITHUB_SHA"
+          test "$(git -C third_party/nexus rev-parse HEAD)" = "7618390658f8f92431dec0ac65979b84f2c0fb76"
+          python3 scripts/check_nexus_native_desktop.py
+          python3 desktop/shackcq-tauri/scripts/verify-shared-ui.py
+      - name: Install documented Linux modem and Tauri packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            file \
+            gfortran \
+            libasound2-dev \
+            libayatana-appindicator3-dev \
+            libboost-dev \
+            libfftw3-dev \
+            libfuse2 \
+            libgtk-3-dev \
+            libsecret-1-dev \
+            libsoup-3.0-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            librsvg2-dev \
+            ninja-build \
+            patchelf \
+            pkg-config
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Install pinned Rust target
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup target add --toolchain "$RUST_TOOLCHAIN" x86_64-unknown-linux-gnu
+      - name: Build unsigned Linux x86_64 candidates
+        env:
+          RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
+        run: scripts/build_nexus_desktop_candidate.sh linux-x86_64 "$GITHUB_WORKSPACE/artifacts/linux-x86_64"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ShackCQ-Nexus-Desktop-Linux-x86_64-UNSIGNED-UNNOTARIZED-${{ github.sha }}
+          path: artifacts/linux-x86_64
+          if-no-files-found: error
+          retention-days: 14
