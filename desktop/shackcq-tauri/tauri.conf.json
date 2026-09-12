@@ -29,7 +29,8 @@
     "externalBin": ["binaries/shackcq-nexus-runtime"],
     "icon": [
       "../../assets/branding/shackcq-mark-1024.png",
-      "../../desktop/resources/app-icon.icns"
+      "../../desktop/resources/app-icon.icns",
+      "../../desktop/resources/app-icon.ico"
     ],
     "category": "Utility",
     "shortDescription": "Local-first amateur-radio station workspace",
