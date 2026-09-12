@@ -30,6 +30,7 @@ jobs:
           update: true
           install: >-
             base-devel git make mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-boost
             mingw-w64-x86_64-gcc mingw-w64-x86_64-gcc-fortran
             mingw-w64-x86_64-ninja mingw-w64-x86_64-openssl
             mingw-w64-x86_64-pkgconf mingw-w64-x86_64-python

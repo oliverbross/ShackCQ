@@ -81,6 +81,11 @@ if [ "$platform" = windows-x64 ]; then
   fi
   export CMAKE_PREFIX_PATH="$fftw_cmake_prefix${CMAKE_PREFIX_PATH:+;$CMAKE_PREFIX_PATH}"
   test "$(pkg-config --modversion fftw3f)" = "$fftw_version"
+  boost_version_header=/mingw64/include/boost/version.hpp
+  test -s "$boost_version_header"
+  boost_version=$(awk '/^#define BOOST_VERSION / { print $3 }' "$boost_version_header")
+  test -n "$boost_version" && test "$boost_version" -ge 107000
+  printf 'Windows Boost header preflight: BOOST_VERSION=%s\n' "$boost_version"
   cargo test --locked --manifest-path "$repo/desktop/nexus-runtime/Cargo.toml" \
     --target "$target" --no-run
 else
