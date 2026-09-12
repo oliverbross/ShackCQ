@@ -213,7 +213,7 @@ struct Backend {
 struct AppState {
     backend: Arc<Backend>,
     loopback: Arc<loopback::Controller>,
-    _agent: Mutex<AgentSupervisor>,
+    agent: Mutex<AgentSupervisor>,
 }
 
 struct AgentSupervisor {
@@ -306,20 +306,25 @@ impl AgentSupervisor {
         }
         agent_ingress::setup_request(action, &self.owner_token, fields)
     }
+
+    fn shutdown(&mut self) {
+        let Some(mut child) = self.child.take() else {
+            return;
+        };
+        agent_ingress::request_owned_stop(&self.owner_token);
+        for _ in 0..40 {
+            if child.try_wait().ok().flatten().is_some() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+    }
 }
 impl Drop for AgentSupervisor {
     fn drop(&mut self) {
-        if let Some(child) = self.child.as_mut() {
-            agent_ingress::request_owned_stop(&self.owner_token);
-            for _ in 0..40 {
-                if child.try_wait().ok().flatten().is_some() {
-                    return;
-                }
-                std::thread::sleep(Duration::from_millis(25));
-            }
-            let _ = child.kill();
-            let _ = child.wait();
-        }
+        self.shutdown();
     }
 }
 fn call_state(state: &Backend, command: RuntimeCommand) -> Result<CommandResult, String> {
@@ -562,7 +567,7 @@ fn valid_pairing_input(input: &AgentPairingInput) -> bool {
 fn digi_read_agent_setup(state: State<'_, AppState>) -> Value {
     let mut status = agent_ingress::setup_status();
     status["desktopOwnership"] = json!(state
-        ._agent
+        .agent
         .lock()
         .map(|agent| if agent.owns_child() {
             "OWNED"
@@ -579,7 +584,7 @@ fn digi_pair_agent(state: State<'_, AppState>, input: AgentPairingInput) -> Valu
         return json!({"ok":false,"code":"AGENT_SETUP_INVALID"});
     }
     state
-        ._agent
+        .agent
         .lock()
         .map(|agent| {
             agent.setup_request(
@@ -593,7 +598,7 @@ fn digi_pair_agent(state: State<'_, AppState>, input: AgentPairingInput) -> Valu
 #[tauri::command]
 fn digi_unpair_agent(state: State<'_, AppState>) -> Value {
     state
-        ._agent
+        .agent
         .lock()
         .map(|agent| agent.setup_request("native-setup.unpair", json!({})))
         .unwrap_or_else(|_| json!({"ok":false,"code":"AGENT_SETUP_UNAVAILABLE"}))
@@ -1059,7 +1064,7 @@ fn digi_set_browser_local_enabled(
 }
 
 fn main() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .setup(|app| {
             let emergency = Arc::new(EmergencyStop {
                 pid: AtomicU32::new(0),
@@ -1077,7 +1082,7 @@ fn main() {
             let state = AppState {
                 backend,
                 loopback: Arc::new(loopback::Controller::new()),
-                _agent: Mutex::new(agent),
+                agent: Mutex::new(agent),
             };
             app.manage(state);
             if let Some(milliseconds) = package_acceptance_exit_ms() {
@@ -1103,13 +1108,33 @@ fn main() {
             digi_unpair_agent,
             digi_decode_recording
         ])
-        .run(tauri::generate_context!())
+        .build(tauri::generate_context!())
         .expect("ShackCQ Desktop runtime failed");
+    app.run(|handle, event| {
+        if matches!(event, tauri::RunEvent::Exit) {
+            handle
+                .state::<AppState>()
+                .agent
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .shutdown();
+        }
+    });
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn agent_shutdown_is_idempotent_without_an_owned_child() {
+        let mut agent = AgentSupervisor {
+            child: None,
+            owner_token: String::new(),
+        };
+        agent.shutdown();
+        agent.shutdown();
+        assert!(!agent.owns_child());
+    }
     #[test]
     fn caller_command_id_and_generation_are_preserved() {
         let e = make_envelope("n", RuntimeCommand::Snapshot, "web-command-7".into(), 42);

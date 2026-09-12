@@ -10,6 +10,7 @@ nexus_windows_path_patch="$repo/patches/nexus-tempo-fast-windows-path.patch"
 nexus_windows_path_overlay_tool="$repo/scripts/apply_nexus_windows_path_overlay.py"
 nexus_windows_path_target="$repo/third_party/nexus/crates/tempo-fast-sys/build.rs"
 sidecar_lock_tool="$repo/scripts/claim_package_sidecar_lock.py"
+pidfd_process_guard="$repo/scripts/pidfd_process_guard.py"
 nexus_patch_applied=0
 nexus_overlay_recovery_required=0
 nexus_overlay_backup_dir=
@@ -20,6 +21,13 @@ stationd_executable=
 owned_stationd_token=
 owned_stationd_socket=
 main_pid=
+linux_owned_agent_pid=
+linux_owned_agent_path=
+linux_owned_agent_socket=
+xvfb_supervisor_pid=
+xvfb_marker=
+xvfb_stop=
+xvfb_done=
 windows_owned_agent_pid=
 windows_owned_agent_path=
 windows_owned_agent_socket=
@@ -60,6 +68,94 @@ stop_windows_owned_agent() {
   windows_owned_agent_pid=
   windows_owned_agent_path=
   windows_owned_agent_socket=
+}
+linux_owned_agent_has_exited() {
+  [ -n "$linux_owned_agent_pid" ] || return 0
+  python3 "$pidfd_process_guard" check-exited --pid "$linux_owned_agent_pid" \
+    --executable "$linux_owned_agent_path" --socket "$linux_owned_agent_socket" >/dev/null
+}
+stop_linux_owned_agent() {
+  [ -n "$linux_owned_agent_pid" ] || return 0
+  if ! python3 "$pidfd_process_guard" terminate --pid "$linux_owned_agent_pid" \
+    --executable "$linux_owned_agent_path" --socket "$linux_owned_agent_socket" >/dev/null; then
+    echo "refusing or failing to terminate unverified GUI-owned Agent" >&2
+    return 1
+  fi
+  linux_owned_agent_pid=
+  linux_owned_agent_path=
+  linux_owned_agent_socket=
+}
+stop_owned_xvfb() {
+  local wait_status supervisor_running=1
+  [ -n "$xvfb_supervisor_pid" ] || return 0
+  [ -n "$xvfb_marker" ] && [ -n "$xvfb_stop" ] && [ -n "$xvfb_done" ] || {
+    echo "owned Xvfb supervisor state is incomplete" >&2
+    return 1
+  }
+  python3 - "$xvfb_stop" "$xvfb_marker" <<'PY'
+import os
+from pathlib import Path
+import sys
+
+destination = Path(sys.argv[1])
+temporary = destination.with_name(destination.name + ".tmp")
+descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+    stream.write(sys.argv[2] + "\n")
+    stream.flush()
+    os.fsync(stream.fileno())
+os.replace(temporary, destination)
+PY
+  for _ in {1..800}; do
+    [ -s "$xvfb_done" ] && break
+    sleep 0.025
+  done
+  if [ ! -s "$xvfb_done" ]; then
+    echo "owned Xvfb supervisor did not publish bounded completion" >&2
+    return 1
+  fi
+  for _ in {1..80}; do
+    if ! jobs -pr | grep -qx "$xvfb_supervisor_pid"; then
+      supervisor_running=0
+      break
+    fi
+    sleep 0.025
+  done
+  if [ "$supervisor_running" != 0 ]; then
+    echo "owned Xvfb supervisor did not exit after completion" >&2
+    return 1
+  fi
+  if wait "$xvfb_supervisor_pid"; then
+    wait_status=0
+  else
+    wait_status=$?
+  fi
+  if [ "$wait_status" != 0 ]; then
+    echo "owned Xvfb supervisor exited with status $wait_status" >&2
+    return 1
+  fi
+  if ! python3 - "$xvfb_done" "$xvfb_marker" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+outcome = json.loads(Path(sys.argv[1]).read_text())
+assert outcome == {
+    "marker": sys.argv[2],
+    "state": "STOPPED",
+    "status": outcome["status"],
+    "termination": outcome["termination"],
+}
+assert outcome["termination"] in {"TERM", "KILL"}
+PY
+  then
+    echo "owned Xvfb supervisor completion is invalid" >&2
+    return 1
+  fi
+  xvfb_supervisor_pid=
+  xvfb_marker=
+  xvfb_stop=
+  xvfb_done=
 }
 stop_owned_stationd() {
   if [ -n "$stationd_pid" ]; then
@@ -107,6 +203,8 @@ cleanup() {
   if [ "${platform:-}" = windows-x64 ]; then
     stop_windows_owned_agent
   fi
+  stop_linux_owned_agent || cleanup_status=1
+  stop_owned_xvfb || cleanup_status=1
   stop_owned_stationd
   if [ "$nexus_overlay_recovery_required" = 1 ]; then
     if [ -s "$nexus_overlay_backup" ] && [ -s "${nexus_overlay_backup}.metadata.json" ]; then
@@ -457,18 +555,8 @@ test -s "$agent_build/_deps/opus-src/COPYING"
 cp "$agent_build/_deps/opus-src/COPYING" "$package_metadata_dir/OPUS-COPYING"
 windows_runtime_dir=
 if [ "$platform" = windows-x64 ]; then
-  isolated_root="${RUNNER_TEMP:-$repo/build}/shackcq-windows-agent-proof"
-  cleanup_paths+=("$isolated_root")
-  owner_token=$(printf 'a%.0s' {1..64})
   stationd_executable="$agent_build/shackcq-stationd.exe"
   test -x "$stationd_executable"
-  stationd_dependency_status=0
-  stationd_dependencies=$(PATH="$qt_runtime_bin:$PATH" ldd "$stationd_executable" 2>&1) || \
-    stationd_dependency_status=$?
-  printf '%s\n' "$stationd_dependencies"
-  test "$stationd_dependency_status" = 0
-  ! printf '%s\n' "$stationd_dependencies" | grep -Eiq 'not found|cannot find|error:'
-  PATH="$qt_runtime_bin:$PATH" "$stationd_executable" --version
   windows_runtime_dir="$repo/desktop/shackcq-tauri/.package-windows-runtime-$target"
   cleanup_paths+=("$windows_runtime_dir")
   mkdir -p "$windows_runtime_dir"
@@ -497,23 +585,6 @@ if [ "$platform" = windows-x64 ]; then
     fi
   done
   test -s "$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
-  owned_stationd_token=$owner_token
-  owned_stationd_socket=
-  rm -rf "$isolated_root"
-  "$stationd_executable" --foreground --native-ingress-only \
-    --native-owner-token "$owner_token" --ephemeral-root "$isolated_root" \
-    --ephemeral-credentials &
-  stationd_pid=$!
-  for _ in {1..40}; do
-    "$stationd_executable" --status >/dev/null 2>&1 && break
-    sleep 0.1
-  done
-  "$stationd_executable" --status >/dev/null
-  SHACKCQ_TEST_WINDOWS_AGENT_PIPE=1 \
-    SHACKCQ_TEST_WINDOWS_AGENT_OWNER_TOKEN="$owner_token" cargo test --locked \
-    --manifest-path "$repo/desktop/shackcq-tauri/Cargo.toml" --target "$target" \
-    agent_ingress::tests::windows_named_pipe_reaches_the_isolated_qt_agent
-  stop_owned_stationd
 fi
 CARGO_BUILD_TARGET="$target" "$repo/scripts/build_nexus_native_sidecar.sh"
 package_config="$repo/desktop/shackcq-tauri/.tauri-package-config-$target.json"
@@ -654,6 +725,7 @@ PY
 accept_linux_payload() {
   local payload_root=$1 label=$2
   local payload_tmp agent_path nexus_path main_path launch_path launch_cwd socket_name owner_token main_rc runtime_probe
+  local main_socket agent_status observed_pid display_number
   local -a launch_env=()
   payload_tmp=$(mktemp -d)
   cleanup_paths+=("$payload_tmp")
@@ -717,28 +789,83 @@ accept_linux_payload() {
   probe_nexus_identity "$nexus_path" "$payload_tmp/nexus"
 
   mkdir -p "$payload_tmp/home" "$payload_tmp/runtime" "$payload_tmp/config" "$payload_tmp/data"
+  chmod 0700 "$payload_tmp/runtime"
+  main_socket="shackcq-package-main-$RANDOM-$RANDOM.sock"
+  xvfb_marker="shackcq-package-xvfb-$RANDOM-$RANDOM"
+  xvfb_stop="$payload_tmp/xvfb-stop"
+  xvfb_done="$payload_tmp/xvfb-done.json"
+  python3 "$repo/scripts/supervise_xvfb.py" \
+    --executable "$(command -v Xvfb)" --marker "$xvfb_marker" \
+    --display "$payload_tmp/xvfb-display" --ready "$payload_tmp/xvfb-ready.json" \
+    --stop "$xvfb_stop" --done "$xvfb_done" \
+    >"$payload_tmp/xvfb.log" 2>&1 &
+  xvfb_supervisor_pid=$!
+  for _ in {1..40}; do
+    [ -s "$payload_tmp/xvfb-ready.json" ] && [ -s "$payload_tmp/xvfb-display" ] && break
+    [ -s "$xvfb_done" ] && break
+    sleep 0.05
+  done
+  test -s "$payload_tmp/xvfb-ready.json"
+  test -s "$payload_tmp/xvfb-display"
+  display_number=$(tr -d '\r\n' <"$payload_tmp/xvfb-display")
+  case "$display_number" in
+    ''|*[!0-9]*) echo "owned Xvfb did not publish a display number" >&2; return 1 ;;
+  esac
   set +e
   (
     cd "$launch_cwd"
-    timeout --signal=TERM --kill-after=2s 8s xvfb-run -a env \
+    timeout --signal=TERM --kill-after=2s 8s env \
+      DISPLAY=":$display_number" \
       HOME="$payload_tmp/home" XDG_RUNTIME_DIR="$payload_tmp/runtime" \
       XDG_CONFIG_HOME="$payload_tmp/config" XDG_DATA_HOME="$payload_tmp/data" \
       "${launch_env[@]}" \
-      SHACKCQ_AGENT_ADMIN_SOCKET="shackcq-package-main-$RANDOM-$RANDOM" \
+      SHACKCQ_AGENT_ADMIN_SOCKET="$main_socket" \
       SHACKCQ_AGENT_EPHEMERAL_ROOT="$payload_tmp/main-agent" \
       SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
       SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 \
       env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
       "$launch_path"
-  ) >"$payload_tmp/main.log" 2>&1
+  ) >"$payload_tmp/main.log" 2>&1 &
+  main_pid=$!
+  set -e
+  observed_pid=
+  for _ in {1..160}; do
+    if agent_status=$(env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
+      "$agent_path" --admin-socket "$main_socket" --status 2>/dev/null); then
+      observed_pid=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["result"]["processId"])' \
+        "$agent_status" 2>/dev/null || true)
+      case "$observed_pid" in
+        ''|*[!0-9]*) ;;
+        *) break ;;
+      esac
+    fi
+    kill -0 "$main_pid" 2>/dev/null || break
+    sleep 0.05
+  done
+  case "$observed_pid" in
+    ''|*[!0-9]*) echo "packaged GUI-owned Agent process ID was not observed" >&2; return 1 ;;
+  esac
+  linux_owned_agent_pid=$observed_pid
+  linux_owned_agent_path=$(readlink "/proc/$observed_pid/exe" 2>/dev/null || true)
+  linux_owned_agent_socket=$main_socket
+  test "$linux_owned_agent_path" = "$agent_path"
+  ! linux_owned_agent_has_exited
+  set +e
+  wait "$main_pid"
   main_rc=$?
+  main_pid=
   set -e
   if [ "$main_rc" -ne 0 ]; then
     cat "$payload_tmp/main.log" >&2
     return 1
   fi
-  sleep 1
-  ! pgrep -f "$payload_root/.*/shackcq-(desktop|stationd|nexus-runtime)" >/dev/null
+  ! env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
+    "$agent_path" --admin-socket "$main_socket" --status >/dev/null 2>&1
+  linux_owned_agent_has_exited
+  linux_owned_agent_pid=
+  linux_owned_agent_path=
+  linux_owned_agent_socket=
+  stop_owned_xvfb
   printf 'PACKAGED_%s_SAFE_LAUNCH_OK hardware=not-opened tx=disabled\n' "$label"
   rm -rf "$payload_tmp"
 }

@@ -43,6 +43,11 @@ jobs:
           test "$(git -C third_party/nexus rev-parse HEAD)" = "7618390658f8f92431dec0ac65979b84f2c0fb76"
           python3 scripts/check_nexus_native_desktop.py
           python3 desktop/shackcq-tauri/scripts/verify-shared-ui.py
+      - name: Verify Windows-safe package cleanup contract
+        shell: msys2 {0}
+        env:
+          SHACKCQ_PACKAGE_CONTRACT_STATIC_ONLY: '1'
+        run: scripts/test_nexus_package_cleanup_contract.sh
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           # Qt 6.11.2 has no published Windows repository metadata. 6.10.2 is
@@ -121,6 +126,8 @@ jobs:
           test "$(git -C third_party/nexus rev-parse HEAD)" = "7618390658f8f92431dec0ac65979b84f2c0fb76"
           python3 scripts/check_nexus_native_desktop.py
           python3 desktop/shackcq-tauri/scripts/verify-shared-ui.py
+      - name: Verify Linux package lifecycle and cleanup contract
+        run: scripts/test_nexus_package_cleanup_contract.sh
       - name: Install documented Linux modem and Tauri packages
         run: |
           sudo apt-get update

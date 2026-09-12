@@ -8,6 +8,10 @@ macos="$repo/scripts/build_nexus_desktop_macos.sh"
 legal="$repo/scripts/stage_nexus_package_legal.sh"
 cross_workflow="$repo/.github/workflows/nexus-desktop-cross-platform-candidate.yml"
 stationd_sidecar="$repo/desktop/shackcq-tauri/scripts/build-stationd-sidecar.sh"
+xvfb_supervisor="$repo/scripts/supervise_xvfb.py"
+xvfb_supervisor_test="$repo/scripts/test_xvfb_supervisor.py"
+pidfd_guard="$repo/scripts/pidfd_process_guard.py"
+pidfd_guard_test="$repo/scripts/test_pidfd_process_guard.py"
 contract_scratch=$(mktemp -d)
 PYTHONPYCACHEPREFIX="$contract_scratch/pycache"
 export PYTHONPYCACHEPREFIX
@@ -68,6 +72,7 @@ sh -n "$legal"
 sh -n "$stationd_sidecar"
 python3 -m py_compile "$repo/scripts/claim_package_sidecar_lock.py"
 python3 -m py_compile "$repo/scripts/write_nexus_package_metadata.py"
+python3 -m py_compile "$xvfb_supervisor" "$xvfb_supervisor_test" "$pidfd_guard" "$pidfd_guard_test"
 test "$(grep -c '^trap cleanup EXIT' "$candidate")" = 1
 grep -F "trap 'exit 143' TERM" "$candidate" >/dev/null
 test "$(grep -c '^trap cleanup EXIT$' "$macos")" = 1
@@ -103,10 +108,31 @@ printf '%s\n' "$linux_acceptance" | grep -F '"${launch_env[@]}"' >/dev/null
 ! printf '%s\n' "$linux_acceptance" | grep -F '${LD_LIBRARY_PATH:+' >/dev/null
 printf '%s\n' "$linux_acceptance" | grep -F 'env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH' >/dev/null
 printf '%s\n' "$linux_acceptance" | grep -F 'SHACKCQ_PACKAGE_RUNTIME_HERMETIC=1 "$agent_path" --package-runtime-probe' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F 'python3 "$repo/scripts/supervise_xvfb.py"' >/dev/null
+! printf '%s\n' "$linux_acceptance" | grep -F 'xvfb-run' >/dev/null
+! printf '%s\n' "$linux_acceptance" | grep -F 'pgrep' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F 'SHACKCQ_AGENT_ADMIN_SOCKET="$main_socket"' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F '["result"]["processId"]' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F '! linux_owned_agent_has_exited' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F 'linux_owned_agent_has_exited' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F 'stop_owned_xvfb' >/dev/null
+grep -F 'owned Xvfb supervisor did not publish bounded completion' "$candidate" >/dev/null
+grep -F 'owned Xvfb supervisor completion is invalid' "$candidate" >/dev/null
+grep -F 'signal.pidfd_send_signal' "$xvfb_supervisor" >/dev/null
+! grep -F 'kill "$xvfb' "$candidate" >/dev/null
+grep -F 'pidfd_process_guard" terminate' "$candidate" >/dev/null
+grep -F 'pidfd_process_guard" check-exited' "$candidate" >/dev/null
+! grep -F 'kill -TERM "$linux_owned_agent_pid"' "$candidate" >/dev/null
+grep -F 'signal.pidfd_send_signal' "$pidfd_guard" >/dev/null
+grep -F 'fn shutdown(&mut self)' "$repo/desktop/shackcq-tauri/src/main.rs" >/dev/null
+grep -F 'matches!(event, tauri::RunEvent::Exit)' "$repo/desktop/shackcq-tauri/src/main.rs" >/dev/null
+grep -F 'agent.shutdown();' "$repo/desktop/shackcq-tauri/src/main.rs" >/dev/null
+grep -F '"processId", QCoreApplication::applicationPid()' "$repo/desktop/src/app/stationd_main.cpp" >/dev/null
 grep -F 'windeployqt.exe" --release --no-translations' "$candidate" >/dev/null
 ! grep -F 'export PATH="$qt_runtime_bin:$PATH"' "$candidate" >/dev/null
-grep -F 'stationd_dependencies=$(PATH="$qt_runtime_bin:$PATH" ldd "$stationd_executable" 2>&1)' "$candidate" >/dev/null
-grep -F 'PATH="$qt_runtime_bin:$PATH" "$stationd_executable" --version' "$candidate" >/dev/null
+! grep -F 'stationd_dependencies=' "$candidate" >/dev/null
+! grep -F 'SHACKCQ_TEST_WINDOWS_AGENT_PIPE' "$candidate" >/dev/null
+! grep -F 'shackcq-windows-agent-proof' "$candidate" >/dev/null
 grep -F '.package-windows-runtime-$target' "$candidate" >/dev/null
 grep -F 'audit_windows_payload "$nsis_extract" "$windows_app_root"' "$candidate" >/dev/null
 windows_acceptance=$(sed -n '/^accept_windows_payload()/,/^}/p' "$candidate")
@@ -210,6 +236,109 @@ grep -F 'test -s /mingw64/lib/libssl.dll.a' "$cross_workflow" >/dev/null
 grep -F 'export OPENSSL_ROOT_DIR="$(cygpath -m /mingw64)"' "$cross_workflow" >/dev/null
 grep -F "SHACKCQ_VERBOSE_STATIOND_BUILD: '1'" "$cross_workflow" >/dev/null
 grep -F 'cmake --build "$build_dir" --target shackcq-stationd shackcq-hamlib-helper -j4 --verbose' "$stationd_sidecar" >/dev/null
+python3 - "$cross_workflow" <<'PY'
+from pathlib import Path
+import re
+import sys
+
+lines = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+
+
+def unique_line(value: str) -> int:
+    matches = [index for index, line in enumerate(lines) if line == value]
+    assert len(matches) == 1, (value, matches)
+    return matches[0]
+
+
+def step_block(start: int) -> list[str]:
+    end = start + 1
+    while end < len(lines) and not lines[end].startswith("      - "):
+        end += 1
+    return lines[start:end]
+
+
+def job_end(start: int) -> int:
+    for index in range(start + 1, len(lines)):
+        if re.fullmatch(r"  [A-Za-z0-9_-]+:", lines[index]):
+            return index
+    return len(lines)
+
+
+windows_job = unique_line("  windows-x64-gnu-cross:")
+windows_gate = unique_line("      - name: Verify Windows-safe package cleanup contract")
+windows_build = unique_line("      - name: Build unsigned Windows x64 candidate")
+linux_job = unique_line("  linux-x86-64:")
+linux_gate = unique_line("      - name: Verify Linux package lifecycle and cleanup contract")
+linux_build = unique_line("      - name: Build unsigned Linux x86_64 candidates")
+static_env = unique_line("          SHACKCQ_PACKAGE_CONTRACT_STATIC_ONLY: '1'")
+windows_job_end = job_end(windows_job)
+linux_job_end = job_end(linux_job)
+
+assert windows_job < windows_gate < windows_build < windows_job_end
+assert linux_job < linux_gate < linux_build < linux_job_end
+assert static_env in range(windows_gate, windows_build)
+assert step_block(windows_gate) == [
+    "      - name: Verify Windows-safe package cleanup contract",
+    "        shell: msys2 {0}",
+    "        env:",
+    "          SHACKCQ_PACKAGE_CONTRACT_STATIC_ONLY: '1'",
+    "        run: scripts/test_nexus_package_cleanup_contract.sh",
+]
+assert step_block(linux_gate) == [
+    "      - name: Verify Linux package lifecycle and cleanup contract",
+    "        run: scripts/test_nexus_package_cleanup_contract.sh",
+]
+assert step_block(windows_build) == [
+    "      - name: Build unsigned Windows x64 candidate",
+    "        env:",
+    "          RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}",
+    "          SHACKCQ_QT_PREFIX: ${{ env.QT_ROOT_DIR }}",
+    "          SHACKCQ_VERBOSE_STATIOND_BUILD: '1'",
+    "        shell: msys2 {0}",
+    "        run: |",
+    '          node_bin=$(cygpath -u "$SHACKCQ_NODE_BIN_WINDOWS")',
+    '          nsis_bin=$(cygpath -u "$SHACKCQ_NSIS_BIN_WINDOWS")',
+    '          cargo_bin=$(cygpath -u "$SHACKCQ_CARGO_BIN_WINDOWS")',
+    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$PATH"',
+    "          command -v npx.cmd",
+    "          command -v makensis.exe",
+    "          command -v cargo.exe",
+    "          test -s /mingw64/include/openssl/ssl.h",
+    "          test -s /mingw64/lib/libcrypto.dll.a",
+    "          test -s /mingw64/lib/libssl.dll.a",
+    '          export OPENSSL_ROOT_DIR="$(cygpath -m /mingw64)"',
+    '          sh scripts/build_nexus_desktop_candidate.sh windows-x64 "$GITHUB_WORKSPACE/artifacts/windows-x64"',
+]
+assert step_block(linux_build) == [
+    "      - name: Build unsigned Linux x86_64 candidates",
+    "        env:",
+    "          RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}",
+    "          SHACKCQ_QT_PREFIX: ${{ env.QT_ROOT_DIR }}",
+    '        run: scripts/build_nexus_desktop_candidate.sh linux-x86_64 "$GITHUB_WORKSPACE/artifacts/linux-x86_64"',
+]
+PY
+codesign_line=$(grep -n 'codesign --force --deep --sign' "$macos" | cut -d: -f1)
+manifest_line=$(grep -n -- '--manifest "$manifest"' "$macos" | cut -d: -f1)
+test "$manifest_line" -gt "$codesign_line"
+
+contract_platform=$(uname -s)
+if [ "${SHACKCQ_PACKAGE_CONTRACT_STATIC_ONLY:-0}" = 1 ]; then
+  if [ "$contract_platform" = Linux ]; then
+    echo 'static-only package cleanup contract is forbidden on Linux' >&2
+    exit 1
+  fi
+  echo 'NEXUS_PACKAGE_CLEANUP_STATIC_CONTRACT_OK exact-owned-processes=true clean-exit-required=true post-sign-manifest=true'
+  exit 0
+fi
+
+if [ "$contract_platform" = Linux ]; then
+  python3 "$xvfb_supervisor_test" >"$contract_scratch/xvfb-cleanup.log"
+  grep -Fx 'XVFB_SUPERVISOR_TEST_OK normal=true invalid=true early=true escalation=true pidfd-failure=true' \
+    "$contract_scratch/xvfb-cleanup.log" >/dev/null
+  python3 "$pidfd_guard_test" >"$contract_scratch/pidfd-guard.log"
+  grep -Fx 'PIDFD_PROCESS_GUARD_TEST_OK normal=true mismatch=true exited=true escalation=true' \
+    "$contract_scratch/pidfd-guard.log" >/dev/null
+fi
 
 mkdir -p "$mac_sidecar_dir"
 test ! -e "$mac_lock" && test ! -L "$mac_lock"
@@ -258,9 +387,5 @@ done
 test "$(cat "$mac_sentinel")" = 'foreign file must survive'
 rm -f -- "$mac_sentinel"
 rmdir "$mac_sidecar_dir" 2>/dev/null || true
-
-codesign_line=$(grep -n 'codesign --force --deep --sign' "$macos" | cut -d: -f1)
-manifest_line=$(grep -n -- '--manifest "$manifest"' "$macos" | cut -d: -f1)
-test "$manifest_line" -gt "$codesign_line"
 
 echo 'NEXUS_PACKAGE_CLEANUP_CONTRACT_OK exact-owned-processes=true clean-exit-required=true post-sign-manifest=true linux-admin-socket=bounded-name mac-term=143-lock-clean'

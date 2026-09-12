@@ -350,7 +350,8 @@ int main(int argc, char **argv) {
         if (action == "status") {
           QVariantMap status{{"cloudAgent", cloudAgent.health()},
                              {"nativeIngress", nativeIngress.capability().toVariantMap()},
-                             {"hardwareAutoconnect", !nativeIngressOnly}};
+                             {"hardwareAutoconnect", !nativeIngressOnly},
+                             {"processId", QCoreApplication::applicationPid()}};
           if (!nativeIngressOnly) {
             status.insert("remoteStation", service.health());
             status.insert("radio", radio.health());
