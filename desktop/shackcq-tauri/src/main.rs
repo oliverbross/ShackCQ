@@ -135,6 +135,13 @@ impl RuntimeSupervisor {
         Ok(response)
     }
 }
+
+impl Drop for RuntimeSupervisor {
+    fn drop(&mut self) {
+        let _ = self._child.kill();
+        let _ = self._child.wait();
+    }
+}
 fn generation_matches(actual: u64, expected: u64, is_stop: bool) -> bool {
     is_stop || actual == expected
 }
@@ -235,10 +242,22 @@ impl AgentSupervisor {
         let mut token = [0u8; 32];
         getrandom::fill(&mut token).map_err(|_| "AGENT_NATIVE_INGRESS_UNAVAILABLE")?;
         let owner_token = hex::encode(token);
-        let mut child = Command::new(executable)
+        let mut command = Command::new(executable);
+        command
             .arg("--native-ingress-only")
             .arg("--native-owner-token")
             .arg(&owner_token)
+            .arg("--admin-socket")
+            .arg(agent_ingress::admin_socket_name());
+        if let Ok(root) = std::env::var("SHACKCQ_AGENT_EPHEMERAL_ROOT") {
+            if !root.is_empty() && root.len() <= 1024 {
+                command.arg("--ephemeral-root").arg(root);
+                if std::env::var("SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS").as_deref() == Ok("1") {
+                    command.arg("--ephemeral-credentials");
+                }
+            }
+        }
+        let mut child = command
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -1045,6 +1064,17 @@ fn main() {
                 _agent: Mutex::new(agent),
             };
             app.manage(state);
+            if let Some(milliseconds) = std::env::var("SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS")
+                .ok()
+                .and_then(|value| value.parse::<u64>().ok())
+                .filter(|value| (100..=10_000).contains(value))
+            {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_millis(milliseconds));
+                    handle.exit(0);
+                });
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -138,5 +138,79 @@ ln -s /Applications "$stage/Applications"
 dmg="$output/ShackCQ-Desktop-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
 hdiutil create -quiet -volname "ShackCQ Desktop" -srcfolder "$stage" -ov -format UDZO "$dmg"
 hdiutil verify "$dmg"
+
+attach_output=$(hdiutil attach -readonly -nobrowse "$dmg")
+mount_point=$(printf '%s\n' "$attach_output" | awk -F '\t' '$3 ~ /^\/Volumes\// {print $3; exit}')
+test -n "$mount_point"
+mounted_app="$mount_point/ShackCQ Desktop.app"
+mounted_stationd="$mounted_app/Contents/MacOS/shackcq-stationd"
+mounted_nexus="$mounted_app/Contents/MacOS/shackcq-nexus-runtime"
+mounted_main="$mounted_app/Contents/MacOS/shackcq-desktop"
+test -x "$mounted_stationd" && test -x "$mounted_nexus" && test -x "$mounted_main"
+mounted_acceptance=$(mktemp -d "${TMPDIR:-/tmp}/shackcq-mounted-acceptance.XXXXXX")
+cleanup() {
+  hdiutil detach "$mount_point" >/dev/null 2>&1 || true
+  rm -rf "$stage" "$mounted_acceptance"
+}
+trap cleanup EXIT HUP INT TERM
+
+mounted_socket="shackcq-mounted-$$"
+mounted_owner=$(python3 -c 'import secrets; print(secrets.token_hex(32))')
+"$mounted_stationd" --foreground --native-ingress-only \
+  --native-owner-token "$mounted_owner" --admin-socket "$mounted_socket" \
+  --ephemeral-root "$mounted_acceptance/agent" --ephemeral-credentials \
+  >"$mounted_acceptance/stationd.log" 2>&1 &
+mounted_stationd_pid=$!
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do
+  "$mounted_stationd" --admin-socket "$mounted_socket" --status \
+    >"$mounted_acceptance/status.json" 2>/dev/null && break
+  sleep 0.1
+done
+jq -e '.ok == true and .result.hardwareAutoconnect == false and .result.nativeIngress.available == true' \
+  "$mounted_acceptance/status.json" >/dev/null
+"$mounted_stationd" --admin-socket "$mounted_socket" \
+  --native-owner-token "$mounted_owner" --stop >/dev/null
+wait "$mounted_stationd_pid"
+
+python3 - "$fixture" "$fixture_sha" <<'PY' >"$mounted_acceptance/reference-request.json"
+import json
+import sys
+print(json.dumps({"version":1,"commandId":"mounted-reference-decode","generation":1,
+  "launchNonce":"nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn",
+  "command":{"type":"DECODE_RECORDING_FILE","parameters":{"path":sys.argv[1],
+  "sha256":sys.argv[2],"mode":"FT8"}}}, separators=(",", ":")))
+PY
+SHACKCQ_RUNTIME_NONCE=nnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn \
+SHACKCQ_QUEUE_KEY_HEX=0000000000000000000000000000000000000000000000000000000000000000 \
+SHACKCQ_QUEUE_PATH="$mounted_acceptance/reference-queue.json" \
+  "$mounted_nexus" <"$mounted_acceptance/reference-request.json" \
+  >"$mounted_acceptance/reference-result.json"
+jq -e '.ok == true and .code == "REFERENCE_RECORDING_DECODED" and
+  (.payload.messages | index("CQ F5RXL IN94") != null)' \
+  "$mounted_acceptance/reference-result.json" >/dev/null
+
+mkdir -p "$mounted_acceptance/home" "$mounted_acceptance/config" "$mounted_acceptance/data"
+SHACKCQ_AGENT_ADMIN_SOCKET="shackcq-mounted-main-$$" \
+SHACKCQ_AGENT_EPHEMERAL_ROOT="$mounted_acceptance/main-agent" \
+SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
+SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 \
+HOME="$mounted_acceptance/home" XDG_CONFIG_HOME="$mounted_acceptance/config" \
+XDG_DATA_HOME="$mounted_acceptance/data" \
+  "$mounted_main" >"$mounted_acceptance/main.log" 2>&1 &
+mounted_main_pid=$!
+main_exited=0
+for attempt in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40; do
+  if ! kill -0 "$mounted_main_pid" 2>/dev/null; then
+    wait "$mounted_main_pid"
+    main_exited=1
+    break
+  fi
+  sleep 0.1
+done
+test "$main_exited" = 1
+sleep 0.5
+! pgrep -f "$mount_point/.*/shackcq-(desktop|stationd|nexus-runtime)" >/dev/null
+printf 'MOUNTED_DMG_ACCEPTANCE_OK stationd=isolated nexus=reference-recording gui=safe-exit stranded=none\n'
+
 shasum -a 256 "$dmg" > "$output/SHA256SUMS.txt"
 printf '%s\n' "$dmg"

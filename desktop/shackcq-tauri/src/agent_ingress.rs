@@ -17,6 +17,19 @@ const MAX_REQUEST: usize = 16 * 1024;
 const MAX_RESPONSE: usize = 16 * 1024;
 pub(crate) const MAX_PAYLOAD: usize = 10 * 1024;
 
+pub(crate) fn admin_socket_name() -> String {
+    std::env::var("SHACKCQ_AGENT_ADMIN_SOCKET")
+        .ok()
+        .filter(|value| {
+            !value.is_empty()
+                && value.len() <= 96
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+        })
+        .unwrap_or_else(|| "shackcq-stationd-v1".into())
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentProbe {
     Missing,
@@ -117,7 +130,7 @@ fn request<T: Serialize>(action: &str, request_id: &str, payload: &T) -> Value {
 #[cfg(unix)]
 fn transport(request: Vec<u8>) -> Value {
     use std::os::unix::net::UnixStream;
-    let path = std::env::temp_dir().join("shackcq-stationd-v1");
+    let path = std::env::temp_dir().join(admin_socket_name());
     let mut stream = match UnixStream::connect(path) {
         Ok(stream) => stream,
         Err(_) => return json!({"ok":false,"code":"AGENT_NATIVE_INGRESS_UNAVAILABLE"}),
@@ -162,7 +175,7 @@ fn classify_response(bytes: &[u8]) -> Value {
 #[cfg(unix)]
 fn plain_request(request: &[u8]) -> Option<Value> {
     use std::os::unix::net::UnixStream;
-    let mut stream = UnixStream::connect(std::env::temp_dir().join("shackcq-stationd-v1")).ok()?;
+    let mut stream = UnixStream::connect(std::env::temp_dir().join(admin_socket_name())).ok()?;
     let timeout = Some(Duration::from_millis(750));
     stream.set_read_timeout(timeout).ok()?;
     stream.set_write_timeout(timeout).ok()?;
@@ -188,7 +201,8 @@ fn plain_request(request: &[u8]) -> Option<Value> {
     };
     use windows_sys::Win32::System::Pipes::{PeekNamedPipe, WaitNamedPipeW};
 
-    let path = OsStr::new(r"\\.\pipe\shackcq-stationd-v1")
+    let pipe_path = format!(r"\\.\pipe\{}", admin_socket_name());
+    let path = OsStr::new(&pipe_path)
         .encode_wide()
         .chain(Some(0))
         .collect::<Vec<_>>();

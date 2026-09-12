@@ -252,6 +252,10 @@ accept_linux_payload() {
   timeout --signal=TERM --kill-after=2s 8s xvfb-run -a env \
     HOME="$payload_tmp/home" XDG_RUNTIME_DIR="$payload_tmp/runtime" \
     XDG_CONFIG_HOME="$payload_tmp/config" XDG_DATA_HOME="$payload_tmp/data" \
+    SHACKCQ_AGENT_ADMIN_SOCKET="shackcq-package-main-$RANDOM-$RANDOM" \
+    SHACKCQ_AGENT_EPHEMERAL_ROOT="$payload_tmp/main-agent" \
+    SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
+    SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 \
     LD_LIBRARY_PATH="$lib_path${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
     "$main_path" >"$payload_tmp/main.log" 2>&1
   main_rc=$?
@@ -295,7 +299,11 @@ accept_windows_payload() {
   mkdir -p "$payload_tmp/home"
   set +e
   timeout 8s env HOME="$payload_tmp/home" APPDATA="$payload_tmp/home/AppData/Roaming" \
-    LOCALAPPDATA="$payload_tmp/home/AppData/Local" "$main_path" \
+    LOCALAPPDATA="$payload_tmp/home/AppData/Local" \
+    SHACKCQ_AGENT_ADMIN_SOCKET="shackcq-package-main-$RANDOM-$RANDOM" \
+    SHACKCQ_AGENT_EPHEMERAL_ROOT="$payload_tmp/main-agent" \
+    SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
+    SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 "$main_path" \
     >"$payload_tmp/main.log" 2>&1
   main_rc=$?
   set -e
