@@ -7,7 +7,11 @@ platform=${1:-}
 output=${2:-}
 tauri_cli_version=${TAURI_CLI_VERSION:-2.11.4}
 nexus_windows_path_patch="$repo/patches/nexus-tempo-fast-windows-path.patch"
+nexus_windows_path_overlay_tool="$repo/scripts/apply_nexus_windows_path_overlay.py"
+nexus_windows_path_target="$repo/third_party/nexus/crates/tempo-fast-sys/build.rs"
 nexus_patch_applied=0
+nexus_overlay_backup_dir=
+nexus_overlay_backup=
 fftw_build=
 stationd_pid=
 stationd_executable=
@@ -82,10 +86,17 @@ cleanup() {
   fi
   stop_owned_stationd
   if [ "$nexus_patch_applied" = 1 ]; then
-    if ! git -C "$repo/third_party/nexus" apply --unidiff-zero --reverse "$nexus_windows_path_patch"; then
-      echo "failed to reverse the Nexus Windows build overlay" >&2
+    if ! python3 "$nexus_windows_path_overlay_tool" restore \
+      "$nexus_windows_path_target" "$nexus_overlay_backup"; then
+      echo "failed to restore the exact Nexus Windows build-overlay preimage" >&2
       cleanup_status=1
     fi
+    nexus_patch_applied=0
+  fi
+  if [ -n "$nexus_overlay_backup_dir" ]; then
+    rm -rf "$nexus_overlay_backup_dir"
+    nexus_overlay_backup_dir=
+    nexus_overlay_backup=
   fi
   if [ -n "$fftw_build" ]; then
     rm -rf "$fftw_build"
@@ -98,8 +109,10 @@ cleanup() {
 trap cleanup EXIT
 
 apply_nexus_windows_overlay() {
-  git -C "$repo/third_party/nexus" apply --unidiff-zero --check "$nexus_windows_path_patch"
-  git -C "$repo/third_party/nexus" apply --unidiff-zero "$nexus_windows_path_patch"
+  nexus_overlay_backup_dir=$(mktemp -d)
+  nexus_overlay_backup="$nexus_overlay_backup_dir/build.rs.preimage"
+  python3 "$nexus_windows_path_overlay_tool" apply \
+    "$nexus_windows_path_target" "$nexus_overlay_backup"
   nexus_patch_applied=1
 }
 
@@ -562,6 +575,7 @@ if [ "$platform" = windows-x64 ]; then
   nexus_overlay_applied=YES
 fi
 nexus_overlay_sha=$(sha256sum "$nexus_windows_path_patch" | awk '{print $1}')
+nexus_overlay_tool_sha=$(sha256sum "$nexus_windows_path_overlay_tool" | awk '{print $1}')
 cat > "$output/CANDIDATE_STATUS.txt" <<EOF
 PRODUCT=ShackCQ Nexus Desktop
 VERSION=0.2.0
@@ -572,6 +586,8 @@ NATIVE_BASE_SHA=68cebdc2991cf9754477e29ac82228de6f8b8107
 NEXUS_SHA=$(git -C "$repo/third_party/nexus" rev-parse HEAD)
 NEXUS_WINDOWS_BUILD_OVERLAY=patches/nexus-tempo-fast-windows-path.patch
 NEXUS_WINDOWS_BUILD_OVERLAY_SHA256=$nexus_overlay_sha
+NEXUS_WINDOWS_BUILD_OVERLAY_TOOL=scripts/apply_nexus_windows_path_overlay.py
+NEXUS_WINDOWS_BUILD_OVERLAY_TOOL_SHA256=$nexus_overlay_tool_sha
 NEXUS_WINDOWS_BUILD_OVERLAY_APPLIED=$nexus_overlay_applied
 SHARED_DIGI_WEB_SHA=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["webCommit"])' "$repo/desktop/shared-digi-ui-manifest.json")
 SIGNING_STATUS=UNSIGNED
