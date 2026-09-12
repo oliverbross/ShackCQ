@@ -564,11 +564,16 @@ fn digi_unpair_agent(state: State<'_, AppState>) -> Value {
         .unwrap_or_else(|_| json!({"ok":false,"code":"AGENT_SETUP_UNAVAILABLE"}))
 }
 
-struct PrivateRecording(std::path::PathBuf);
+struct PrivateRecording {
+    path: std::path::PathBuf,
+    created: bool,
+}
 
 impl Drop for PrivateRecording {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.0);
+        if self.created {
+            let _ = std::fs::remove_file(&self.path);
+        }
     }
 }
 
@@ -576,12 +581,18 @@ fn write_private_recording(
     path: &std::path::Path,
     bytes: &[u8],
 ) -> std::io::Result<PrivateRecording> {
+    let mut recording = PrivateRecording {
+        path: path.to_path_buf(),
+        created: false,
+    };
     let mut options = OpenOptions::new();
     options.write(true).create_new(true);
     #[cfg(unix)]
     options.mode(0o600);
-    options.open(path)?.write_all(bytes)?;
-    Ok(PrivateRecording(path.to_path_buf()))
+    let mut file = options.open(&recording.path)?;
+    recording.created = true;
+    file.write_all(bytes)?;
+    Ok(recording)
 }
 
 #[tauri::command]
@@ -612,7 +623,7 @@ fn digi_decode_recording(state: State<'_, AppState>, input: RecordingInput) -> V
         .and_then(|mut runtime| {
             runtime
                 .request(RuntimeCommand::DecodeRecordingFile {
-                    path: recording.0.to_string_lossy().into_owned(),
+                    path: recording.path.to_string_lossy().into_owned(),
                     sha256: digest,
                     mode: input.mode,
                 })
@@ -1129,5 +1140,10 @@ mod tests {
         );
         drop(recording);
         assert!(!path.exists());
+
+        std::fs::write(&path, b"existing").unwrap();
+        assert!(write_private_recording(&path, b"replacement").is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), b"existing");
+        std::fs::remove_file(&path).unwrap();
     }
 }
