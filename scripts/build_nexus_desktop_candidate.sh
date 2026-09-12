@@ -115,6 +115,9 @@ cleanup() {
   if [ "${#cleanup_paths[@]}" -gt 0 ]; then
     rm -rf "${cleanup_paths[@]}"
   fi
+  # These three target-suffixed externalBin files are generated solely for the
+  # current package build and must not survive either success or abort.
+  rm -rf "$repo/desktop/shackcq-tauri/binaries"
   exit "$cleanup_status"
 }
 trap cleanup EXIT

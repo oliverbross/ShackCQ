@@ -67,6 +67,9 @@ cleanup() {
   [ -z "$acceptance_root" ] || rm -rf "$acceptance_root"
   [ -z "$stage" ] || rm -rf "$stage"
   [ -z "$mounted_acceptance" ] || rm -rf "$mounted_acceptance"
+  # The target-suffixed externalBin files are build staging, not source or a
+  # deliverable. Remove them on both successful completion and interruption.
+  rm -rf "$repo/desktop/shackcq-tauri/binaries"
   exit "$cleanup_status"
 }
 trap cleanup EXIT HUP INT TERM
