@@ -140,9 +140,11 @@ case "$platform" in
     appimage_name=$(basename "${appimages[0]}" .AppImage)
     cp "${debs[0]}" "$output/${deb_name}-UNSIGNED-UNNOTARIZED.deb"
     cp "${appimages[0]}" "$output/${appimage_name}-UNSIGNED-UNNOTARIZED.AppImage"
+    dpkg-deb -c "${debs[0]}" > "$output/DEBIAN_CONTENTS.txt"
+    7z l "${appimages[0]}" > "$output/APPIMAGE_CONTENTS.txt"
     for packaged in shackcq-nexus-runtime shackcq-stationd shackcq-hamlib-helper; do
-      dpkg-deb -c "${debs[0]}" | grep -Fq "$packaged"
-      7z l "${appimages[0]}" | grep -Fq "$packaged"
+      grep -Fq "$packaged" "$output/DEBIAN_CONTENTS.txt"
+      grep -Fq "$packaged" "$output/APPIMAGE_CONTENTS.txt"
     done
     {
       for binary in "$main_executable" "$staged_sidecar" "$agent" "$helper"; do
