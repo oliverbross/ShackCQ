@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - feature/nexus-native-desktop-cross-platform-ci-v1
+      - feature/nexus-native-logbook-authority-v1
 
 permissions:
   contents: read
@@ -15,49 +16,59 @@ env:
 
 jobs:
   windows-x64-gnu-cross:
-    name: Windows x64 Tauri Digi candidate (Agent blocked)
-    runs-on: ubuntu-24.04
+    name: Windows x64 complete Nexus + Agent candidate
+    runs-on: windows-2025
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           submodules: recursive
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel git make mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-gcc mingw-w64-x86_64-gcc-fortran
+            mingw-w64-x86_64-ninja mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-pkgconf
       - name: Verify exact checkout and Nexus pin
+        shell: msys2 {0}
         run: |
-          test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_REF" = refs/heads/feature/nexus-native-desktop-cross-platform-ci-v1
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_REF" = refs/heads/feature/nexus-native-logbook-authority-v1 || test "$GITHUB_REF" = refs/heads/feature/nexus-native-desktop-cross-platform-ci-v1
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git merge-base --is-ancestor 68cebdc2991cf9754477e29ac82228de6f8b8107 "$GITHUB_SHA"
           test "$(git -C third_party/nexus rev-parse HEAD)" = "7618390658f8f92431dec0ac65979b84f2c0fb76"
           python3 scripts/check_nexus_native_desktop.py
           python3 desktop/shackcq-tauri/scripts/verify-shared-ui.py
-      - name: Install documented GNU cross and NSIS packages
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            binutils-mingw-w64-x86-64 \
-            build-essential \
-            ca-certificates \
-            cmake \
-            curl \
-            g++-mingw-w64-x86-64 \
-            gcc-mingw-w64-x86-64 \
-            gfortran-mingw-w64-x86-64 \
-            libboost-dev \
-            ninja-build \
-            nsis \
-            pkg-config
+      - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.11.2'
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          modules: 'qtmultimedia qtserialport qtwebsockets qtlocation qtpositioning'
+          tools: 'tools_mingw1310'
+          cache: true
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
+      - name: Install pinned NSIS packager
+        shell: pwsh
+        run: choco install nsis --version=3.11 --yes --no-progress
       - name: Install pinned Rust target
+        shell: pwsh
         run: |
-          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
-          rustup target add --toolchain "$RUST_TOOLCHAIN" x86_64-pc-windows-gnu
+          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal
+          rustup target add --toolchain $env:RUST_TOOLCHAIN x86_64-pc-windows-gnu
       - name: Build unsigned Windows x64 candidate
         env:
           RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
-        run: scripts/build_nexus_desktop_candidate.sh windows-x64 "$GITHUB_WORKSPACE/artifacts/windows-x64"
+          SHACKCQ_QT_PREFIX: ${{ env.QT_ROOT_DIR }}
+          OPENSSL_ROOT_DIR: C:/msys64/mingw64
+        shell: msys2 {0}
+        run: sh scripts/build_nexus_desktop_candidate.sh windows-x64 "$GITHUB_WORKSPACE/artifacts/windows-x64"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ShackCQ-Nexus-Digi-Desktop-Windows-x64-UNSIGNED-UNNOTARIZED-${{ github.sha }}
@@ -66,7 +77,7 @@ jobs:
           retention-days: 14
 
   linux-x86-64:
-    name: Linux x86_64 Tauri Digi candidate (Agent blocked)
+    name: Linux x86_64 complete Nexus + Agent candidate
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -76,7 +87,7 @@ jobs:
           submodules: recursive
       - name: Verify exact checkout and Nexus pin
         run: |
-          test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_REF" = refs/heads/feature/nexus-native-desktop-cross-platform-ci-v1
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_REF" = refs/heads/feature/nexus-native-logbook-authority-v1 || test "$GITHUB_REF" = refs/heads/feature/nexus-native-desktop-cross-platform-ci-v1
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git merge-base --is-ancestor 68cebdc2991cf9754477e29ac82228de6f8b8107 "$GITHUB_SHA"
           test "$(git -C third_party/nexus rev-parse HEAD)" = "7618390658f8f92431dec0ac65979b84f2c0fb76"
@@ -104,10 +115,19 @@ jobs:
             librsvg2-dev \
             ninja-build \
             patchelf \
+            p7zip-full \
             pkg-config
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '24'
+      - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.11.2'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: 'qtmultimedia qtserialport qtwebsockets qtlocation qtpositioning'
+          cache: true
       - name: Install pinned Rust target
         run: |
           rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
@@ -115,6 +135,7 @@ jobs:
       - name: Build unsigned Linux x86_64 candidates
         env:
           RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
+          SHACKCQ_QT_PREFIX: ${{ env.QT_ROOT_DIR }}
         run: scripts/build_nexus_desktop_candidate.sh linux-x86_64 "$GITHUB_WORKSPACE/artifacts/linux-x86_64"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:

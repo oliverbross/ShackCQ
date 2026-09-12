@@ -22,6 +22,7 @@ case "$platform" in
     ;;
 esac
 test -n "$output" || { echo "output directory is required" >&2; exit 64; }
+qt_prefix=${SHACKCQ_QT_PREFIX:?SHACKCQ_QT_PREFIX is required}
 
 test "$(git -C "$repo" rev-parse HEAD)" = "${GITHUB_SHA:-$(git -C "$repo" rev-parse HEAD)}"
 git -C "$repo" merge-base --is-ancestor 68cebdc2991cf9754477e29ac82228de6f8b8107 HEAD
@@ -62,6 +63,20 @@ else
   cargo test --locked --manifest-path "$repo/desktop/nexus-runtime/Cargo.toml" --target "$target"
 fi
 
+agent_build="$repo/build/desktop/nexus-$platform"
+hamlib_root="$repo/build/desktop/nexus-hamlib-$platform"
+sh "$repo/scripts/build_hamlib_posix.sh" "$hamlib_root" \
+  "$repo/core/third_party/hamlib" "$repo/build/desktop/nexus-hamlib-build-$platform"
+cmake -S "$repo/desktop" -B "$agent_build" -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_PREFIX_PATH="$qt_prefix" \
+  -DSHACKCQ_BUILD_TESTS=OFF \
+  -DSHACKCQ_BUILD_NATIVE_DIGI=OFF \
+  -DSHACKCQ_REQUIRE_HAMLIB=ON \
+  -DSHACKCQ_HAMLIB_ROOT="$hamlib_root"
+export SHACKCQ_DESKTOP_BUILD_DIR="$agent_build"
+export SHACKCQ_TAURI_TARGET="$target"
+sh "$repo/desktop/shackcq-tauri/scripts/build-stationd-sidecar.sh"
 CARGO_BUILD_TARGET="$target" "$repo/scripts/build_nexus_native_sidecar.sh"
 tauri_args=(build --ci --no-sign --target "$target" --bundles "$bundles")
 if [ "$platform" = linux-x86_64 ]; then
@@ -78,9 +93,13 @@ git -C "$repo" diff --exit-code -- \
 bundle_root="$repo/desktop/shackcq-tauri/target/$target/release/bundle"
 main_executable="$repo/desktop/shackcq-tauri/target/$target/release/shackcq-desktop"
 sidecar="$repo/desktop/shackcq-tauri/binaries/shackcq-nexus-runtime-$target"
-[ "$platform" = windows-x64 ] && { main_executable="$main_executable.exe"; sidecar="$sidecar.exe"; }
+agent="$repo/desktop/shackcq-tauri/binaries/shackcq-stationd-$target"
+helper="$repo/desktop/shackcq-tauri/binaries/shackcq-hamlib-helper-$target"
+[ "$platform" = windows-x64 ] && { main_executable="$main_executable.exe"; sidecar="$sidecar.exe"; agent="$agent.exe"; helper="$helper.exe"; }
 test -s "$main_executable"
 test -s "$sidecar"
+test -s "$agent"
+test -s "$helper"
 mkdir -p "$output"
 sidecar_name=$(basename "$sidecar")
 case "$sidecar_name" in
@@ -95,11 +114,18 @@ case "$platform" in
     [ "${#packages[@]}" -eq 1 ] || { echo "expected one NSIS installer, found ${#packages[@]}" >&2; exit 1; }
     package_name=$(basename "${packages[0]}" .exe)
     cp "${packages[0]}" "$output/${package_name}-UNSIGNED-UNNOTARIZED.exe"
+    for packaged in shackcq-nexus-runtime.exe shackcq-stationd.exe shackcq-hamlib-helper.exe; do
+      7z l "${packages[0]}" | grep -Fq "$packaged"
+    done
     {
       echo 'MAIN_EXECUTABLE'
       x86_64-w64-mingw32-objdump -p "$main_executable" | grep 'DLL Name:' || true
       echo 'NEXUS_RUNTIME_SIDECAR'
       x86_64-w64-mingw32-objdump -p "$staged_sidecar" | grep 'DLL Name:' || true
+      echo 'STATION_AGENT'
+      x86_64-w64-mingw32-objdump -p "$agent" | grep 'DLL Name:' || true
+      echo 'HAMLIB_HELPER'
+      x86_64-w64-mingw32-objdump -p "$helper" | grep 'DLL Name:' || true
     } > "$output/WINDOWS_PE_IMPORTS.txt"
     x86_64-w64-mingw32-objdump -f "$main_executable" | grep -q 'pei-x86-64'
     x86_64-w64-mingw32-objdump -f "$staged_sidecar" | grep -q 'pei-x86-64'
@@ -114,15 +140,19 @@ case "$platform" in
     appimage_name=$(basename "${appimages[0]}" .AppImage)
     cp "${debs[0]}" "$output/${deb_name}-UNSIGNED-UNNOTARIZED.deb"
     cp "${appimages[0]}" "$output/${appimage_name}-UNSIGNED-UNNOTARIZED.AppImage"
+    for packaged in shackcq-nexus-runtime shackcq-stationd shackcq-hamlib-helper; do
+      dpkg-deb -c "${debs[0]}" | grep -Fq "$packaged"
+      7z l "${appimages[0]}" | grep -Fq "$packaged"
+    done
     {
-      for binary in "$main_executable" "$staged_sidecar"; do
+      for binary in "$main_executable" "$staged_sidecar" "$agent" "$helper"; do
         echo "BINARY=$(basename "$binary")"
         file -b "$binary"
         readelf -d "$binary"
         ldd "$binary"
       done
     } > "$output/LINUX_ELF_DEPENDENCIES.txt"
-    [ "$(grep -c 'ELF 64-bit.*x86-64' "$output/LINUX_ELF_DEPENDENCIES.txt")" -eq 2 ]
+    [ "$(grep -c 'ELF 64-bit.*x86-64' "$output/LINUX_ELF_DEPENDENCIES.txt")" -eq 4 ]
     ! grep -q 'not found' "$output/LINUX_ELF_DEPENDENCIES.txt"
     ! grep -Fq "$repo" "$output/LINUX_ELF_DEPENDENCIES.txt"
     dpkg-deb --info "$output/${deb_name}-UNSIGNED-UNNOTARIZED.deb" > "$output/DEBIAN_PACKAGE_INFO.txt"
@@ -154,10 +184,10 @@ SIGNING_STATUS=UNSIGNED
 NOTARIZATION_STATUS=UNNOTARIZED
 DISTRIBUTION=GITHUB_WORKFLOW_ARTIFACT_ONLY
 RUN_ACCEPTANCE=NOT_PERFORMED
-PACKAGE_SCOPE=TAURI_DIGI_DESKTOP_ONLY_NOT_COMPLETE_NATIVE_LOGGING
-CANONICAL_LOGBOOK_AGENT=NOT_BUNDLED_REQUIRES_SEPARATE_SHACKCQ_AGENT
-WINDOWS_CANONICAL_LOGBOOK_AGENT_BUILD=BLOCKED_NO_LINUX_HOST_QT_6_11_2_WINDOWS_TOOLCHAIN_OR_DEPLOYMENT
-LINUX_CANONICAL_LOGBOOK_AGENT_BUILD=BLOCKED_NO_QT_6_11_2_RUNTIME_DEPLOYMENT_CLOSURE_IN_THIS_SLICE
+PACKAGE_SCOPE=TAURI_DIGI_DESKTOP_WITH_OWNED_NATIVE_INGRESS_AGENT_AND_HAMLIB_HELPER
+CANONICAL_LOGBOOK_AGENT=BUNDLED_CONNECT_EXISTING_OR_OWNED_NO_HARDWARE_AUTOCONNECT
+WINDOWS_CANONICAL_LOGBOOK_AGENT_BUILD=CI_PROOF_REQUIRED_NATIVE_MINGW_QT_6_11_2
+LINUX_CANONICAL_LOGBOOK_AGENT_BUILD=CI_PROOF_REQUIRED_NATIVE_QT_6_11_2
 PHYSICAL_AUDIO_CAT_ACCEPTANCE=PENDING
 RF_TX_ACCEPTANCE=NOT_AUTHORIZED
 PRODUCTION_DIGI_TX=DISABLED
