@@ -260,6 +260,7 @@ private slots:
       QVERIFY(!metadata.readAll().contains("VK8ABC"));
     }
     LoggerIngestion restarted(&vault, path);
+    QCOMPARE(restarted.pendingEvents().size(), 0);
     restarted.setAccountScope("account-two");
     QCOMPARE(restarted.pendingEvents().size(), 0);
     restarted.setAccountScope("account-one");

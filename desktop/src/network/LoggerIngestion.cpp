@@ -643,7 +643,7 @@ QJsonArray LoggerIngestion::pendingEvents(int maximum) const {
       break;
     const QJsonObject row = item.toObject();
     if ((row.value("source") == "NEXUS_NATIVE" &&
-         (!m_accountId.isEmpty() && row.value("accountId") != m_accountId)) ||
+         (m_accountId.isEmpty() || row.value("accountId") != m_accountId)) ||
         (row.contains("state") && row.value("state") != "PENDING"))
       continue;
     const auto secret =
