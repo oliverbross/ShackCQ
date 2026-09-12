@@ -10,7 +10,9 @@ bash -n "$candidate"
 sh -n "$macos"
 test "$(grep -c '^trap cleanup EXIT' "$candidate")" = 1
 test "$(grep -c '^trap cleanup EXIT HUP INT TERM$' "$macos")" = 1
-test "$(grep -h 'rm -rf "\$repo/desktop/shackcq-tauri/binaries"' "$candidate" "$macos" | wc -l | tr -d ' ')" = 2
+! grep -F 'rm -rf "$repo/desktop/shackcq-tauri/binaries"' "$candidate" "$macos"
+grep -F 'rm -f -- "$generated_sidecar"' "$candidate" "$macos" >/dev/null
+grep -F 'rmdir "$generated_sidecar_dir"' "$candidate" "$macos" >/dev/null
 grep -F 'taskkill.exe /PID "$main_pid" /T /F' "$candidate" >/dev/null
 grep -F 'pgrep -f "$mount_point/.*/shackcq-(desktop|stationd|nexus-runtime)"' "$macos" >/dev/null
 ! grep -Eq 'taskkill\.exe .* /IM|(^|[[:space:]])pkill([[:space:]]|$)' "$candidate" "$macos"

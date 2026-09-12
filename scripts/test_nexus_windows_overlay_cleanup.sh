@@ -7,7 +7,14 @@ candidate="$repo/scripts/build_nexus_desktop_candidate.sh"
 overlay_tool="$repo/scripts/apply_nexus_windows_path_overlay.py"
 source_file="$repo/third_party/nexus/crates/tempo-fast-sys/build.rs"
 scratch=$(mktemp -d)
-trap 'rm -rf "$scratch"' EXIT
+test_sidecar_dir="$repo/desktop/shackcq-tauri/binaries"
+test_sidecar_sentinel="$test_sidecar_dir/unrelated-sentinel.keep"
+cleanup_test() {
+  rm -rf "$scratch"
+  rm -f -- "$test_sidecar_sentinel"
+  rmdir "$test_sidecar_dir" 2>/dev/null || true
+}
+trap cleanup_test EXIT
 
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 test "$(grep -Ec '^trap (cleanup )?EXIT$|^trap - EXIT$' "$candidate")" = 1
@@ -15,7 +22,57 @@ test "$(grep -Ec '^trap (cleanup )?EXIT$|^trap - EXIT$' "$candidate")" = 1
 grep -Fq 'fftw_rust_lib=$(cygpath -m "$fftw_rust_lib")' "$candidate"
 grep -Fq 'export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-Lnative=$fftw_rust_lib"' "$candidate"
 grep -Fq 'x86_64-w64-mingw32-gcc -print-file-name=libfftw3f.a' "$candidate"
-grep -Fq 'cmp "$FFTW_MINGW_PREFIX/lib/libfftw3f.a" "$fftw_gcc_archive"' "$candidate"
+grep -Fq 'if ! cmp "$expected_archive" "$fftw_gcc_archive"; then' "$candidate"
+
+cygpath() {
+  case "$1" in
+    -m) printf '%s\n' "$SHACKCQ_TEST_MIXED_LIB" ;;
+    -u) printf '%s\n' "$2" ;;
+    *) return 64 ;;
+  esac
+}
+x86_64-w64-mingw32-gcc() {
+  test "$1" = -print-file-name=libfftw3f.a
+  printf '%s\n' "$SHACKCQ_TEST_GCC_ARCHIVE"
+}
+export -f cygpath x86_64-w64-mingw32-gcc
+
+fftw_valid="$scratch/fftw-valid"
+mkdir -p "$fftw_valid/lib"
+printf 'expected archive\n' >"$fftw_valid/lib/libfftw3f.a"
+valid_log="$scratch/fftw-valid.log"
+FFTW_MINGW_PREFIX="$fftw_valid" \
+SHACKCQ_TEST_MIXED_LIB=C:/shackcq-fftw/lib \
+SHACKCQ_TEST_GCC_ARCHIVE="$fftw_valid/lib/libfftw3f.a" \
+SHACKCQ_TEST_WINDOWS_FFTW_LINK=1 RUSTFLAGS=-Cdebuginfo=1 \
+  "$candidate" windows-x64 "$scratch/unused-valid" >"$valid_log"
+grep -Fx 'RUSTFLAGS=-Cdebuginfo=1 -Lnative=C:/shackcq-fftw/lib' "$valid_log"
+
+for failure in relative whitespace missing mismatch; do
+  failure_prefix="$scratch/fftw-$failure"
+  mkdir -p "$failure_prefix/lib"
+  printf 'expected archive\n' >"$failure_prefix/lib/libfftw3f.a"
+  mixed_lib=C:/shackcq-fftw/lib
+  resolved_archive="$failure_prefix/lib/libfftw3f.a"
+  case "$failure" in
+    relative) mixed_lib=relative/path ;;
+    whitespace) mixed_lib='C:/path with space/lib' ;;
+    missing) rm "$failure_prefix/lib/libfftw3f.a" ;;
+    mismatch)
+      resolved_archive="$scratch/different-libfftw3f.a"
+      printf 'different archive\n' >"$resolved_archive"
+      ;;
+  esac
+  set +e
+  FFTW_MINGW_PREFIX="$failure_prefix" \
+  SHACKCQ_TEST_MIXED_LIB="$mixed_lib" \
+  SHACKCQ_TEST_GCC_ARCHIVE="$resolved_archive" \
+  SHACKCQ_TEST_WINDOWS_FFTW_LINK=1 \
+    "$candidate" windows-x64 "$scratch/unused-$failure" >/dev/null 2>&1
+  failure_status=$?
+  set -e
+  test "$failure_status" != 0
+done
 
 for style in lf crlf; do
   fixture="$scratch/build-$style.rs"
@@ -141,16 +198,28 @@ PY
   test ! -e "${retained_backup}.metadata.json"
 done
 
+mkdir -p "$test_sidecar_dir"
+printf 'foreign file must survive\n' >"$test_sidecar_sentinel"
+SHACKCQ_TEST_GENERATED_SIDECARS=1 \
 SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
   "$candidate" windows-x64 "$repo/build/overlay-cleanup-success"
+test "$(cat "$test_sidecar_sentinel")" = 'foreign file must survive'
+for owned in shackcq-nexus-runtime shackcq-stationd shackcq-hamlib-helper; do
+  test ! -e "$test_sidecar_dir/$owned-x86_64-pc-windows-gnu.exe"
+done
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 
 set +e
+SHACKCQ_TEST_GENERATED_SIDECARS=1 \
 SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=failure \
   "$candidate" windows-x64 "$repo/build/overlay-cleanup-failure"
 failure_status=$?
 set -e
 test "$failure_status" = 73
+test "$(cat "$test_sidecar_sentinel")" = 'foreign file must survive'
+for owned in shackcq-nexus-runtime shackcq-stationd shackcq-hamlib-helper; do
+  test ! -e "$test_sidecar_dir/$owned-x86_64-pc-windows-gnu.exe"
+done
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 
 set +e
@@ -180,4 +249,4 @@ python3 "$overlay_tool" restore "$source_file" "$retained_dir/build.rs.preimage"
 rm -rf "$retained_dir"
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 
-echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean recovery-retained=proven fftw-link-path=bounded"
+echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean recovery-retained=proven fftw-link-path=executable generated-sidecars=exact-owned"

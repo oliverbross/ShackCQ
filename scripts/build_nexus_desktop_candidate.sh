@@ -23,6 +23,8 @@ windows_owned_agent_pid=
 windows_owned_agent_path=
 windows_owned_agent_socket=
 cleanup_paths=()
+generated_sidecar_dir=
+generated_sidecars=()
 capture_windows_owned_agent() {
   local native_path observed_pid
   native_path=$(cygpath -w "$1")
@@ -115,12 +117,80 @@ cleanup() {
   if [ "${#cleanup_paths[@]}" -gt 0 ]; then
     rm -rf "${cleanup_paths[@]}"
   fi
-  # These three target-suffixed externalBin files are generated solely for the
-  # current package build and must not survive either success or abort.
-  rm -rf "$repo/desktop/shackcq-tauri/binaries"
+  if [ "${#generated_sidecars[@]}" -gt 0 ]; then
+    for generated_sidecar in "${generated_sidecars[@]}"; do
+      rm -f -- "$generated_sidecar"
+    done
+    rmdir "$generated_sidecar_dir" 2>/dev/null || true
+  fi
   exit "$cleanup_status"
 }
 trap cleanup EXIT
+
+claim_generated_sidecars() {
+  local suffix= candidate
+  [ "$platform" = windows-x64 ] && suffix=.exe
+  generated_sidecar_dir="$repo/desktop/shackcq-tauri/binaries"
+  local candidates=(
+    "$generated_sidecar_dir/shackcq-nexus-runtime-$target$suffix"
+    "$generated_sidecar_dir/shackcq-stationd-$target$suffix"
+    "$generated_sidecar_dir/shackcq-hamlib-helper-$target$suffix"
+  )
+  for candidate in "${candidates[@]}"; do
+    if [ -e "$candidate" ]; then
+      echo "refusing to overwrite pre-existing generated sidecar: $candidate" >&2
+      generated_sidecar_dir=
+      return 1
+    fi
+  done
+  generated_sidecars=("${candidates[@]}")
+}
+
+write_test_generated_sidecars() {
+  mkdir -p "$generated_sidecar_dir"
+  for generated_sidecar in "${generated_sidecars[@]}"; do
+    printf 'owned test sidecar\n' >"$generated_sidecar"
+  done
+}
+
+configure_windows_fftw_rust_link() {
+  local expected_archive fftw_rust_lib fftw_gcc_archive
+  expected_archive="$FFTW_MINGW_PREFIX/lib/libfftw3f.a"
+  if [ ! -s "$expected_archive" ]; then
+    echo "Windows FFTW archive is missing: $expected_archive" >&2
+    return 1
+  fi
+  fftw_rust_lib="$FFTW_MINGW_PREFIX/lib"
+  if command -v cygpath >/dev/null 2>&1; then
+    fftw_rust_lib=$(cygpath -m "$fftw_rust_lib")
+  fi
+  case "$fftw_rust_lib" in
+    *[[:space:]]*)
+      echo "Windows FFTW Rust link path contains whitespace: $fftw_rust_lib" >&2
+      return 1
+      ;;
+    [A-Za-z]:/*) ;;
+    *)
+      echo "Windows FFTW Rust link path is not a mixed absolute path: $fftw_rust_lib" >&2
+      return 1
+      ;;
+  esac
+  export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-Lnative=$fftw_rust_lib"
+  fftw_gcc_archive=$(LIBRARY_PATH="$FFTW_MINGW_PREFIX/lib${LIBRARY_PATH:+:$LIBRARY_PATH}" \
+    x86_64-w64-mingw32-gcc -print-file-name=libfftw3f.a)
+  if command -v cygpath >/dev/null 2>&1; then
+    fftw_gcc_archive=$(cygpath -u "$fftw_gcc_archive")
+  fi
+  if [ ! -s "$fftw_gcc_archive" ]; then
+    echo "Windows linker did not resolve libfftw3f.a: $fftw_gcc_archive" >&2
+    return 1
+  fi
+  if ! cmp "$expected_archive" "$fftw_gcc_archive"; then
+    echo "Windows linker resolved a different libfftw3f.a" >&2
+    return 1
+  fi
+  printf 'Windows FFTW Rust link preflight: %s\n' "$fftw_rust_lib/libfftw3f.a"
+}
 
 apply_nexus_windows_overlay() {
   nexus_overlay_backup_dir=$(mktemp -d)
@@ -148,6 +218,13 @@ case "$platform" in
     ;;
 esac
 test -n "$output" || { echo "output directory is required" >&2; exit 64; }
+claim_generated_sidecars
+
+if [ "${SHACKCQ_TEST_WINDOWS_FFTW_LINK:-}" = 1 ]; then
+  configure_windows_fftw_rust_link
+  printf 'RUSTFLAGS=%s\n' "$RUSTFLAGS"
+  exit 0
+fi
 
 # Focused lifecycle hook: exercises the production apply/EXIT-cleanup path
 # without requiring a Windows toolchain or opening any runtime/hardware path.
@@ -155,11 +232,13 @@ case "${SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP:-}" in
   success)
     test "$(git -C "$repo/third_party/nexus" rev-parse HEAD)" = 7618390658f8f92431dec0ac65979b84f2c0fb76
     apply_nexus_windows_overlay
+    [ "${SHACKCQ_TEST_GENERATED_SIDECARS:-}" != 1 ] || write_test_generated_sidecars
     exit 0
     ;;
   failure)
     test "$(git -C "$repo/third_party/nexus" rev-parse HEAD)" = 7618390658f8f92431dec0ac65979b84f2c0fb76
     apply_nexus_windows_overlay
+    [ "${SHACKCQ_TEST_GENERATED_SIDECARS:-}" != 1 ] || write_test_generated_sidecars
     exit 73
     ;;
   "") ;;
@@ -221,26 +300,7 @@ if [ "$platform" = windows-x64 ]; then
   fi
   export CMAKE_PREFIX_PATH="$fftw_cmake_prefix${CMAKE_PREFIX_PATH:+;$CMAKE_PREFIX_PATH}"
   test "$(pkg-config --modversion fftw3f)" = "$fftw_version"
-  fftw_rust_lib="$FFTW_MINGW_PREFIX/lib"
-  if command -v cygpath >/dev/null 2>&1; then
-    fftw_rust_lib=$(cygpath -m "$fftw_rust_lib")
-  fi
-  case "$fftw_rust_lib" in
-    [A-Za-z]:/*) ;;
-    *)
-      echo "Windows FFTW Rust link path is not a mixed absolute path: $fftw_rust_lib" >&2
-      exit 1
-      ;;
-  esac
-  export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-Lnative=$fftw_rust_lib"
-  fftw_gcc_archive=$(LIBRARY_PATH="$FFTW_MINGW_PREFIX/lib${LIBRARY_PATH:+:$LIBRARY_PATH}" \
-    x86_64-w64-mingw32-gcc -print-file-name=libfftw3f.a)
-  if command -v cygpath >/dev/null 2>&1; then
-    fftw_gcc_archive=$(cygpath -u "$fftw_gcc_archive")
-  fi
-  test -s "$fftw_gcc_archive"
-  cmp "$FFTW_MINGW_PREFIX/lib/libfftw3f.a" "$fftw_gcc_archive"
-  printf 'Windows FFTW Rust link preflight: %s\n' "$fftw_rust_lib/libfftw3f.a"
+  configure_windows_fftw_rust_link
   boost_version_header=/mingw64/include/boost/version.hpp
   test -s "$boost_version_header"
   boost_version=$(awk '/^#define BOOST_VERSION / { print $3 }' "$boost_version_header")

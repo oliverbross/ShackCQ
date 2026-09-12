@@ -29,6 +29,10 @@ acceptance_socket=
 mounted_socket=
 owner_token=
 mounted_owner=
+generated_sidecar_dir=
+generated_nexus=
+generated_stationd=
+generated_hamlib_helper=
 cleanup() {
   cleanup_status=$?
   trap - EXIT HUP INT TERM
@@ -67,9 +71,10 @@ cleanup() {
   [ -z "$acceptance_root" ] || rm -rf "$acceptance_root"
   [ -z "$stage" ] || rm -rf "$stage"
   [ -z "$mounted_acceptance" ] || rm -rf "$mounted_acceptance"
-  # The target-suffixed externalBin files are build staging, not source or a
-  # deliverable. Remove them on both successful completion and interruption.
-  rm -rf "$repo/desktop/shackcq-tauri/binaries"
+  for generated_sidecar in "$generated_nexus" "$generated_stationd" "$generated_hamlib_helper"; do
+    [ -z "$generated_sidecar" ] || rm -f -- "$generated_sidecar"
+  done
+  [ -z "$generated_sidecar_dir" ] || rmdir "$generated_sidecar_dir" 2>/dev/null || true
   exit "$cleanup_status"
 }
 trap cleanup EXIT HUP INT TERM
@@ -83,6 +88,20 @@ test -d "$qtwebengine_prefix/lib"
 test -d "$brotli_prefix/lib"
 python3 "$repo/scripts/check_nexus_native_desktop.py"
 python3 "$repo/desktop/shackcq-tauri/scripts/verify-shared-ui.py"
+sidecar_dir="$repo/desktop/shackcq-tauri/binaries"
+candidate_nexus="$sidecar_dir/shackcq-nexus-runtime-aarch64-apple-darwin"
+candidate_stationd="$sidecar_dir/shackcq-stationd-aarch64-apple-darwin"
+candidate_hamlib_helper="$sidecar_dir/shackcq-hamlib-helper-aarch64-apple-darwin"
+for candidate_sidecar in "$candidate_nexus" "$candidate_stationd" "$candidate_hamlib_helper"; do
+  test ! -e "$candidate_sidecar" || {
+    echo "refusing to overwrite pre-existing generated sidecar: $candidate_sidecar" >&2
+    exit 1
+  }
+done
+generated_sidecar_dir=$sidecar_dir
+generated_nexus=$candidate_nexus
+generated_stationd=$candidate_stationd
+generated_hamlib_helper=$candidate_hamlib_helper
 "$repo/scripts/build_nexus_native_sidecar.sh"
 sh "$repo/scripts/build_hamlib_posix.sh" "$hamlib_root" \
   "$repo/core/third_party/hamlib" "$repo/build/desktop/nexus-hamlib-build-macos-13"
