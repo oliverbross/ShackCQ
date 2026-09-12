@@ -25,6 +25,7 @@ windows_owned_agent_socket=
 cleanup_paths=()
 generated_sidecar_dir=
 generated_sidecar_lock=
+generated_sidecar_owner_metadata=
 generated_sidecars=()
 capture_windows_owned_agent() {
   local native_path observed_pid
@@ -119,15 +120,33 @@ cleanup() {
   if [ "${#cleanup_paths[@]}" -gt 0 ]; then
     rm -rf "${cleanup_paths[@]}"
   fi
+  generated_sidecars_absent=1
   if [ "${#generated_sidecars[@]}" -gt 0 ]; then
     for generated_sidecar in "${generated_sidecars[@]}"; do
-      rm -f -- "$generated_sidecar"
+      if ! rm -f -- "$generated_sidecar"; then
+        echo "failed to remove owned generated sidecar: $generated_sidecar" >&2
+        generated_sidecars_absent=0
+      fi
+      if [ -e "$generated_sidecar" ] || [ -L "$generated_sidecar" ]; then
+        echo "owned generated sidecar remains: $generated_sidecar" >&2
+        generated_sidecars_absent=0
+      fi
     done
   fi
   if [ -n "$generated_sidecar_lock" ]; then
-    if ! rmdir "$generated_sidecar_lock"; then
+    if [ "$generated_sidecars_absent" != 1 ]; then
       echo "generated sidecar ownership lock retained: $generated_sidecar_lock" >&2
+      echo "inspect OWNER.json and the three exact target paths; after proving the recorded PID inactive, remove only those owned paths, OWNER.json, and then this lock directory" >&2
       cleanup_status=1
+    else
+      if ! rm -f -- "$generated_sidecar_owner_metadata" || \
+        [ -e "$generated_sidecar_owner_metadata" ] || \
+        [ -L "$generated_sidecar_owner_metadata" ] || \
+        ! rmdir "$generated_sidecar_lock"; then
+        echo "generated sidecar ownership metadata/lock retained: $generated_sidecar_lock" >&2
+        echo "inspect OWNER.json and confirm the recorded PID inactive before manually removing the metadata and empty lock directory" >&2
+        cleanup_status=1
+      fi
     fi
   fi
   if [ -n "$generated_sidecar_dir" ]; then
@@ -141,17 +160,45 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 claim_generated_sidecars() {
-  local suffix= candidate candidate_lock
+  local suffix= candidate candidate_lock owner_source owner_started owner_output
   [ "$platform" = windows-x64 ] && suffix=.exe
   local candidate_dir="$repo/desktop/shackcq-tauri/binaries"
   mkdir -p "$candidate_dir"
   candidate_lock="$candidate_dir/.shackcq-package-$target.lock"
   if ! mkdir "$candidate_lock"; then
     echo "another package build owns target $target: $candidate_lock" >&2
+    echo "inspect $candidate_lock/OWNER.json and all exact target paths; never auto-break the lock, and remove it manually only after proving the recorded PID inactive" >&2
     return 1
   fi
   generated_sidecar_dir=$candidate_dir
   generated_sidecar_lock=$candidate_lock
+  generated_sidecar_owner_metadata="$candidate_lock/OWNER.json"
+  owner_source=$(git -C "$repo" rev-parse HEAD)
+  owner_started=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+  owner_output=${output:0:512}
+  python3 - "$generated_sidecar_owner_metadata" "$$" "${HOSTNAME:-unknown}" \
+    "$owner_started" "$owner_source" "$platform" "$owner_output" <<'PY'
+import json
+import os
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+payload = {
+    "pid": int(sys.argv[2]),
+    "host": sys.argv[3][:128],
+    "startedUtc": sys.argv[4],
+    "sourceSha": sys.argv[5],
+    "platform": sys.argv[6],
+    "output": sys.argv[7],
+}
+raw = (json.dumps(payload, sort_keys=True, separators=(",", ":")) + "\n").encode()
+if len(raw) > 2048:
+    raise SystemExit("generated sidecar owner metadata exceeds 2048 bytes")
+fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+with os.fdopen(fd, "wb") as handle:
+    handle.write(raw)
+PY
   local candidates=(
     "$generated_sidecar_dir/shackcq-nexus-runtime-$target$suffix"
     "$generated_sidecar_dir/shackcq-stationd-$target$suffix"
@@ -168,9 +215,13 @@ claim_generated_sidecars() {
 
 write_test_generated_sidecars() {
   mkdir -p "$generated_sidecar_dir"
-  for generated_sidecar in "${generated_sidecars[@]}"; do
-    printf 'owned test sidecar\n' >"$generated_sidecar"
-  done
+  if [ "${SHACKCQ_TEST_GENERATED_SIDECARS:-}" = directory ]; then
+    mkdir "${generated_sidecars[0]}"
+  else
+    for generated_sidecar in "${generated_sidecars[@]}"; do
+      printf 'owned test sidecar\n' >"$generated_sidecar"
+    done
+  fi
 }
 
 configure_windows_fftw_rust_link() {
@@ -266,13 +317,13 @@ case "${SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP:-}" in
   success)
     test "$(git -C "$repo/third_party/nexus" rev-parse HEAD)" = 7618390658f8f92431dec0ac65979b84f2c0fb76
     apply_nexus_windows_overlay
-    [ "${SHACKCQ_TEST_GENERATED_SIDECARS:-}" != 1 ] || write_test_generated_sidecars
+    [ -z "${SHACKCQ_TEST_GENERATED_SIDECARS:-}" ] || write_test_generated_sidecars
     exit 0
     ;;
   failure)
     test "$(git -C "$repo/third_party/nexus" rev-parse HEAD)" = 7618390658f8f92431dec0ac65979b84f2c0fb76
     apply_nexus_windows_overlay
-    [ "${SHACKCQ_TEST_GENERATED_SIDECARS:-}" != 1 ] || write_test_generated_sidecars
+    [ -z "${SHACKCQ_TEST_GENERATED_SIDECARS:-}" ] || write_test_generated_sidecars
     exit 73
     ;;
   "") ;;

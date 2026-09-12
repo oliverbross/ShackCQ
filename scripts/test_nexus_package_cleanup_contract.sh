@@ -17,6 +17,9 @@ grep -F 'rmdir "$generated_sidecar_dir"' "$candidate" "$macos" >/dev/null
 grep -F '.shackcq-package-$target.lock' "$candidate" >/dev/null
 grep -F '.shackcq-package-aarch64-apple-darwin.lock' "$macos" >/dev/null
 grep -F '[ -e "$candidate" ] || [ -L "$candidate" ]' "$candidate" >/dev/null
+grep -F 'generated sidecar ownership lock retained:' "$candidate" "$macos" >/dev/null
+grep -F 'after proving the recorded PID inactive' "$candidate" "$macos" >/dev/null
+grep -F 'OWNER.json' "$candidate" "$macos" >/dev/null
 grep -F 'taskkill.exe /PID "$main_pid" /T /F' "$candidate" >/dev/null
 grep -F 'pgrep -f "$mount_point/.*/shackcq-(desktop|stationd|nexus-runtime)"' "$macos" >/dev/null
 ! grep -Eq 'taskkill\.exe .* /IM|(^|[[:space:]])pkill([[:space:]]|$)' "$candidate" "$macos"

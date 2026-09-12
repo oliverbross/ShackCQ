@@ -10,6 +10,8 @@ scratch=$(mktemp -d)
 test_sidecar_dir="$repo/desktop/shackcq-tauri/binaries"
 test_sidecar_sentinel="$test_sidecar_dir/unrelated-sentinel.keep"
 test_exact_sidecar=
+retained_lock=
+retained_owned_dir=
 lock_holder_pid=
 lock_ready="$scratch/sidecar-lock-ready"
 cleanup_test() {
@@ -21,6 +23,11 @@ cleanup_test() {
   rm -rf "$scratch"
   rm -f -- "$test_sidecar_sentinel"
   [ -z "$test_exact_sidecar" ] || rm -f -- "$test_exact_sidecar"
+  [ -z "$retained_owned_dir" ] || rmdir "$retained_owned_dir" 2>/dev/null || true
+  if [ -n "$retained_lock" ]; then
+    rm -f -- "$retained_lock/OWNER.json"
+    rmdir "$retained_lock" 2>/dev/null || true
+  fi
   rmdir "$test_sidecar_dir" 2>/dev/null || true
 }
 trap cleanup_test EXIT
@@ -95,6 +102,24 @@ for _ in {1..100}; do
   sleep 0.05
 done
 test "$lock_observed" = 1
+lock_path="$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
+test -s "$lock_path/OWNER.json"
+python3 - "$lock_path/OWNER.json" "$(git -C "$repo" rev-parse HEAD)" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+raw = path.read_bytes()
+assert len(raw) <= 2048
+owner = json.loads(raw)
+assert owner["pid"] > 0
+assert owner["host"]
+assert owner["startedUtc"].endswith("Z")
+assert owner["sourceSha"] == sys.argv[2]
+assert owner["platform"] == "windows-x64"
+assert owner["output"].endswith("lock-holder")
+PY
 set +e
 SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
   "$candidate" windows-x64 "$scratch/lock-contender" >/dev/null 2>&1
@@ -151,6 +176,29 @@ for preexisting_kind in file dangling-symlink; do
 done
 test_exact_sidecar=
 test ! -e "$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
+
+printf 'foreign file must survive\n' >"$test_sidecar_sentinel"
+retained_log="$scratch/generated-sidecar-retained.log"
+set +e
+SHACKCQ_TEST_GENERATED_SIDECARS=directory \
+SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
+  "$candidate" windows-x64 "$scratch/generated-sidecar-retained" \
+  >"$retained_log" 2>&1
+retained_status=$?
+set -e
+test "$retained_status" != 0
+retained_lock="$test_sidecar_dir/.shackcq-package-x86_64-pc-windows-gnu.lock"
+retained_owned_dir="$test_sidecar_dir/shackcq-nexus-runtime-x86_64-pc-windows-gnu.exe"
+test -d "$retained_owned_dir"
+test -s "$retained_lock/OWNER.json"
+test "$(cat "$test_sidecar_sentinel")" = 'foreign file must survive'
+grep -F "generated sidecar ownership lock retained: $retained_lock" "$retained_log"
+grep -F 'after proving the recorded PID inactive' "$retained_log"
+rmdir "$retained_owned_dir"
+retained_owned_dir=
+rm -f -- "$retained_lock/OWNER.json"
+rmdir "$retained_lock"
+retained_lock=
 
 for style in lf crlf; do
   fixture="$scratch/build-$style.rs"
@@ -327,4 +375,4 @@ python3 "$overlay_tool" restore "$source_file" "$retained_dir/build.rs.preimage"
 rm -rf "$retained_dir"
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 
-echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean recovery-retained=proven fftw-link-path=executable generated-sidecars=exact-owned-lock-contended-term-clean"
+echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean recovery-retained=proven fftw-link-path=executable generated-sidecars=exact-owned-lock-contended-term-clean-delete-failure-retained"
