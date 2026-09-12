@@ -1,10 +1,8 @@
 diff --git a/crates/tempo-fast-sys/build.rs b/crates/tempo-fast-sys/build.rs
+index 9bef911a..f46fe9da 100644
 --- a/crates/tempo-fast-sys/build.rs
 +++ b/crates/tempo-fast-sys/build.rs
-@@ -27,10 +27,12 @@ mod manifest_gate;
- 
- fn main() {
-     let manifest = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+@@ -30,4 +30,6 @@ fn main() {
 -    let libtempo_src = manifest
 -        .join("../../libtempo")
 -        .canonicalize()
@@ -15,13 +13,7 @@ diff --git a/crates/tempo-fast-sys/build.rs b/crates/tempo-fast-sys/build.rs
 +            .canonicalize()
 +            .expect("locate tempo/libtempo"),
 +    );
-     check_state_manifest(&libtempo_src);
-     let out = PathBuf::from(env::var("OUT_DIR").unwrap());
- 
-@@ -138,4 +139,18 @@ fn main() {
-     emit_rerun(&libtempo_src);
- }
- 
+@@ -140,0 +143,14 @@ fn main() {
 +/// Rust's Windows canonicalization returns a verbatim `\\?\` path. MinGW
 +/// gfortran receives CMake's slash-normalized `//?/D:/...` form and treats the
 +/// source operand as `//file.f90`, so preprocessing fails before compilation.
@@ -36,4 +28,3 @@ diff --git a/crates/tempo-fast-sys/build.rs b/crates/tempo-fast-sys/build.rs
 +    path
 +}
 +
- /// Emit `rustc-link-search` entries for the gfortran and FFTW3f runtimes on macOS.

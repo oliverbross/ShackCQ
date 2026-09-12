@@ -9,15 +9,38 @@ tauri_cli_version=${TAURI_CLI_VERSION:-2.11.4}
 nexus_windows_path_patch="$repo/patches/nexus-tempo-fast-windows-path.patch"
 nexus_patch_applied=0
 fftw_build=
+stationd_pid=
+stationd_executable=
+owner_token=
+stop_owned_stationd() {
+  if [ -n "$stationd_pid" ]; then
+    "$stationd_executable" --stop --native-owner-token "$owner_token" >/dev/null 2>&1 || true
+    wait "$stationd_pid" 2>/dev/null || true
+    stationd_pid=
+  fi
+}
 cleanup() {
+  cleanup_status=$?
+  set +e
+  stop_owned_stationd
   if [ "$nexus_patch_applied" = 1 ]; then
-    git -C "$repo/third_party/nexus" apply --reverse "$nexus_windows_path_patch"
+    if ! git -C "$repo/third_party/nexus" apply --unidiff-zero --reverse "$nexus_windows_path_patch"; then
+      echo "failed to reverse the Nexus Windows build overlay" >&2
+      cleanup_status=1
+    fi
   fi
   if [ -n "$fftw_build" ]; then
     rm -rf "$fftw_build"
   fi
+  exit "$cleanup_status"
 }
 trap cleanup EXIT
+
+apply_nexus_windows_overlay() {
+  git -C "$repo/third_party/nexus" apply --unidiff-zero --check "$nexus_windows_path_patch"
+  git -C "$repo/third_party/nexus" apply --unidiff-zero "$nexus_windows_path_patch"
+  nexus_patch_applied=1
+}
 
 case "$platform" in
   windows-x64)
@@ -36,6 +59,23 @@ case "$platform" in
     ;;
 esac
 test -n "$output" || { echo "output directory is required" >&2; exit 64; }
+
+# Focused lifecycle hook: exercises the production apply/EXIT-cleanup path
+# without requiring a Windows toolchain or opening any runtime/hardware path.
+case "${SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP:-}" in
+  success)
+    test "$(git -C "$repo/third_party/nexus" rev-parse HEAD)" = 7618390658f8f92431dec0ac65979b84f2c0fb76
+    apply_nexus_windows_overlay
+    exit 0
+    ;;
+  failure)
+    test "$(git -C "$repo/third_party/nexus" rev-parse HEAD)" = 7618390658f8f92431dec0ac65979b84f2c0fb76
+    apply_nexus_windows_overlay
+    exit 73
+    ;;
+  "") ;;
+  *) echo "invalid SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP value" >&2; exit 64 ;;
+esac
 qt_prefix=${SHACKCQ_QT_PREFIX:?SHACKCQ_QT_PREFIX is required}
 if command -v npx >/dev/null 2>&1; then
   npx_command=npx
@@ -97,9 +137,7 @@ if [ "$platform" = windows-x64 ]; then
   boost_version=$(awk '/^#define BOOST_VERSION / { print $3 }' "$boost_version_header")
   test -n "$boost_version" && test "$boost_version" -ge 107000
   printf 'Windows Boost header preflight: BOOST_VERSION=%s\n' "$boost_version"
-  git -C "$repo/third_party/nexus" apply --check "$nexus_windows_path_patch"
-  git -C "$repo/third_party/nexus" apply "$nexus_windows_path_patch"
-  nexus_patch_applied=1
+  apply_nexus_windows_overlay
   cargo test --locked --manifest-path "$repo/desktop/nexus-runtime/Cargo.toml" \
     --target "$target" --no-run
 else
@@ -134,11 +172,6 @@ if [ "$platform" = windows-x64 ]; then
     --native-owner-token "$owner_token" --ephemeral-root "$isolated_root" \
     --ephemeral-credentials &
   stationd_pid=$!
-  stop_stationd() {
-    "$stationd_executable" --stop --native-owner-token "$owner_token" >/dev/null 2>&1 || true
-    wait "$stationd_pid" 2>/dev/null || true
-  }
-  trap stop_stationd EXIT
   for _ in {1..40}; do
     "$stationd_executable" --status >/dev/null 2>&1 && break
     sleep 0.1
@@ -148,8 +181,7 @@ if [ "$platform" = windows-x64 ]; then
     SHACKCQ_TEST_WINDOWS_AGENT_OWNER_TOKEN="$owner_token" cargo test --locked \
     --manifest-path "$repo/desktop/shackcq-tauri/Cargo.toml" --target "$target" \
     agent_ingress::tests::windows_named_pipe_reaches_the_isolated_qt_agent
-  stop_stationd
-  trap - EXIT
+  stop_owned_stationd
 fi
 CARGO_BUILD_TARGET="$target" "$repo/scripts/build_nexus_native_sidecar.sh"
 tauri_args=(build --ci --no-sign --target "$target" --bundles "$bundles")
