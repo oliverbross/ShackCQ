@@ -23,6 +23,13 @@ const AGENT_ID: &str = "shackcq-desktop-local";
 const DEVICE_ID: &str = "nexus-native-rx";
 const RECORDING_LOCAL_ONLY: bool = true;
 
+fn package_acceptance_exit_ms() -> Option<u64> {
+    std::env::var("SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| (100..=10_000).contains(value))
+}
+
 struct RuntimeSupervisor {
     _child: Child,
     input: ChildStdin,
@@ -36,18 +43,24 @@ impl RuntimeSupervisor {
         let mut nonce = [0u8; 32];
         getrandom::fill(&mut nonce).map_err(|_| "runtime nonce unavailable")?;
         let nonce = hex::encode(nonce);
-        let entry = keyring::Entry::new("ShackCQ Desktop", "nexus-reviewed-contact-queue")
-            .map_err(|_| "credential vault unavailable")?;
-        let queue_key = match entry.get_password() {
-            Ok(v) if v.len() == 64 => v,
-            _ => {
-                let mut k = [0u8; 32];
-                getrandom::fill(&mut k).map_err(|_| "queue key unavailable")?;
-                let v = hex::encode(k);
-                entry
-                    .set_password(&v)
-                    .map_err(|_| "credential vault unavailable")?;
-                v
+        let queue_key = if package_acceptance_exit_ms().is_some() {
+            let mut key = [0u8; 32];
+            getrandom::fill(&mut key).map_err(|_| "queue key unavailable")?;
+            hex::encode(key)
+        } else {
+            let entry = keyring::Entry::new("ShackCQ Desktop", "nexus-reviewed-contact-queue")
+                .map_err(|_| "credential vault unavailable")?;
+            match entry.get_password() {
+                Ok(value) if value.len() == 64 => value,
+                _ => {
+                    let mut key = [0u8; 32];
+                    getrandom::fill(&mut key).map_err(|_| "queue key unavailable")?;
+                    let value = hex::encode(key);
+                    entry
+                        .set_password(&value)
+                        .map_err(|_| "credential vault unavailable")?;
+                    value
+                }
             }
         };
         let executable = std::env::current_exe()
@@ -1064,11 +1077,7 @@ fn main() {
                 _agent: Mutex::new(agent),
             };
             app.manage(state);
-            if let Some(milliseconds) = std::env::var("SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS")
-                .ok()
-                .and_then(|value| value.parse::<u64>().ok())
-                .filter(|value| (100..=10_000).contains(value))
-            {
+            if let Some(milliseconds) = package_acceptance_exit_ms() {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(Duration::from_millis(milliseconds));
