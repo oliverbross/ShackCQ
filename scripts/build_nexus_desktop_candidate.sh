@@ -47,7 +47,17 @@ if [ "$platform" = windows-x64 ]; then
   done
   fftw_version=3.3.10
   fftw_sha256=56c932549852cddcfafdab3820b0200c7742675be92179e59e6215b340e26467
-  export FFTW_MINGW_PREFIX="${RUNNER_TEMP:-$repo/build}/shackcq-fftw-mingw"
+  fftw_parent=${RUNNER_TEMP:-$repo/build}
+  if command -v cygpath >/dev/null 2>&1; then
+    fftw_parent=$(cygpath -u "$fftw_parent")
+  fi
+  case "$fftw_parent" in
+    [A-Za-z]:\\*)
+      echo "Windows FFTW prefix was not normalized for MSYS2: $fftw_parent" >&2
+      exit 1
+      ;;
+  esac
+  export FFTW_MINGW_PREFIX="$fftw_parent/shackcq-fftw-mingw"
   if [ ! -s "$FFTW_MINGW_PREFIX/lib/libfftw3f.a" ]; then
     fftw_build=$(mktemp -d)
     trap 'rm -rf "$fftw_build"' EXIT
