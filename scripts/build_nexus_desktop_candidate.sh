@@ -10,6 +10,7 @@ nexus_windows_path_patch="$repo/patches/nexus-tempo-fast-windows-path.patch"
 nexus_windows_path_overlay_tool="$repo/scripts/apply_nexus_windows_path_overlay.py"
 nexus_windows_path_target="$repo/third_party/nexus/crates/tempo-fast-sys/build.rs"
 nexus_patch_applied=0
+nexus_overlay_recovery_required=0
 nexus_overlay_backup_dir=
 nexus_overlay_backup=
 fftw_build=
@@ -85,15 +86,25 @@ cleanup() {
     stop_windows_owned_agent
   fi
   stop_owned_stationd
-  if [ "$nexus_patch_applied" = 1 ]; then
-    if ! python3 "$nexus_windows_path_overlay_tool" restore \
-      "$nexus_windows_path_target" "$nexus_overlay_backup"; then
-      echo "failed to restore the exact Nexus Windows build-overlay preimage" >&2
+  if [ "$nexus_overlay_recovery_required" = 1 ]; then
+    if [ -s "$nexus_overlay_backup" ] && [ -s "${nexus_overlay_backup}.metadata.json" ]; then
+      if python3 "$nexus_windows_path_overlay_tool" restore \
+        "$nexus_windows_path_target" "$nexus_overlay_backup"; then
+        nexus_overlay_recovery_required=0
+      else
+        echo "Nexus overlay recovery retained at: $nexus_overlay_backup_dir" >&2
+        cleanup_status=1
+      fi
+    elif python3 "$nexus_windows_path_overlay_tool" verify-preimage \
+      "$nexus_windows_path_target"; then
+      nexus_overlay_recovery_required=0
+    else
+      echo "Nexus overlay state is not recoverable; retained: $nexus_overlay_backup_dir" >&2
       cleanup_status=1
     fi
     nexus_patch_applied=0
   fi
-  if [ -n "$nexus_overlay_backup_dir" ]; then
+  if [ "$nexus_overlay_recovery_required" = 0 ] && [ -n "$nexus_overlay_backup_dir" ]; then
     rm -rf "$nexus_overlay_backup_dir"
     nexus_overlay_backup_dir=
     nexus_overlay_backup=
@@ -111,6 +122,7 @@ trap cleanup EXIT
 apply_nexus_windows_overlay() {
   nexus_overlay_backup_dir=$(mktemp -d)
   nexus_overlay_backup="$nexus_overlay_backup_dir/build.rs.preimage"
+  nexus_overlay_recovery_required=1
   python3 "$nexus_windows_path_overlay_tool" apply \
     "$nexus_windows_path_target" "$nexus_overlay_backup"
   nexus_patch_applied=1

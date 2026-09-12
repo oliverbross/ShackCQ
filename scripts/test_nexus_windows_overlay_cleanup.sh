@@ -44,6 +44,15 @@ PY
   fi
   python3 "$overlay_tool" restore "$fixture" "$backup"
   cmp "$fixture.original" "$fixture"
+  python3 - "$fixture.original" "$fixture" <<'PY'
+from pathlib import Path
+import stat
+import sys
+
+assert stat.S_IMODE(Path(sys.argv[1]).stat().st_mode) == stat.S_IMODE(
+    Path(sys.argv[2]).stat().st_mode
+)
+PY
 
   bad_fixture="$scratch/build-$style-bad.rs"
   bad_backup="$scratch/build-$style-bad.backup"
@@ -60,23 +69,72 @@ PY
   test "$bad_status" != 0
   test ! -e "$bad_backup"
 
-  changed_fixture="$scratch/build-$style-changed.rs"
-  changed_backup="$scratch/build-$style-changed.backup"
-  cp "$fixture.original" "$changed_fixture"
-  cp "$changed_fixture" "$changed_fixture.original"
-  python3 "$overlay_tool" apply "$changed_fixture" "$changed_backup"
-  if [ "$style" = lf ]; then
-    printf '\n// unexpected postimage mutation\n' >> "$changed_fixture"
-  else
-    printf '\r\n// unexpected postimage mutation\r\n' >> "$changed_fixture"
-  fi
+  for damage in deleted malformed mode unreadable; do
+    changed_fixture="$scratch/build-$style-$damage.rs"
+    changed_backup="$scratch/build-$style-$damage.backup"
+    cp "$fixture.original" "$changed_fixture"
+    cp "$changed_fixture" "$changed_fixture.original"
+    python3 "$overlay_tool" apply "$changed_fixture" "$changed_backup"
+    case "$damage" in
+      deleted) rm "$changed_fixture" ;;
+      malformed) printf '\rbare-CR and mixed\n' > "$changed_fixture" ;;
+      mode) chmod 0600 "$changed_fixture" ;;
+      unreadable) chmod 0000 "$changed_fixture" ;;
+    esac
+    python3 "$overlay_tool" restore "$changed_fixture" "$changed_backup"
+    cmp "$changed_fixture.original" "$changed_fixture"
+    python3 - "$changed_fixture.original" "$changed_fixture" <<'PY'
+from pathlib import Path
+import stat
+import sys
+
+assert stat.S_IMODE(Path(sys.argv[1]).stat().st_mode) == stat.S_IMODE(
+    Path(sys.argv[2]).stat().st_mode
+)
+PY
+    test ! -e "$changed_backup"
+    test ! -e "${changed_backup}.metadata.json"
+  done
+
+  rollback_fixture="$scratch/build-$style-rollback.rs"
+  rollback_backup="$scratch/build-$style-rollback.backup"
+  cp "$fixture.original" "$rollback_fixture"
+  cp "$rollback_fixture" "$rollback_fixture.original"
   set +e
-  python3 "$overlay_tool" restore "$changed_fixture" "$changed_backup" >/dev/null 2>&1
-  changed_status=$?
+  SHACKCQ_TEST_OVERLAY_ATOMIC_FAILURES=before \
+    python3 "$overlay_tool" apply "$rollback_fixture" "$rollback_backup" >/dev/null 2>&1
+  rollback_status=$?
   set -e
-  test "$changed_status" != 0
-  cmp "$changed_fixture.original" "$changed_fixture"
-  test ! -e "$changed_backup"
+  test "$rollback_status" != 0
+  cmp "$rollback_fixture.original" "$rollback_fixture"
+  test ! -e "$rollback_backup"
+  test ! -e "${rollback_backup}.metadata.json"
+
+  retained_fixture="$scratch/build-$style-retained.rs"
+  retained_backup="$scratch/build-$style-retained.backup"
+  cp "$fixture.original" "$retained_fixture"
+  cp "$retained_fixture" "$retained_fixture.original"
+  set +e
+  SHACKCQ_TEST_OVERLAY_ATOMIC_FAILURES=after,before \
+    python3 "$overlay_tool" apply "$retained_fixture" "$retained_backup" >/dev/null 2>&1
+  retained_status=$?
+  set -e
+  test "$retained_status" != 0
+  test -s "$retained_backup"
+  test -s "${retained_backup}.metadata.json"
+  python3 - "$retained_backup" "${retained_backup}.metadata.json" <<'PY'
+from pathlib import Path
+import stat
+import sys
+
+assert stat.S_IMODE(Path(sys.argv[1]).stat().st_mode) == 0o600
+assert stat.S_IMODE(Path(sys.argv[2]).stat().st_mode) == 0o600
+assert stat.S_IMODE(Path(sys.argv[1]).parent.stat().st_mode) == 0o700
+PY
+  python3 "$overlay_tool" restore "$retained_fixture" "$retained_backup"
+  cmp "$retained_fixture.original" "$retained_fixture"
+  test ! -e "$retained_backup"
+  test ! -e "${retained_backup}.metadata.json"
 done
 
 SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
@@ -91,4 +149,31 @@ set -e
 test "$failure_status" = 73
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 
-echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean"
+set +e
+SHACKCQ_TEST_OVERLAY_ATOMIC_FAILURES=before \
+  SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
+  "$candidate" windows-x64 "$repo/build/overlay-cleanup-apply-failure" \
+  >/dev/null 2>&1
+apply_failure_status=$?
+set -e
+test "$apply_failure_status" != 0
+test -z "$(git -C "$repo/third_party/nexus" status --short)"
+
+retained_log="$scratch/candidate-retained.log"
+set +e
+SHACKCQ_TEST_OVERLAY_ATOMIC_FAILURES=after,before \
+  SHACKCQ_TEST_NEXUS_OVERLAY_CLEANUP=success \
+  "$candidate" windows-x64 "$repo/build/overlay-cleanup-retained" \
+  >"$retained_log" 2>&1
+retained_candidate_status=$?
+set -e
+test "$retained_candidate_status" != 0
+retained_dir=$(sed -n 's/^Nexus overlay recovery retained at: //p' "$retained_log" | tail -n 1)
+test -n "$retained_dir"
+test -s "$retained_dir/build.rs.preimage"
+test -s "$retained_dir/build.rs.preimage.metadata.json"
+python3 "$overlay_tool" restore "$source_file" "$retained_dir/build.rs.preimage"
+rm -rf "$retained_dir"
+test -z "$(git -C "$repo/third_party/nexus" status --short)"
+
+echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean recovery-retained=proven"
