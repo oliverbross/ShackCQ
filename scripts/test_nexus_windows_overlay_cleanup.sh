@@ -12,6 +12,10 @@ trap 'rm -rf "$scratch"' EXIT
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 test "$(grep -Ec '^trap (cleanup )?EXIT$|^trap - EXIT$' "$candidate")" = 1
 ! grep -Eq 'main_rc.*124|main_rc" -eq 124' "$candidate"
+grep -Fq 'fftw_rust_lib=$(cygpath -m "$fftw_rust_lib")' "$candidate"
+grep -Fq 'export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-Lnative=$fftw_rust_lib"' "$candidate"
+grep -Fq 'x86_64-w64-mingw32-gcc -print-file-name=libfftw3f.a' "$candidate"
+grep -Fq 'cmp "$FFTW_MINGW_PREFIX/lib/libfftw3f.a" "$fftw_gcc_archive"' "$candidate"
 
 for style in lf crlf; do
   fixture="$scratch/build-$style.rs"
@@ -176,4 +180,4 @@ python3 "$overlay_tool" restore "$source_file" "$retained_dir/build.rs.preimage"
 rm -rf "$retained_dir"
 test -z "$(git -C "$repo/third_party/nexus" status --short)"
 
-echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean recovery-retained=proven"
+echo "NEXUS_WINDOWS_OVERLAY_CLEANUP_OK success=clean failure=clean recovery-retained=proven fftw-link-path=bounded"

@@ -180,7 +180,7 @@ python3 "$repo/desktop/shackcq-tauri/scripts/verify-shared-ui.py"
 test "$("$npx_command" --yes "@tauri-apps/cli@${tauri_cli_version}" --version | awk '{print $NF}')" = "$tauri_cli_version"
 
 if [ "$platform" = windows-x64 ]; then
-  for tool in x86_64-w64-mingw32-gcc x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gfortran cmake curl make ninja makensis sha256sum tar; do
+  for tool in x86_64-w64-mingw32-gcc x86_64-w64-mingw32-g++ x86_64-w64-mingw32-gfortran cmake cmp curl make ninja makensis sha256sum tar; do
     command -v "$tool" >/dev/null || { echo "missing Windows cross tool: $tool" >&2; exit 1; }
   done
   fftw_version=3.3.10
@@ -218,6 +218,26 @@ if [ "$platform" = windows-x64 ]; then
   fi
   export CMAKE_PREFIX_PATH="$fftw_cmake_prefix${CMAKE_PREFIX_PATH:+;$CMAKE_PREFIX_PATH}"
   test "$(pkg-config --modversion fftw3f)" = "$fftw_version"
+  fftw_rust_lib="$FFTW_MINGW_PREFIX/lib"
+  if command -v cygpath >/dev/null 2>&1; then
+    fftw_rust_lib=$(cygpath -m "$fftw_rust_lib")
+  fi
+  case "$fftw_rust_lib" in
+    [A-Za-z]:/*) ;;
+    *)
+      echo "Windows FFTW Rust link path is not a mixed absolute path: $fftw_rust_lib" >&2
+      exit 1
+      ;;
+  esac
+  export RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-Lnative=$fftw_rust_lib"
+  fftw_gcc_archive=$(LIBRARY_PATH="$FFTW_MINGW_PREFIX/lib${LIBRARY_PATH:+:$LIBRARY_PATH}" \
+    x86_64-w64-mingw32-gcc -print-file-name=libfftw3f.a)
+  if command -v cygpath >/dev/null 2>&1; then
+    fftw_gcc_archive=$(cygpath -u "$fftw_gcc_archive")
+  fi
+  test -s "$fftw_gcc_archive"
+  cmp "$FFTW_MINGW_PREFIX/lib/libfftw3f.a" "$fftw_gcc_archive"
+  printf 'Windows FFTW Rust link preflight: %s\n' "$fftw_rust_lib/libfftw3f.a"
   boost_version_header=/mingw64/include/boost/version.hpp
   test -s "$boost_version_header"
   boost_version=$(awk '/^#define BOOST_VERSION / { print $3 }' "$boost_version_header")
