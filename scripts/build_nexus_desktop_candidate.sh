@@ -6,6 +6,18 @@ repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 platform=${1:-}
 output=${2:-}
 tauri_cli_version=${TAURI_CLI_VERSION:-2.11.4}
+nexus_windows_path_patch="$repo/patches/nexus-tempo-fast-windows-path.patch"
+nexus_patch_applied=0
+fftw_build=
+cleanup() {
+  if [ "$nexus_patch_applied" = 1 ]; then
+    git -C "$repo/third_party/nexus" apply --reverse "$nexus_windows_path_patch"
+  fi
+  if [ -n "$fftw_build" ]; then
+    rm -rf "$fftw_build"
+  fi
+}
+trap cleanup EXIT
 
 case "$platform" in
   windows-x64)
@@ -60,7 +72,6 @@ if [ "$platform" = windows-x64 ]; then
   export FFTW_MINGW_PREFIX="$fftw_parent/shackcq-fftw-mingw"
   if [ ! -s "$FFTW_MINGW_PREFIX/lib/libfftw3f.a" ]; then
     fftw_build=$(mktemp -d)
-    trap 'rm -rf "$fftw_build"' EXIT
     curl -fsSL "https://www.fftw.org/fftw-${fftw_version}.tar.gz" -o "$fftw_build/fftw.tar.gz"
     echo "$fftw_sha256  $fftw_build/fftw.tar.gz" | sha256sum -c -
     tar -C "$fftw_build" -xzf "$fftw_build/fftw.tar.gz"
@@ -86,6 +97,9 @@ if [ "$platform" = windows-x64 ]; then
   boost_version=$(awk '/^#define BOOST_VERSION / { print $3 }' "$boost_version_header")
   test -n "$boost_version" && test "$boost_version" -ge 107000
   printf 'Windows Boost header preflight: BOOST_VERSION=%s\n' "$boost_version"
+  git -C "$repo/third_party/nexus" apply --check "$nexus_windows_path_patch"
+  git -C "$repo/third_party/nexus" apply "$nexus_windows_path_patch"
+  nexus_patch_applied=1
   cargo test --locked --manifest-path "$repo/desktop/nexus-runtime/Cargo.toml" \
     --target "$target" --no-run
 else
@@ -406,6 +420,11 @@ PY
     ;;
 esac
 
+nexus_overlay_applied=NO
+if [ "$platform" = windows-x64 ]; then
+  nexus_overlay_applied=YES
+fi
+nexus_overlay_sha=$(sha256sum "$nexus_windows_path_patch" | awk '{print $1}')
 cat > "$output/CANDIDATE_STATUS.txt" <<EOF
 PRODUCT=ShackCQ Nexus Desktop
 VERSION=0.2.0
@@ -414,6 +433,9 @@ TARGET=$target
 SOURCE_SHA=$(git -C "$repo" rev-parse HEAD)
 NATIVE_BASE_SHA=68cebdc2991cf9754477e29ac82228de6f8b8107
 NEXUS_SHA=$(git -C "$repo/third_party/nexus" rev-parse HEAD)
+NEXUS_WINDOWS_BUILD_OVERLAY=patches/nexus-tempo-fast-windows-path.patch
+NEXUS_WINDOWS_BUILD_OVERLAY_SHA256=$nexus_overlay_sha
+NEXUS_WINDOWS_BUILD_OVERLAY_APPLIED=$nexus_overlay_applied
 SHARED_DIGI_WEB_SHA=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["webCommit"])' "$repo/desktop/shared-digi-ui-manifest.json")
 SIGNING_STATUS=UNSIGNED
 NOTARIZATION_STATUS=UNNOTARIZED

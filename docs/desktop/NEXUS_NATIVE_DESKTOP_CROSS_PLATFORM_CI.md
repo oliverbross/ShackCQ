@@ -21,6 +21,17 @@ static FFTW3f build satisfy the selected Nexus WSJT-X-derived modem crates.
 Dynamic GNU/Fortran/FFTW runtime imports are rejected. It produces a
 current-user NSIS candidate and verifies all three sidecars are present.
 
+The Nexus gitlink remains the exact upstream `761839...` commit. Windows applies
+one committed, auditable build-only overlay,
+`patches/nexus-tempo-fast-windows-path.patch`, after verifying that pin and
+before compiling. Rust's Windows `canonicalize()` returns a `\\?\` verbatim
+path; MinGW CMake turns it into `//?/D:/...`, which gfortran truncates to
+`//file.f90`. The overlay strips only that leading verbatim prefix before CMake.
+The candidate status records the overlay path, SHA-256, and whether it was
+applied; the build trap reverses it even on failure, so the pinned submodule is
+left clean. This candidate is therefore a documented ShackCQ build adaptation
+over the pinned source, not a claim that upstream Nexus is byte-unmodified.
+
 The Agent uses the published official Qt 6.10.2 `win64_mingw` archive. Qt
 6.11.2 has no Windows repository metadata, while Linux and macOS remain on Qt
 6.11.2; CMake requires the exact selected platform version. This platform
