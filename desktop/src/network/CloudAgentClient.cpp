@@ -177,7 +177,7 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
   QNetworkRequest request(endpoint);
   if (!m_reviewCertificates.isEmpty()) {
     QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
-    ssl.setProtocol(QSsl::TlsV1_3OrLater);
+    ssl.setProtocol(QSsl::TlsV1_2OrLater);
     ssl.addCaCertificates(m_reviewCertificates);
     request.setSslConfiguration(ssl);
   }
@@ -355,7 +355,7 @@ void CloudAgentClient::connectNow() {
   request.setRawHeader("Authorization",
                        QByteArray("Bearer ") + m_credential.toUtf8());
   QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
-  ssl.setProtocol(QSsl::TlsV1_3OrLater);
+  ssl.setProtocol(QSsl::TlsV1_2OrLater);
   ssl.addCaCertificates(m_reviewCertificates);
   request.setSslConfiguration(ssl);
   setState("Connecting", "Opening outbound TLS WebSocket");
