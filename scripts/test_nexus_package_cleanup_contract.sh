@@ -12,6 +12,8 @@ xvfb_supervisor="$repo/scripts/supervise_xvfb.py"
 xvfb_supervisor_test="$repo/scripts/test_xvfb_supervisor.py"
 pidfd_guard="$repo/scripts/pidfd_process_guard.py"
 pidfd_guard_test="$repo/scripts/test_pidfd_process_guard.py"
+stationd_readiness="$repo/scripts/wait_stationd_ready.py"
+stationd_readiness_test="$repo/scripts/test_stationd_readiness.py"
 contract_scratch=$(mktemp -d)
 PYTHONPYCACHEPREFIX="$contract_scratch/pycache"
 export PYTHONPYCACHEPREFIX
@@ -72,7 +74,8 @@ sh -n "$legal"
 sh -n "$stationd_sidecar"
 python3 -m py_compile "$repo/scripts/claim_package_sidecar_lock.py"
 python3 -m py_compile "$repo/scripts/write_nexus_package_metadata.py"
-python3 -m py_compile "$xvfb_supervisor" "$xvfb_supervisor_test" "$pidfd_guard" "$pidfd_guard_test"
+python3 -m py_compile "$xvfb_supervisor" "$xvfb_supervisor_test" "$pidfd_guard" "$pidfd_guard_test" \
+  "$stationd_readiness" "$stationd_readiness_test"
 test "$(grep -c '^trap cleanup EXIT' "$candidate")" = 1
 grep -F "trap 'exit 143' TERM" "$candidate" >/dev/null
 test "$(grep -c '^trap cleanup EXIT$' "$macos")" = 1
@@ -108,6 +111,11 @@ printf '%s\n' "$linux_acceptance" | grep -F '"${launch_env[@]}"' >/dev/null
 ! printf '%s\n' "$linux_acceptance" | grep -F '${LD_LIBRARY_PATH:+' >/dev/null
 printf '%s\n' "$linux_acceptance" | grep -F 'env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH' >/dev/null
 printf '%s\n' "$linux_acceptance" | grep -F 'SHACKCQ_PACKAGE_RUNTIME_HERMETIC=1 "$agent_path" --package-runtime-probe' >/dev/null
+test "$(printf '%s\n' "$linux_acceptance" | grep -Fc -- '--admin-socket "$socket_name" --status')" = 0
+printf '%s\n' "$linux_acceptance" | grep -F 'python3 "$stationd_readiness" --executable "$agent_path"' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F -- '--overall-timeout 5' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F -- '--probe-timeout 0.25' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F 'chmod 0600 "$stationd_stderr"' >/dev/null
 printf '%s\n' "$linux_acceptance" | grep -F 'python3 "$repo/scripts/supervise_xvfb.py"' >/dev/null
 ! printf '%s\n' "$linux_acceptance" | grep -F 'xvfb-run' >/dev/null
 ! printf '%s\n' "$linux_acceptance" | grep -F 'pgrep' >/dev/null
@@ -266,6 +274,7 @@ def job_end(start: int) -> int:
 
 windows_job = unique_line("  windows-x64-gnu-cross:")
 windows_gate = unique_line("      - name: Verify Windows-safe package cleanup contract")
+windows_rust_install = unique_line("      - name: Install pinned Windows GNU Rust host toolchain")
 windows_build = unique_line("      - name: Build unsigned Windows x64 candidate")
 linux_job = unique_line("  linux-x86-64:")
 linux_gate = unique_line("      - name: Verify Linux package lifecycle and cleanup contract")
@@ -274,7 +283,7 @@ static_env = unique_line("          SHACKCQ_PACKAGE_CONTRACT_STATIC_ONLY: '1'")
 windows_job_end = job_end(windows_job)
 linux_job_end = job_end(linux_job)
 
-assert windows_job < windows_gate < windows_build < windows_job_end
+assert windows_job < windows_gate < windows_rust_install < windows_build < windows_job_end
 assert linux_job < linux_gate < linux_build < linux_job_end
 assert static_env in range(windows_gate, windows_build)
 assert step_block(windows_gate) == [
@@ -288,10 +297,23 @@ assert step_block(linux_gate) == [
     "      - name: Verify Linux package lifecycle and cleanup contract",
     "        run: scripts/test_nexus_package_cleanup_contract.sh",
 ]
+assert unique_line("  WINDOWS_GNU_RUST_TOOLCHAIN: '1.91.0-x86_64-pc-windows-gnu'") < windows_job
+assert step_block(windows_rust_install) == [
+    "      - name: Install pinned Windows GNU Rust host toolchain",
+    "        shell: pwsh",
+    "        run: |",
+    "          rustup toolchain install $env:WINDOWS_GNU_RUST_TOOLCHAIN --profile minimal",
+    "          rustup target add --toolchain $env:WINDOWS_GNU_RUST_TOOLCHAIN x86_64-pc-windows-gnu",
+    "          $cargo = rustup which --toolchain $env:WINDOWS_GNU_RUST_TOOLCHAIN cargo",
+    "          if (-not (Test-Path -LiteralPath $cargo)) {",
+    '            throw "GNU-host cargo was not resolved: $cargo"',
+    "          }",
+    '          "SHACKCQ_CARGO_BIN_WINDOWS=$(Split-Path -Parent $cargo)" >> $env:GITHUB_ENV',
+]
 assert step_block(windows_build) == [
     "      - name: Build unsigned Windows x64 candidate",
     "        env:",
-    "          RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}",
+    "          RUSTUP_TOOLCHAIN: ${{ env.WINDOWS_GNU_RUST_TOOLCHAIN }}",
     "          SHACKCQ_QT_PREFIX: ${{ env.QT_ROOT_DIR }}",
     "          SHACKCQ_VERBOSE_STATIOND_BUILD: '1'",
     "        shell: msys2 {0}",
@@ -303,6 +325,16 @@ assert step_block(windows_build) == [
     "          command -v npx.cmd",
     "          command -v makensis.exe",
     "          command -v cargo.exe",
+    "          command -v rustc.exe",
+    "          command -v x86_64-w64-mingw32-gcc.exe",
+    "          command -v x86_64-w64-mingw32-windres.exe",
+    "          command -v x86_64-w64-mingw32-ar.exe",
+    "          test \"$(rustc -vV | sed -n 's/^host: //p')\" = x86_64-pc-windows-gnu",
+    "          test \"$(rustc -vV | sed -n 's/^release: //p')\" = 1.91.0",
+    "          test \"$(cargo -V | awk '{print $2}')\" = 1.91.0",
+    "          test \"$(x86_64-w64-mingw32-gcc -dumpmachine)\" = x86_64-w64-mingw32",
+    "          test \"$(x86_64-w64-mingw32-windres --version | sed -n '1p' | wc -c)\" -gt 1",
+    "          test \"$(x86_64-w64-mingw32-ar --version | sed -n '1p' | wc -c)\" -gt 1",
     "          test -s /mingw64/include/openssl/ssl.h",
     "          test -s /mingw64/lib/libcrypto.dll.a",
     "          test -s /mingw64/lib/libssl.dll.a",
@@ -338,6 +370,9 @@ if [ "$contract_platform" = Linux ]; then
   python3 "$pidfd_guard_test" >"$contract_scratch/pidfd-guard.log"
   grep -Fx 'PIDFD_PROCESS_GUARD_TEST_OK normal=true mismatch=true exited=true escalation=true' \
     "$contract_scratch/pidfd-guard.log" >/dev/null
+  python3 "$stationd_readiness_test" >"$contract_scratch/stationd-readiness.log"
+  grep -Fx 'STATIOND_READINESS_TEST_OK transient=true single-response=true timeout=true early-exit=true validation=true diagnostics=true stop-reap=true' \
+    "$contract_scratch/stationd-readiness.log" >/dev/null
 fi
 
 mkdir -p "$mac_sidecar_dir"

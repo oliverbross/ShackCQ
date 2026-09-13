@@ -12,6 +12,7 @@ permissions:
 
 env:
   RUST_TOOLCHAIN: '1.91.0'
+  WINDOWS_GNU_RUST_TOOLCHAIN: '1.91.0-x86_64-pc-windows-gnu'
   TAURI_CLI_VERSION: '2.11.4'
 
 jobs:
@@ -76,16 +77,19 @@ jobs:
             throw "pinned NSIS installed without expected makensis.exe: $makensis"
           }
           "SHACKCQ_NSIS_BIN_WINDOWS=$(Split-Path -Parent $makensis)" >> $env:GITHUB_ENV
-      - name: Install pinned Rust target
+      - name: Install pinned Windows GNU Rust host toolchain
         shell: pwsh
         run: |
-          rustup toolchain install $env:RUST_TOOLCHAIN --profile minimal
-          rustup target add --toolchain $env:RUST_TOOLCHAIN x86_64-pc-windows-gnu
-          $cargo = (Get-Command cargo.exe -ErrorAction Stop).Source
+          rustup toolchain install $env:WINDOWS_GNU_RUST_TOOLCHAIN --profile minimal
+          rustup target add --toolchain $env:WINDOWS_GNU_RUST_TOOLCHAIN x86_64-pc-windows-gnu
+          $cargo = rustup which --toolchain $env:WINDOWS_GNU_RUST_TOOLCHAIN cargo
+          if (-not (Test-Path -LiteralPath $cargo)) {
+            throw "GNU-host cargo was not resolved: $cargo"
+          }
           "SHACKCQ_CARGO_BIN_WINDOWS=$(Split-Path -Parent $cargo)" >> $env:GITHUB_ENV
       - name: Build unsigned Windows x64 candidate
         env:
-          RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
+          RUSTUP_TOOLCHAIN: ${{ env.WINDOWS_GNU_RUST_TOOLCHAIN }}
           SHACKCQ_QT_PREFIX: ${{ env.QT_ROOT_DIR }}
           SHACKCQ_VERBOSE_STATIOND_BUILD: '1'
         shell: msys2 {0}
@@ -97,6 +101,16 @@ jobs:
           command -v npx.cmd
           command -v makensis.exe
           command -v cargo.exe
+          command -v rustc.exe
+          command -v x86_64-w64-mingw32-gcc.exe
+          command -v x86_64-w64-mingw32-windres.exe
+          command -v x86_64-w64-mingw32-ar.exe
+          test "$(rustc -vV | sed -n 's/^host: //p')" = x86_64-pc-windows-gnu
+          test "$(rustc -vV | sed -n 's/^release: //p')" = 1.91.0
+          test "$(cargo -V | awk '{print $2}')" = 1.91.0
+          test "$(x86_64-w64-mingw32-gcc -dumpmachine)" = x86_64-w64-mingw32
+          test "$(x86_64-w64-mingw32-windres --version | sed -n '1p' | wc -c)" -gt 1
+          test "$(x86_64-w64-mingw32-ar --version | sed -n '1p' | wc -c)" -gt 1
           test -s /mingw64/include/openssl/ssl.h
           test -s /mingw64/lib/libcrypto.dll.a
           test -s /mingw64/lib/libssl.dll.a

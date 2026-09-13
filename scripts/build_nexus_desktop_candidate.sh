@@ -11,6 +11,7 @@ nexus_windows_path_overlay_tool="$repo/scripts/apply_nexus_windows_path_overlay.
 nexus_windows_path_target="$repo/third_party/nexus/crates/tempo-fast-sys/build.rs"
 sidecar_lock_tool="$repo/scripts/claim_package_sidecar_lock.py"
 pidfd_process_guard="$repo/scripts/pidfd_process_guard.py"
+stationd_readiness="$repo/scripts/wait_stationd_ready.py"
 nexus_patch_applied=0
 nexus_overlay_recovery_required=0
 nexus_overlay_backup_dir=
@@ -725,7 +726,7 @@ PY
 accept_linux_payload() {
   local payload_root=$1 label=$2
   local payload_tmp agent_path nexus_path main_path launch_path launch_cwd socket_name owner_token main_rc runtime_probe
-  local main_socket agent_status observed_pid display_number
+  local main_socket agent_status observed_pid display_number stationd_stderr
   local -a launch_env=()
   payload_tmp=$(mktemp -d)
   cleanup_paths+=("$payload_tmp")
@@ -761,21 +762,23 @@ accept_linux_payload() {
     "$runtime_probe"
   printf 'PACKAGED_%s_QT_RUNTIME_OK qsqlite=true tls=true\n' "$label"
   owner_token=$(printf 'b%.0s' {1..64})
+  stationd_stderr="$payload_tmp/stationd.stderr"
+  : >"$stationd_stderr"
+  chmod 0600 "$stationd_stderr"
   env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
     "$agent_path" --foreground --native-ingress-only \
       --native-owner-token "$owner_token" --admin-socket "$socket_name" \
-      --ephemeral-root "$payload_tmp/agent" --ephemeral-credentials &
+      --ephemeral-root "$payload_tmp/agent" --ephemeral-credentials \
+      2>"$stationd_stderr" &
   stationd_pid=$!
   stationd_executable=$agent_path
   owned_stationd_socket=$socket_name
   owned_stationd_token=$owner_token
-  for _ in {1..50}; do
-    env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
-      "$agent_path" --admin-socket "$socket_name" --status >/dev/null 2>&1 && break
-    sleep 0.1
-  done
-  env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
-    "$agent_path" --admin-socket "$socket_name" --status >/dev/null
+  agent_status=$(env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
+    python3 "$stationd_readiness" --executable "$agent_path" \
+      --socket "$socket_name" --expected-pid "$stationd_pid" \
+      --stderr-log "$stationd_stderr" --overall-timeout 5 \
+      --probe-timeout 0.25)
   ! env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
     "$agent_path" --admin-socket "$socket_name" --stop \
       --native-owner-token "$(printf 'c%.0s' {1..64})" >/dev/null 2>&1
