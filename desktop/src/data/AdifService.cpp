@@ -48,6 +48,14 @@ qint64 frequencyHz(const QString &mhz) {
 QString adifDate(const QString &date) { return QString(date).remove('-'); }
 QString isoDate(const QString &date) { return date.size()==8?QStringLiteral("%1-%2-%3").arg(date.left(4),date.mid(4,2),date.mid(6,2)):date; }
 
+bool safeExtraAdifName(const QString &name) {
+    const QString upper = name.toUpper();
+    static const QRegularExpression valid(QStringLiteral("^[A-Z][A-Z0-9_]{0,63}$"));
+    static const QRegularExpression sensitive(QStringLiteral("(?:^|_)(?:TOKEN|SECRET|PASSWORD|API_KEY|AUTH)(?:_|$)"));
+    static const QSet<QString> denied{"ID","QSO_ID","APP_SHACKCQ_ID","APP_SHACKCQ_OPERATION_ID"};
+    return valid.match(upper).hasMatch() && !denied.contains(upper) && !sensitive.match(upper).hasMatch();
+}
+
 } // namespace
 
 AdifService::AdifService(QsoDatabase *database, QObject *parent) : QObject(parent), m_database(database) {}
@@ -76,7 +84,10 @@ QByteArray AdifService::serialize(const QsoRecord &record) {
     out += field("EQSL_QSL_RCVD", record.eqslReceived); out += field("APP_SHACKCQ_QRZ_RCVD", record.qrzReceived);
     static const QSet<QString> reserved{"QSO_DATE","TIME_ON","CALL","FREQ","BAND","MODE","SUBMODE","RST_SENT","RST_RCVD","GRIDSQUARE","COMMENT","STATION_CALLSIGN","OPERATOR","DXCC","COUNTRY","CQZ","ITUZ","CONTEST_ID","SAT_NAME","SAT_MODE","PROP_MODE","ANT_PATH","TX_PWR","MY_ANTENNA","POTA_REF","SOTA_REF","IOTA","WWFF_REF","QSL_VIA","QSLMSG","QSL_SENT","QSL_RCVD","QSLSDATE","QSLRDATE","QSL_SENT_VIA","QSL_RCVD_VIA","LOTW_QSL_RCVD","EQSL_QSL_RCVD","APP_SHACKCQ_QRZ_RCVD"};
     QStringList names = record.extraAdif.keys(); names.sort();
-    for (const auto &name : names) if (!reserved.contains(name.toUpper())) out += field(name.toUpper().toLatin1(), record.extraAdif.value(name).toString());
+    for (const auto &name : names) {
+        const QString value = record.extraAdif.value(name).toString();
+        if (!reserved.contains(name.toUpper()) && safeExtraAdifName(name) && value.toUtf8().size() <= 512) out += field(name.toUpper().toLatin1(), value);
+    }
     out += "<EOR>\r\n";
     return out;
 }
@@ -107,7 +118,7 @@ std::optional<QsoRecord> AdifService::parseRecord(const QByteArray &record, QStr
     QTime time = QTime::fromString(timeValue, QStringLiteral("HHmmss"));
     q.createdAt = date.isValid() && time.isValid() ? QDateTime(date, time, QTimeZone::UTC).toSecsSinceEpoch() : QDateTime::currentSecsSinceEpoch();
     static const QSet<QString> known{"QSO_DATE","TIME_ON","CALL","FREQ","FREQ_RX","BAND","BAND_RX","MODE","SUBMODE","RST_SENT","RST_RCVD","GRIDSQUARE","COMMENT","STATION_CALLSIGN","OPERATOR","DXCC","COUNTRY","CQZ","ITUZ","CONTEST_ID","SAT_NAME","SAT_MODE","PROP_MODE","ANT_PATH","TX_PWR","MY_ANTENNA","POTA_REF","SOTA_REF","IOTA","WWFF_REF","QSL_VIA","QSLMSG","QSL_SENT","QSL_RCVD","QSLSDATE","QSLRDATE","QSL_SENT_VIA","QSL_RCVD_VIA","LOTW_QSL_RCVD","EQSL_QSL_RCVD","APP_SHACKCQ_QRZ_RCVD"};
-    for (auto it = map.cbegin(); it != map.cend(); ++it) if (!known.contains(it.key())) q.extraAdif.insert(it.key(), it.value());
+    for (auto it = map.cbegin(); it != map.cend(); ++it) if (!known.contains(it.key()) && safeExtraAdifName(it.key()) && it.value().toUtf8().size() <= 512) q.extraAdif.insert(it.key(), it.value());
     if (q.frequencyHz <= 0 || q.mode.isEmpty()) { if (error) *error = QStringLiteral("ADIF record requires FREQ and MODE"); return std::nullopt; }
     return q;
 }

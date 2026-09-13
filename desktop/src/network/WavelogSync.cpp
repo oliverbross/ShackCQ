@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QTimer>
@@ -20,6 +21,19 @@ namespace shackcq::desktop {
 namespace {
 
 QString safeError(const QSqlQuery &q) { return q.lastError().text().left(500); }
+
+const QSet<QString> &mappedWavelogFields() {
+    static const QSet<QString> fields{"ID","CALL","FREQ","BAND","MODE","SUBMODE","RST_SENT","RST_RCVD","GRIDSQUARE","COMMENT","STATION_CALLSIGN","OPERATOR","DXCC","COUNTRY","CQZ","ITUZ","CONTEST_ID","QSO_DATE","TIME_ON","STATION_PROFILE_ID","IMPORT_TYPE","SAT_NAME","SAT_MODE","PROP_MODE","ANT_PATH","TX_PWR","MY_ANTENNA","POTA_REF","SOTA_REF","WWFF_REF","IOTA","QSL_VIA","QSLMSG","QSL_SENT","QSL_RCVD","QSLSDATE","QSLRDATE","QSL_SENT_VIA","QSL_RCVD_VIA"};
+    return fields;
+}
+
+bool safeExtraAdifName(const QString &name) {
+    const QString upper = name.toUpper();
+    static const QRegularExpression valid(QStringLiteral("^[A-Z][A-Z0-9_]{0,63}$"));
+    static const QRegularExpression sensitive(QStringLiteral("(?:^|_)(?:TOKEN|SECRET|PASSWORD|API_KEY|AUTH)(?:_|$)"));
+    static const QSet<QString> denied{"ID","QSO_ID","APP_SHACKCQ_ID","APP_SHACKCQ_OPERATION_ID"};
+    return valid.match(upper).hasMatch() && !denied.contains(upper) && !sensitive.match(upper).hasMatch();
+}
 
 const QSet<QString> &patchRetainedFields() {
     static const QSet<QString> fields{"ANT_PATH","MY_ANTENNA","QSLMSG","QSL_SENT","QSL_RCVD","QSLSDATE","QSLRDATE","QSL_SENT_VIA","QSL_RCVD_VIA"};
@@ -142,7 +156,7 @@ bool WavelogSyncEngine::configureBinding(const QString&serverUrl,const QString&c
 
 std::optional<WavelogBinding> WavelogSyncEngine::binding()const{if(m_closed)return std::nullopt;QSqlQuery q(m_database->connection());if(!q.exec("SELECT * FROM wavelog_binding LIMIT 1")||!q.next())return std::nullopt;return WavelogBinding{q.value("id").toString(),QUrl(q.value("server_url").toString()),q.value("credential_alias").toString(),q.value("local_station_profile_id").toString(),q.value("remote_station_id").toString(),q.value("can_read").toBool(),q.value("can_write").toBool()};}
 
-CanonicalQso WavelogSyncEngine::canonical(const QsoRecord&r){CanonicalQso c;const QDateTime dt=QDateTime::fromSecsSinceEpoch(r.createdAt,QTimeZone::UTC);c.fields={{"QSO_DATE",dt.toString("yyyyMMdd")},{"TIME_ON",dt.toString("HHmmss")},{"CALL",normalizedCallsign(r.callsign)},{"FREQ",QString::number(r.frequencyHz/1000000.0,'f',6)},{"BAND",r.band},{"MODE",r.mode.toUpper()},{"SUBMODE",r.submode.toUpper()},{"RST_SENT",r.rstSent},{"RST_RCVD",r.rstReceived},{"GRIDSQUARE",r.grid.toUpper()},{"COMMENT",r.comment},{"STATION_CALLSIGN",normalizedCallsign(r.stationCallsign)},{"OPERATOR",normalizedCallsign(r.operatorCallsign)},{"DXCC",r.dxcc},{"COUNTRY",r.country},{"CQZ",r.cqZone},{"ITUZ",r.ituZone},{"CONTEST_ID",r.contestId},{"SAT_NAME",r.satelliteName},{"SAT_MODE",r.satelliteMode},{"PROP_MODE",r.propagationMode},{"ANT_PATH",r.antennaPath},{"TX_PWR",std::isfinite(r.txPower)?QString::number(r.txPower,'g',12):QString{}},{"MY_ANTENNA",r.antenna},{"POTA_REF",r.potaRef},{"SOTA_REF",r.sotaRef},{"IOTA",r.iota},{"WWFF_REF",r.wwffRef},{"QSL_VIA",r.qslManager},{"QSLMSG",r.qslMessage},{"QSL_SENT",r.qslSent},{"QSL_RCVD",r.qslReceived},{"QSLSDATE",QString(r.qslSentDate).remove('-')},{"QSLRDATE",QString(r.qslReceivedDate).remove('-')},{"QSL_SENT_VIA",r.qslSentMethod},{"QSL_RCVD_VIA",r.qslReceivedMethod},{"LOTW_QSL_RCVD",r.lotwReceived},{"EQSL_QSL_RCVD",r.eqslReceived}};for(auto it=r.extraAdif.begin();it!=r.extraAdif.end();++it){const QString key=it.key().toUpper();if(!c.fields.contains(key))c.fields.insert(key,canonicalAdifValue(it.value().toString()));}for(auto it=c.fields.begin();it!=c.fields.end();)if(it.value().isEmpty())it=c.fields.erase(it);else++it;return c;}
+CanonicalQso WavelogSyncEngine::canonical(const QsoRecord&r){CanonicalQso c;const QDateTime dt=QDateTime::fromSecsSinceEpoch(r.createdAt,QTimeZone::UTC);c.fields={{"QSO_DATE",dt.toString("yyyyMMdd")},{"TIME_ON",dt.toString("HHmmss")},{"CALL",normalizedCallsign(r.callsign)},{"FREQ",QString::number(r.frequencyHz/1000000.0,'f',6)},{"BAND",r.band},{"MODE",r.mode.toUpper()},{"SUBMODE",r.submode.toUpper()},{"RST_SENT",r.rstSent},{"RST_RCVD",r.rstReceived},{"GRIDSQUARE",r.grid.toUpper()},{"COMMENT",r.comment},{"STATION_CALLSIGN",normalizedCallsign(r.stationCallsign)},{"OPERATOR",normalizedCallsign(r.operatorCallsign)},{"DXCC",r.dxcc},{"COUNTRY",r.country},{"CQZ",r.cqZone},{"ITUZ",r.ituZone},{"CONTEST_ID",r.contestId},{"SAT_NAME",r.satelliteName},{"SAT_MODE",r.satelliteMode},{"PROP_MODE",r.propagationMode},{"ANT_PATH",r.antennaPath},{"TX_PWR",std::isfinite(r.txPower)?QString::number(r.txPower,'g',12):QString{}},{"MY_ANTENNA",r.antenna},{"POTA_REF",r.potaRef},{"SOTA_REF",r.sotaRef},{"IOTA",r.iota},{"WWFF_REF",r.wwffRef},{"QSL_VIA",r.qslManager},{"QSLMSG",r.qslMessage},{"QSL_SENT",r.qslSent},{"QSL_RCVD",r.qslReceived},{"QSLSDATE",QString(r.qslSentDate).remove('-')},{"QSLRDATE",QString(r.qslReceivedDate).remove('-')},{"QSL_SENT_VIA",r.qslSentMethod},{"QSL_RCVD_VIA",r.qslReceivedMethod},{"LOTW_QSL_RCVD",r.lotwReceived},{"EQSL_QSL_RCVD",r.eqslReceived}};for(auto it=r.extraAdif.begin();it!=r.extraAdif.end();++it){const QString key=it.key().toUpper(),value=it.value().toString();if(!c.fields.contains(key)&&safeExtraAdifName(key)&&value.toUtf8().size()<=512)c.fields.insert(key,canonicalAdifValue(value));}for(auto it=c.fields.begin();it!=c.fields.end();)if(it.value().isEmpty())it=c.fields.erase(it);else++it;return c;}
 
 MergeResult WavelogSyncEngine::threeWayMerge(const CanonicalQso&base,const CanonicalQso&local,const CanonicalQso&remote){MergeResult r;QSet<QString> keys;for(const auto&k:base.fields.keys())keys.insert(k);for(const auto&k:local.fields.keys())keys.insert(k);for(const auto&k:remote.fields.keys())keys.insert(k);for(const auto&k:keys){const auto b=base.fields.value(k),l=local.fields.value(k),v=remote.fields.value(k);if(l==v)r.merged.fields[k]=l;else if(l==b)r.merged.fields[k]=v;else if(v==b)r.merged.fields[k]=l;else r.conflicts<<k;}if(!r.conflicts.isEmpty())r.disposition="CONFLICT";else if(local.hash()==remote.hash())r.disposition="CONVERGED";else if(base.hash()==remote.hash())r.disposition="PUSH_LOCAL";else if(base.hash()==local.hash())r.disposition="PULL_REMOTE";else r.disposition="SAFE_MERGE";return r;}
 
@@ -163,7 +177,7 @@ void WavelogSyncEngine::synchronize(const QString &mode) {
         const auto rows = result.value("data").toList();
         for (const auto &value : rows) {
             const auto map = value.toMap(); const QString remoteId = map.value("id").toString(); if (remoteId.isEmpty()) continue;
-            CanonicalQso remote; for (auto it = map.cbegin(); it != map.cend(); ++it) remote.fields.insert(it.key().toUpper(), canonicalAdifValue(it.value().toString()));
+            CanonicalQso remote; for (auto it = map.cbegin(); it != map.cend(); ++it) { const QString key=it.key().toUpper(),raw=it.value().toString(); if(mappedWavelogFields().contains(key)||(safeExtraAdifName(key)&&raw.toUtf8().size()<=512)) remote.fields.insert(key,canonicalAdifValue(raw)); }
             QSqlQuery link(m_database->connection()); link.prepare("SELECT qso_id,baseline_json,retained_fields FROM wavelog_link WHERE binding_id=? AND remote_id=?"); link.addBindValue(b->id); link.addBindValue(remoteId);
             if (link.exec() && link.next()) {
                 auto local = canonical(recordById(m_database, link.value(0).toString())); CanonicalQso base; auto comparableRemote = remote;
@@ -192,8 +206,7 @@ void WavelogSyncEngine::synchronize(const QString &mode) {
             r.potaRef = remote.fields.value("POTA_REF"); r.sotaRef = remote.fields.value("SOTA_REF"); r.wwffRef = remote.fields.value("WWFF_REF"); r.iota = remote.fields.value("IOTA");
             r.qslManager = remote.fields.value("QSL_VIA"); r.qslMessage = remote.fields.value("QSLMSG"); r.qslSent = remote.fields.value("QSL_SENT"); r.qslReceived = remote.fields.value("QSL_RCVD", "N");
             r.qslSentDate = isoAdifDate(remote.fields.value("QSLSDATE")); r.qslReceivedDate = isoAdifDate(remote.fields.value("QSLRDATE")); r.qslSentMethod = remote.fields.value("QSL_SENT_VIA"); r.qslReceivedMethod = remote.fields.value("QSL_RCVD_VIA");
-            static const QSet<QString> mapped{"ID","CALL","FREQ","BAND","MODE","SUBMODE","RST_SENT","RST_RCVD","GRIDSQUARE","COMMENT","STATION_CALLSIGN","OPERATOR","DXCC","COUNTRY","CQZ","ITUZ","CONTEST_ID","QSO_DATE","TIME_ON","STATION_PROFILE_ID","IMPORT_TYPE","SAT_NAME","SAT_MODE","PROP_MODE","ANT_PATH","TX_PWR","MY_ANTENNA","POTA_REF","SOTA_REF","WWFF_REF","IOTA","QSL_VIA","QSLMSG","QSL_SENT","QSL_RCVD","QSLSDATE","QSLRDATE","QSL_SENT_VIA","QSL_RCVD_VIA"};
-            for (auto it = remote.fields.cbegin(); it != remote.fields.cend(); ++it) if (!mapped.contains(it.key())) r.extraAdif.insert(it.key(), it.value());
+            for (auto it = remote.fields.cbegin(); it != remote.fields.cend(); ++it) if (!mappedWavelogFields().contains(it.key()) && safeExtraAdifName(it.key())) r.extraAdif.insert(it.key(), it.value());
             r.stationProfileId = b->localStationProfileId; r.createdAt = QDateTime::currentSecsSinceEpoch(); QString saveError;
             if (!m_database->save(r, &saveError)) { setState("Error"); emit error(QStringLiteral("Wavelog QSO %1 import failed: %2").arg(remoteId,saveError)); return; }
             QSqlQuery l(m_database->connection()); l.prepare("INSERT INTO wavelog_link(binding_id,qso_id,remote_id,baseline_json,baseline_hash,retained_fields) VALUES(?,?,?,?,?,'')"); l.addBindValue(b->id); l.addBindValue(r.id); l.addBindValue(remoteId); l.addBindValue(remote.encoded()); l.addBindValue(remote.hash());
