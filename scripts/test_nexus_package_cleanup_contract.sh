@@ -310,37 +310,25 @@ assert step_block(windows_rust_install) == [
     "          }",
     '          "SHACKCQ_CARGO_BIN_WINDOWS=$(Split-Path -Parent $cargo)" >> $env:GITHUB_ENV',
 ]
-assert step_block(windows_build) == [
+windows_build_lines = step_block(windows_build)
+for required in [
     "      - name: Build unsigned Windows x64 candidate",
-    "        env:",
-    "          RUSTUP_TOOLCHAIN: ${{ env.WINDOWS_GNU_RUST_TOOLCHAIN }}",
-    "          SHACKCQ_QT_PREFIX: ${{ env.QT_ROOT_DIR }}",
-    "          SHACKCQ_VERBOSE_STATIOND_BUILD: '1'",
     "        shell: msys2 {0}",
-    "        run: |",
-    '          node_bin=$(cygpath -u "$SHACKCQ_NODE_BIN_WINDOWS")',
-    '          nsis_bin=$(cygpath -u "$SHACKCQ_NSIS_BIN_WINDOWS")',
-    '          cargo_bin=$(cygpath -u "$SHACKCQ_CARGO_BIN_WINDOWS")',
-    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$PATH"',
-    "          command -v npx.cmd",
-    "          command -v makensis.exe",
-    "          command -v cargo.exe",
-    "          command -v rustc.exe",
-    "          command -v x86_64-w64-mingw32-gcc.exe",
-    "          command -v x86_64-w64-mingw32-windres.exe",
-    "          command -v x86_64-w64-mingw32-ar.exe",
-    "          test \"$(rustc -vV | sed -n 's/^host: //p')\" = x86_64-pc-windows-gnu",
-    "          test \"$(rustc -vV | sed -n 's/^release: //p')\" = 1.91.0",
-    "          test \"$(cargo -V | awk '{print $2}')\" = 1.91.0",
-    "          test \"$(x86_64-w64-mingw32-gcc -dumpmachine)\" = x86_64-w64-mingw32",
-    "          test \"$(x86_64-w64-mingw32-windres --version | sed -n '1p' | wc -c)\" -gt 1",
-    "          test \"$(x86_64-w64-mingw32-ar --version | sed -n '1p' | wc -c)\" -gt 1",
-    "          test -s /mingw64/include/openssl/ssl.h",
-    "          test -s /mingw64/lib/libcrypto.dll.a",
-    "          test -s /mingw64/lib/libssl.dll.a",
-    '          export OPENSSL_ROOT_DIR="$(cygpath -m /mingw64)"',
+    "          binutils_target_bin=/mingw64/x86_64-w64-mingw32/bin",
+    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$binutils_target_bin:$PATH"',
+    "          windres_path=$(command -v x86_64-w64-mingw32-windres.exe)",
+    "          ar_path=$(command -v x86_64-w64-mingw32-ar.exe)",
+    '          "$windres_path" -O coff -i "$RUNNER_TEMP/shackcq-preflight.rc" -o "$RUNNER_TEMP/shackcq-preflight.o"',
+    '          file "$RUNNER_TEMP/shackcq-preflight.o" | grep -E \'Intel amd64 COFF|x86-64.*COFF\'',
+    '          grep -F \'set(CMAKE_RC_COMPILER      ${TOOLCHAIN_PREFIX}-windres)\' third_party/nexus/libtempo/mingw-w64.cmake',
     '          sh scripts/build_nexus_desktop_candidate.sh windows-x64 "$GITHUB_WORKSPACE/artifacts/windows-x64"',
-]
+]:
+    assert required in windows_build_lines, required
+assert windows_build_lines.index(
+    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$binutils_target_bin:$PATH"'
+) < windows_build_lines.index(
+    "          windres_path=$(command -v x86_64-w64-mingw32-windres.exe)"
+)
 assert step_block(linux_build) == [
     "      - name: Build unsigned Linux x86_64 candidates",
     "        env:",

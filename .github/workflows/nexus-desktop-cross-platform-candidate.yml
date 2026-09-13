@@ -97,20 +97,27 @@ jobs:
           node_bin=$(cygpath -u "$SHACKCQ_NODE_BIN_WINDOWS")
           nsis_bin=$(cygpath -u "$SHACKCQ_NSIS_BIN_WINDOWS")
           cargo_bin=$(cygpath -u "$SHACKCQ_CARGO_BIN_WINDOWS")
-          export PATH="$node_bin:$nsis_bin:$cargo_bin:$PATH"
+          binutils_target_bin=/mingw64/x86_64-w64-mingw32/bin
+          test -d "$binutils_target_bin"
+          export PATH="$node_bin:$nsis_bin:$cargo_bin:$binutils_target_bin:$PATH"
           command -v npx.cmd
           command -v makensis.exe
           command -v cargo.exe
           command -v rustc.exe
-          command -v x86_64-w64-mingw32-gcc.exe
-          command -v x86_64-w64-mingw32-windres.exe
-          command -v x86_64-w64-mingw32-ar.exe
+          gcc_path=$(command -v x86_64-w64-mingw32-gcc.exe)
+          windres_path=$(command -v x86_64-w64-mingw32-windres.exe)
+          ar_path=$(command -v x86_64-w64-mingw32-ar.exe)
+          printf 'Windows GNU tools: gcc=%s windres=%s ar=%s\n' "$gcc_path" "$windres_path" "$ar_path"
           test "$(rustc -vV | sed -n 's/^host: //p')" = x86_64-pc-windows-gnu
           test "$(rustc -vV | sed -n 's/^release: //p')" = 1.91.0
           test "$(cargo -V | awk '{print $2}')" = 1.91.0
-          test "$(x86_64-w64-mingw32-gcc -dumpmachine)" = x86_64-w64-mingw32
-          test "$(x86_64-w64-mingw32-windres --version | sed -n '1p' | wc -c)" -gt 1
-          test "$(x86_64-w64-mingw32-ar --version | sed -n '1p' | wc -c)" -gt 1
+          test "$("$gcc_path" -dumpmachine)" = x86_64-w64-mingw32
+          "$windres_path" --version | sed -n '1p'
+          "$ar_path" --version | sed -n '1p'
+          printf '1 VERSIONINFO\nFILEVERSION 0,2,0,0\nBEGIN\nEND\n' >"$RUNNER_TEMP/shackcq-preflight.rc"
+          "$windres_path" -O coff -i "$RUNNER_TEMP/shackcq-preflight.rc" -o "$RUNNER_TEMP/shackcq-preflight.o"
+          file "$RUNNER_TEMP/shackcq-preflight.o" | grep -E 'Intel amd64 COFF|x86-64.*COFF'
+          grep -F 'set(CMAKE_RC_COMPILER      ${TOOLCHAIN_PREFIX}-windres)' third_party/nexus/libtempo/mingw-w64.cmake
           test -s /mingw64/include/openssl/ssl.h
           test -s /mingw64/lib/libcrypto.dll.a
           test -s /mingw64/lib/libssl.dll.a
