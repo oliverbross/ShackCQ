@@ -7,15 +7,19 @@ output=${1:?usage: build_nexus_desktop_macos.sh OUTPUT_DIRECTORY}
 tauri_cli_version=${TAURI_CLI_VERSION:-2.11.4}
 sidecar_lock_tool="$repo/scripts/claim_package_sidecar_lock.py"
 review_build=${SHACKCQ_ISOLATED_REVIEW_BUILD:-0}
+package_only=${SHACKCQ_MACOS_PACKAGE_ONLY:-0}
+assembly_only=${SHACKCQ_MACOS_ASSEMBLY_ONLY:-0}
 app_name="ShackCQ Desktop"
 dmg_name="ShackCQ-Desktop-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
 if [ "$review_build" = 1 ]; then
   app_name="ShackCQ Desktop Isolated Review"
   dmg_name="ShackCQ-Desktop-Isolated-Review-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
 fi
-app="$repo/desktop/shackcq-tauri/target/release/bundle/macos/$app_name.app"
+compiled_app="$repo/desktop/shackcq-tauri/target/release/bundle/macos/$app_name.app"
+app="$compiled_app"
+packaging_revision=$(git -C "$repo" rev-parse HEAD)
+compiled_source_revision=${SHACKCQ_COMPILED_SOURCE_REVISION:-$packaging_revision}
 qt_prefix=${QT_PREFIX:?QT_PREFIX must name an official Qt 6.11.2 macOS installation}
-macdeployqt="$qt_prefix/bin/macdeployqt"
 qtwebengine_prefix=${QTWEBENGINE_PREFIX:-}
 brotli_prefix=${BROTLI_PREFIX:-}
 build_dir="$repo/build/desktop/nexus-macos-13-portable"
@@ -187,24 +191,67 @@ if [ -n "${SHACKCQ_TEST_MAC_SIDECAR_LOCK_READY:-}" ]; then
   exit 0
 fi
 
-[ -n "$qtwebengine_prefix" ] || qtwebengine_prefix=$(brew --prefix qtwebengine)
-[ -n "$brotli_prefix" ] || brotli_prefix=$(brew --prefix brotli)
+case "$package_only" in 0|1) ;; *) echo "SHACKCQ_MACOS_PACKAGE_ONLY must be 0 or 1" >&2; exit 2;; esac
+case "$assembly_only" in 0|1) ;; *) echo "SHACKCQ_MACOS_ASSEMBLY_ONLY must be 0 or 1" >&2; exit 2;; esac
+test "$assembly_only" = 0 || test "$package_only" = 1 || { echo "Assembly-only requires package-only mode" >&2; exit 2; }
+test -d "$qt_prefix" || { echo "Requested Qt prefix is unavailable: $qt_prefix" >&2; exit 2; }
+qt_prefix=$(CDPATH= cd -- "$qt_prefix" && pwd -P)
+qtpaths="$qt_prefix/bin/qtpaths"
+macdeployqt="$qt_prefix/bin/macdeployqt"
+test -x "$qtpaths" || { echo "Selected Qt qtpaths is unavailable: $qtpaths" >&2; exit 2; }
+test -x "$macdeployqt" || { echo "Selected Qt macdeployqt is unavailable: $macdeployqt" >&2; exit 2; }
+reported_qt_prefix=$("$qtpaths" --query QT_INSTALL_PREFIX)
+reported_qt_version=$("$qtpaths" --query QT_VERSION)
+qt_plugin_dir=$("$qtpaths" --query QT_INSTALL_PLUGINS)
+test "$reported_qt_prefix" = "$qt_prefix" || {
+  echo "Qt prefix mismatch: requested=$qt_prefix imported=$reported_qt_prefix" >&2
+  exit 2
+}
+test "$reported_qt_version" = 6.11.2 || {
+  echo "Qt version mismatch: expected=6.11.2 selected=$reported_qt_version prefix=$qt_prefix" >&2
+  exit 2
+}
+case "$qt_plugin_dir" in "$qt_prefix"/*) ;; *)
+  echo "Qt plugin directory mismatch: prefix=$qt_prefix plugins=$qt_plugin_dir" >&2
+  exit 2
+esac
+for required_plugin in \
+  "$qt_plugin_dir/tls/libqcertonlybackend.dylib" \
+  "$qt_plugin_dir/tls/libqsecuretransportbackend.dylib" \
+  "$qt_plugin_dir/sqldrivers/libqsqlite.dylib"; do
+  test -f "$required_plugin" || { echo "Required selected-Qt plugin unavailable: $required_plugin" >&2; exit 2; }
+  file "$required_plugin" | grep 'arm64' >/dev/null || { echo "Required selected-Qt plugin lacks arm64: $required_plugin" >&2; exit 2; }
+  if otool -L "$required_plugin" | grep -E '/opt/(homebrew|local)|/Users/.*/Qt/' | grep -v "$qt_prefix/" >/dev/null; then
+    echo "Selected-Qt plugin links another developer runtime: $required_plugin" >&2
+    exit 2
+  fi
+done
+if [ -n "$qtwebengine_prefix" ]; then
+  qtwebengine_prefix=$(CDPATH= cd -- "$qtwebengine_prefix" && pwd -P)
+  case "$qtwebengine_prefix" in "$qt_prefix"|"$qt_prefix"/*) ;; *)
+    echo "Qt WebEngine prefix would mix Qt installations: qt=$qt_prefix webengine=$qtwebengine_prefix" >&2
+    exit 2
+  esac
+  test -d "$qtwebengine_prefix/lib"
+fi
+if [ -n "$brotli_prefix" ]; then
+  brotli_prefix=$(CDPATH= cd -- "$brotli_prefix" && pwd -P)
+  test -f "$brotli_prefix/lib/libbrotlidec.1.dylib"
+  test -f "$brotli_prefix/lib/libbrotlicommon.1.dylib"
+  file "$brotli_prefix/lib/libbrotlidec.1.dylib" | grep 'arm64' >/dev/null
+  file "$brotli_prefix/lib/libbrotlicommon.1.dylib" | grep 'arm64' >/dev/null
+fi
 
 test "$(git -C "$repo/third_party/nexus" rev-parse HEAD)" = 7618390658f8f92431dec0ac65979b84f2c0fb76
-test -x "$macdeployqt"
-test -d "$qtwebengine_prefix/lib"
-test -d "$brotli_prefix/lib"
 python3 "$repo/scripts/check_nexus_native_desktop.py"
 python3 "$repo/desktop/shackcq-tauri/scripts/verify-shared-ui.py"
-claim_generated_sidecars
-"$repo/scripts/build_nexus_native_sidecar.sh"
-sh "$repo/scripts/build_hamlib_posix.sh" "$hamlib_root" \
-  "$repo/core/third_party/hamlib" "$repo/build/desktop/nexus-hamlib-build-macos-13"
-sh "$repo/scripts/build_openssl_macos.sh" "$openssl_root" \
-  "$repo/build/desktop/nexus-openssl-build-macos-13"
 cmake -S "$repo/desktop" -B "$build_dir" -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_PREFIX_PATH="$qt_prefix" \
+  -DQt6_DIR="$qt_prefix/lib/cmake/Qt6" \
+  -DQt6Core_DIR="$qt_prefix/lib/cmake/Qt6Core" \
+  -DQt6Network_DIR="$qt_prefix/lib/cmake/Qt6Network" \
+  -DQt6Sql_DIR="$qt_prefix/lib/cmake/Qt6Sql" \
   -DCMAKE_OSX_ARCHITECTURES=arm64 \
   -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 \
   -DSHACKCQ_BUILD_TESTS=OFF \
@@ -216,16 +263,50 @@ cmake -S "$repo/desktop" -B "$build_dir" -G Ninja \
   -DOPENSSL_CRYPTO_LIBRARY="$openssl_root/lib/libcrypto.a" \
   -DOPENSSL_SSL_LIBRARY="$openssl_root/lib/libssl.a" \
   -DOPENSSL_USE_STATIC_LIBS=TRUE
-"$repo/desktop/shackcq-tauri/scripts/build-stationd-sidecar.sh"
-(
-  cd "$repo/desktop/shackcq-tauri"
-  if [ "$review_build" = 1 ]; then
-    npx --yes "@tauri-apps/cli@$tauri_cli_version" build --ci --no-sign \
-      --bundles app --features isolated-review --config tauri.review.conf.json -- --locked
-  else
-    npx --yes "@tauri-apps/cli@$tauri_cli_version" build --ci --no-sign --bundles app -- --locked
-  fi
-)
+for cache_entry in CMAKE_PREFIX_PATH Qt6_DIR Qt6Core_DIR Qt6Network_DIR Qt6Sql_DIR; do
+  cache_value=$(sed -n "s/^$cache_entry:[^=]*=//p" "$build_dir/CMakeCache.txt")
+  case "$cache_value" in "$qt_prefix"|"$qt_prefix"/*) ;; *)
+    echo "CMake Qt cache mismatch: $cache_entry=$cache_value selected=$qt_prefix" >&2
+    exit 2
+  esac
+done
+printf 'QT_PREFLIGHT_OK prefix=%s version=%s deploy=%s plugins=%s cache=%s\n' \
+  "$qt_prefix" "$reported_qt_version" "$macdeployqt" "$qt_plugin_dir" "$build_dir/CMakeCache.txt"
+
+if [ "$package_only" = 1 ]; then
+  test "$review_build" = 1 || { echo "Package-only recovery is restricted to the isolated-review bundle" >&2; exit 2; }
+  test -d "$compiled_app" || { echo "Retained compiled app is unavailable: $compiled_app" >&2; exit 2; }
+  git -C "$repo" cat-file -e "$compiled_source_revision^{commit}"
+  assembly_root="$output/assembly"
+  test ! -e "$assembly_root" || { echo "Assembly destination already exists: $assembly_root" >&2; exit 2; }
+  mkdir -p "$assembly_root"
+  ditto "$compiled_app" "$assembly_root/$app_name.app"
+  app="$assembly_root/$app_name.app"
+  rm -rf -- "$app/Contents/Frameworks" "$app/Contents/PlugIns" "$app/Contents/lib" "$app/Contents/_CodeSignature"
+  cp "$repo/desktop/shackcq-tauri/target/release/shackcq-desktop" "$app/Contents/MacOS/shackcq-desktop"
+  cp "$repo/desktop/shackcq-tauri/target/release/shackcq-stationd" "$app/Contents/MacOS/shackcq-stationd"
+  cp "$repo/desktop/shackcq-tauri/target/release/shackcq-hamlib-helper" "$app/Contents/MacOS/shackcq-hamlib-helper"
+  cp "$repo/desktop/shackcq-tauri/target/release/shackcq-nexus-runtime" "$app/Contents/MacOS/shackcq-nexus-runtime"
+  chmod 755 "$app/Contents/MacOS/shackcq-desktop" "$app/Contents/MacOS/shackcq-stationd" \
+    "$app/Contents/MacOS/shackcq-hamlib-helper" "$app/Contents/MacOS/shackcq-nexus-runtime"
+else
+  claim_generated_sidecars
+  "$repo/scripts/build_nexus_native_sidecar.sh"
+  sh "$repo/scripts/build_hamlib_posix.sh" "$hamlib_root" \
+    "$repo/core/third_party/hamlib" "$repo/build/desktop/nexus-hamlib-build-macos-13"
+  sh "$repo/scripts/build_openssl_macos.sh" "$openssl_root" \
+    "$repo/build/desktop/nexus-openssl-build-macos-13"
+  "$repo/desktop/shackcq-tauri/scripts/build-stationd-sidecar.sh"
+  (
+    cd "$repo/desktop/shackcq-tauri"
+    if [ "$review_build" = 1 ]; then
+      npx --yes "@tauri-apps/cli@$tauri_cli_version" build --ci --no-sign \
+        --bundles app --features isolated-review --config tauri.review.conf.json -- --locked
+    else
+      npx --yes "@tauri-apps/cli@$tauri_cli_version" build --ci --no-sign --bundles app -- --locked
+    fi
+  )
+fi
 
 stationd="$app/Contents/MacOS/shackcq-stationd"
 nexus="$app/Contents/MacOS/shackcq-nexus-runtime"
@@ -233,30 +314,37 @@ hamlib_helper="$app/Contents/MacOS/shackcq-hamlib-helper"
 test -x "$stationd"
 test -x "$nexus"
 test -x "$hamlib_helper"
-"$macdeployqt" "$app" -no-strip -no-plugins \
-  -executable="$stationd" -executable="$nexus" -executable="$hamlib_helper" \
-  -libpath="$qt_prefix/lib" -libpath="$qtwebengine_prefix/lib" \
-  -libpath="$brotli_prefix/lib"
 mkdir -p "$app/Contents/PlugIns/tls"
-cp "$qt_prefix/plugins/tls/libqcertonlybackend.dylib" \
-  "$qt_prefix/plugins/tls/libqsecuretransportbackend.dylib" \
+cp "$qt_plugin_dir/tls/libqcertonlybackend.dylib" \
+  "$qt_plugin_dir/tls/libqsecuretransportbackend.dylib" \
   "$app/Contents/PlugIns/tls/"
 mkdir -p "$app/Contents/PlugIns/sqldrivers"
-cp "$qt_prefix/plugins/sqldrivers/libqsqlite.dylib" \
+cp "$qt_plugin_dir/sqldrivers/libqsqlite.dylib" \
   "$app/Contents/PlugIns/sqldrivers/"
+set -- "$app" -no-strip -no-plugins \
+  -executable="$stationd" -executable="$nexus" -executable="$hamlib_helper" \
+  -executable="$app/Contents/PlugIns/tls/libqcertonlybackend.dylib" \
+  -executable="$app/Contents/PlugIns/tls/libqsecuretransportbackend.dylib" \
+  -executable="$app/Contents/PlugIns/sqldrivers/libqsqlite.dylib" \
+  -libpath="$qt_prefix/lib"
+[ -z "$qtwebengine_prefix" ] || set -- "$@" -libpath="$qtwebengine_prefix/lib"
+[ -z "$brotli_prefix" ] || set -- "$@" -libpath="$brotli_prefix/lib"
+"$macdeployqt" "$@"
 mkdir -p "$app/Contents/Resources"
 sh "$repo/scripts/stage_nexus_package_legal.sh" "$app/Contents/Resources" "$repo" 6.11.2 macos-arm64
 test -s "$build_dir/_deps/opus-src/COPYING"
 cp "$build_dir/_deps/opus-src/COPYING" "$app/Contents/Resources/OPUS-COPYING"
 python3 "$repo/scripts/write_nexus_package_metadata.py" \
   --output "$app/Contents/Resources/PACKAGE_MANIFEST.json" \
-  --source "$(git -C "$repo" rev-parse HEAD)" \
+  --source "$compiled_source_revision" \
   --web "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sourceRevision"])' "$repo/desktop/shared-digi-ui-snapshot/frontend-manifest.json")" \
   --frontend-content-sha "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["contentSha256"])' "$repo/desktop/shared-digi-ui-manifest.json")" \
   --nexus 7618390658f8f92431dec0ac65979b84f2c0fb76 \
   --platform macos-arm64 --qt 6.11.2 \
   --rust "$(rustc --version | awk '{print $2}')" \
   --tauri-cli "$tauri_cli_version"
+printf '%s\n' "$compiled_source_revision" > "$app/Contents/Resources/COMPILED_SOURCE_REVISION.txt"
+printf '%s\n' "$packaging_revision" > "$app/Contents/Resources/PACKAGING_REVISION.txt"
 python3 "$repo/scripts/audit_macos_nexus_desktop.py" --repair-install-ids "$app"
 manifest="$output/COMPONENT_MANIFEST.json"
 mkdir -p "$output"
@@ -320,6 +408,11 @@ jq -e '.ok == true and .code == "REFERENCE_RECORDING_DECODED" and
 printf 'PACKAGED_REFERENCE_RECORDING_OK source=REFERENCE_RECORDING expected="CQ F5RXL IN94"\n'
 rm -rf "$acceptance_root"
 acceptance_root=
+
+if [ "$assembly_only" = 1 ]; then
+  printf 'PACKAGE_ASSEMBLY_ONLY_OK app=%s\n' "$app"
+  exit 0
+fi
 
 stage=$(mktemp -d "${TMPDIR:-/tmp}/shackcq-nexus-desktop.XXXXXX")
 ditto "$app" "$stage/$app_name.app"
