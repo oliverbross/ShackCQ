@@ -36,7 +36,7 @@ pub(crate) fn configure_isolated_review(socket: String, secret_hex: &str) -> Res
         .map_err(|_| "isolated review IPC identity already set")?;
     REVIEW_SECRET
         .set(secret)
-        .map_err(|_| "isolated review IPC secret already set")
+        .map_err(|_| "isolated review IPC secret already set".to_string())
 }
 
 pub(crate) fn admin_socket_name() -> String {
