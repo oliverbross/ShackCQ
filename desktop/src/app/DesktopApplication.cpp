@@ -576,10 +576,29 @@ bool DesktopApplication::saveFastEntry(const QVariantMap &values) {
   q.contestId = values.value("contestId").toString();
   q.satelliteName = values.value("satelliteName").toString();
   q.satelliteMode = values.value("satelliteMode").toString();
+  q.propagationMode = values.value("propagationMode").toString();
+  q.antennaPath = values.value("antennaPath").toString();
+  if (values.contains("txPower") && !values.value("txPower").isNull()) {
+    const QVariant powerValue = values.value("txPower");
+    if (powerValue.metaType().id() != QMetaType::QString || !powerValue.toString().trimmed().isEmpty()) {
+      bool powerOk = false;
+      q.txPower = powerValue.toDouble(&powerOk);
+      if (!powerOk) { emit error("TX power must be numeric"); return false; }
+    }
+  }
+  q.antenna = values.value("antenna").toString();
   q.potaRef = values.value("potaRef").toString();
   q.sotaRef = values.value("sotaRef").toString();
   q.iota = values.value("iota").toString();
   q.wwffRef = values.value("wwffRef").toString();
+  q.qslManager = values.value("qslManager").toString();
+  q.qslMessage = values.value("qslMessage").toString();
+  q.qslSent = values.value("qslSent").toString();
+  q.qslReceived = values.value("qslReceived", "N").toString();
+  q.qslSentDate = values.value("qslSentDate").toString();
+  q.qslReceivedDate = values.value("qslReceivedDate").toString();
+  q.qslSentMethod = values.value("qslSentMethod").toString();
+  q.qslReceivedMethod = values.value("qslReceivedMethod").toString();
   q.extraAdif = QJsonObject::fromVariantMap(values.value("extraAdif").toMap());
   q.createdAt = QDateTime::currentSecsSinceEpoch();
   QString error;

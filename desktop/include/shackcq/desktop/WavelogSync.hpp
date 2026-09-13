@@ -62,6 +62,8 @@ public:
                       const QString &operation, const CanonicalQso &qso,
                       const QString &remoteId) override;
     static QUrl normalizedRoot(const QUrl &server);
+    static QJsonObject requestBody(const WavelogBinding &binding, const CanonicalQso &qso,
+                                   const QString &operation);
 private:
     QVariantMap request(const QUrl &url, const QString &token, const QByteArray &method,
                         const QJsonObject &body = {});

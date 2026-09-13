@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QStringList>
 #include <QVector>
+#include <limits>
 
 namespace shackcq::desktop {
 
@@ -32,11 +33,22 @@ struct QsoRecord {
     QString contestId;
     QString satelliteName;
     QString satelliteMode;
+    QString propagationMode;
+    QString antennaPath;
+    double txPower{std::numeric_limits<double>::quiet_NaN()};
+    QString antenna;
     QString potaRef;
     QString sotaRef;
     QString iota;
     QString wwffRef;
+    QString qslManager;
+    QString qslMessage;
+    QString qslSent;
     QString qslReceived{"N"};
+    QString qslSentDate;
+    QString qslReceivedDate;
+    QString qslSentMethod;
+    QString qslReceivedMethod;
     QString lotwReceived{"N"};
     QString eqslReceived{"N"};
     QString qrzReceived{"N"};
