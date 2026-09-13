@@ -7,6 +7,7 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDebug>
 #include <QEventLoop>
 #include <QFile>
 #include <QJsonArray>
@@ -14,6 +15,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QMetaEnum>
 #include <QRegularExpression>
 #include <QRandomGenerator>
 #include <QSslError>
@@ -36,6 +38,10 @@ bool boundedId(const QString &value) {
   static const QRegularExpression pattern(
       QStringLiteral("^[A-Za-z0-9._:-]{1,128}$"));
   return pattern.match(value).hasMatch();
+}
+QString enumName(const QMetaEnum &meta, int value) {
+  const char *key = meta.valueToKey(value);
+  return key ? QString::fromLatin1(key) : QString::number(value);
 }
 }
 
@@ -81,9 +87,29 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
                            "binary frames prohibited");
           });
   connect(&m_socket, &QWebSocket::sslErrors, this,
-          [this](const QList<QSslError> &) {
+          [this](const QList<QSslError> &errors) {
+            QStringList categories;
+            const auto meta = QMetaEnum::fromType<QSslError::SslError>();
+            for (qsizetype index = 0;
+                 index < std::min<qsizetype>(errors.size(), 8); ++index) {
+              categories.append(enumName(meta, errors.at(index).error()));
+            }
+            qWarning().noquote()
+                << "Cloud Agent WSS TLS verification failed; categories="
+                << categories.join(',');
             setState("Failed", "TLS verification failed");
-            m_socket.close();
+            m_socket.abort();
+          });
+  connect(&m_socket, &QWebSocket::errorOccurred, this,
+          [this](QAbstractSocket::SocketError error) {
+            const auto meta =
+                QMetaEnum::fromType<QAbstractSocket::SocketError>();
+            QString detail = m_socket.errorString().left(160);
+            detail.replace('\n', ' ');
+            detail.replace('\r', ' ');
+            qWarning().noquote()
+                << "Cloud Agent WSS transport failed; category="
+                << enumName(meta, error) << "; detail=" << detail;
           });
   connect(&m_socket, &QWebSocket::disconnected, this, [this] {
     m_heartbeat.stop();
@@ -355,8 +381,13 @@ void CloudAgentClient::connectNow() {
   request.setRawHeader("Authorization",
                        QByteArray("Bearer ") + m_credential.toUtf8());
   QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
-  ssl.setProtocol(QSsl::TlsV1_2OrLater);
-  ssl.addCaCertificates(m_reviewCertificates);
+  if (m_reviewCertificates.isEmpty()) {
+    ssl.setProtocol(QSsl::TlsV1_3OrLater);
+  } else {
+    ssl.setProtocol(QSsl::TlsV1_2OrLater);
+    ssl.addCaCertificates(m_reviewCertificates);
+  }
+  m_socket.setSslConfiguration(ssl);
   request.setSslConfiguration(ssl);
   setState("Connecting", "Opening outbound TLS WebSocket");
   m_socket.open(request);
