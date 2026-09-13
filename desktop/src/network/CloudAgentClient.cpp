@@ -411,7 +411,7 @@ void CloudAgentClient::sendHello() {
               {"platform", QSysInfo::productType().left(40)},
               {"version", QCoreApplication::applicationVersion().left(40)},
               {"build", buildIdentity()},
-              {"loggerSources", QJsonArray{"WSJTX", "N1MM"}},
+              {"loggerSources", QJsonArray{"WSJTX", "N1MM", "NEXUS_NATIVE"}},
               {"devices", devices}});
 }
 
