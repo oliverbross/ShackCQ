@@ -2,8 +2,8 @@
   "schema": 1,
   "sourceRepository": "https://github.com/oliverbross/ShackCQ-Web",
   "sourcePath": "packages/shared-digi-ui",
-  "webCommit": "1a662b1196ca16d45c1f3ce460116e7ceeca81d3",
-  "contentSha256": "f30b03a8c43a49e7e3231be4bbe4d352925e8a8ae00d17759ea5de182a6d4abe",
+  "webCommit": "82b32a62f83d386731842070d4907076f217b09b",
+  "contentSha256": "507c89592c46948f29f013e7c66fd35ae717e5257f16c92405b64d839d69dbd1",
   "snapshotPath": "desktop/shared-digi-ui-snapshot",
   "contractVersion": 1,
   "nativeCommands": [
