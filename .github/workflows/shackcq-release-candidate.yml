@@ -20,7 +20,7 @@ jobs:
   contract-audit:
     runs-on: ubuntu-latest
     env:
-      SHACKCQ_ALLOW_RC1_DESCENDANT_VALIDATION: ${{ (inputs.allow_descendant_validation || github.ref_name == 'integration/shackcq-v0.1.0-rc1-final' || github.ref_name == 'main') && '1' || '0' }}
+      SHACKCQ_ALLOW_RC1_DESCENDANT_VALIDATION: ${{ (inputs.allow_descendant_validation || github.head_ref == 'feature/nexus-native-logbook-authority-v1' || github.ref_name == 'feature/nexus-native-logbook-authority-v1' || github.ref_name == 'integration/shackcq-v0.1.0-rc1-final' || github.ref_name == 'main') && '1' || '0' }}
     steps:
       - uses: actions/checkout@v4
         with:

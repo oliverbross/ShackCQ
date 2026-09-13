@@ -1,6 +1,7 @@
 #include "shackcq/desktop/LoggerIngestion.hpp"
 
 #include <QFile>
+#include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -28,6 +29,26 @@ QJsonObject profile(quint16 port,
           {"destinationAuthority", "WEB_LOCAL"},
           {"authorityRevision", 1},
           {"stationProfileId", "22222222-2222-4222-8222-222222222222"}};
+}
+QJsonObject nativeProfile(const QString &authority = QStringLiteral("WEB_LOCAL")) {
+  QJsonObject value = profile(0, "NEXUS_NATIVE");
+  value.insert("destinationAuthority", authority);
+  if (authority == "WAVELOG")
+    value.insert("mappingRevision", 7);
+  return value;
+}
+QJsonObject nativeIntent(const QString &operation = QStringLiteral("nexus-qso-1")) {
+  return {{"profileId", "11111111-1111-4111-8111-111111111111"},
+          {"operationIdentity", operation},
+          {"sourceRevision", 1},
+          {"capturedUtc", "2026-09-12T02:03:04.000Z"},
+          {"destinationAuthority", "WEB_LOCAL"},
+          {"authorityRevision", 1},
+          {"stationProfileId", "22222222-2222-4222-8222-222222222222"},
+          {"contact", QJsonObject{{"callsign", "VK8ABC"},
+                                   {"contactStartUtc", "2026-09-12T02:02:00.000Z"},
+                                   {"frequencyHz", 14074000},
+                                   {"mode", "FT8"}}}};
 }
 void u8(QByteArray &out, quint8 value) { out.append(char(value)); }
 void u32(QByteArray &out, quint32 value) {
@@ -132,6 +153,7 @@ private slots:
       QVERIFY(vault.read(alias).has_value());
     }
     LoggerIngestion restarted(&vault, path);
+    restarted.setAccountScope("account-other");
     QCOMPARE(restarted.pendingEvents().size(), 1);
     restarted.acknowledge(
         QJsonArray{QJsonObject{{"eventId", eventId}, {"accepted", true}}});
@@ -210,6 +232,202 @@ private slots:
                                      .toObject();
       QCOMPARE(richer.value("ownCallsign").toString(), QString("OM0RX"));
     }
+  }
+
+  void nativeContactIsAccountScopedDurableAndIdempotent() {
+    QTemporaryDir dir;
+    FakeCredentialVault vault;
+    const QString path = dir.filePath("journal.json");
+    QString eventId;
+    {
+      LoggerIngestion logger(&vault, path);
+      logger.setAccountScope("account-one");
+      QCOMPARE(logger.applyProfile(nativeProfile()).value("code").toString(),
+               QString("LOGGER_NATIVE_READY"));
+      const QJsonObject first = logger.submitNativeContact(nativeIntent());
+      QVERIFY(first.value("ok").toBool());
+      QCOMPARE(first.value("code").toString(), QString("LOGGER_NATIVE_QUEUED"));
+      eventId = first.value("eventId").toString();
+      const QJsonObject duplicate = logger.submitNativeContact(nativeIntent());
+      QCOMPARE(duplicate.value("eventId").toString(), eventId);
+      QCOMPARE(duplicate.value("code").toString(),
+               QString("LOGGER_NATIVE_DUPLICATE"));
+      QCOMPARE(logger.pendingEvents().size(), 1);
+      QCOMPARE(logger.pendingEvents()[0].toObject().value("source"),
+               QJsonValue("NEXUS_NATIVE"));
+      QFile metadata(path);
+      QVERIFY(metadata.open(QIODevice::ReadOnly));
+      QVERIFY(!metadata.readAll().contains("VK8ABC"));
+    }
+    LoggerIngestion restarted(&vault, path);
+    QCOMPARE(restarted.pendingEvents().size(), 0);
+    restarted.setAccountScope("account-two");
+    QCOMPARE(restarted.pendingEvents().size(), 0);
+    restarted.setAccountScope("account-one");
+    QCOMPARE(restarted.pendingEvents().size(), 1);
+    QCOMPARE(restarted.pendingEvents()[0].toObject().value("eventId").toString(),
+             eventId);
+  }
+
+  void nativeAuthorityChangeAndOperationReuseFailClosed() {
+    QTemporaryDir dir;
+    FakeCredentialVault vault;
+    LoggerIngestion logger(&vault, dir.filePath("journal.json"));
+    logger.setAccountScope("account-one");
+    QVERIFY(logger.applyProfile(nativeProfile()).value("ok").toBool());
+    QJsonObject stale = nativeIntent();
+    stale.insert("authorityRevision", 2);
+    QCOMPARE(logger.submitNativeContact(stale).value("code").toString(),
+             QString("LOGGER_DESTINATION_CHANGED"));
+    QCOMPARE(logger.pendingEvents().size(), 0);
+    QVERIFY(logger.submitNativeContact(nativeIntent()).value("ok").toBool());
+    QJsonObject changed = nativeIntent();
+    QJsonObject contact = changed.value("contact").toObject();
+    contact.insert("callsign", "VK9XYZ");
+    changed.insert("contact", contact);
+    QCOMPARE(logger.submitNativeContact(changed).value("code").toString(),
+             QString("LOGGER_EVENT_ID_REUSED"));
+    QVERIFY(logger.applyProfile(nativeProfile("WAVELOG")).value("ok").toBool());
+    QJsonObject migrated = nativeIntent();
+    migrated.insert("destinationAuthority", "WAVELOG");
+    migrated.insert("mappingRevision", 7);
+    QCOMPARE(logger.submitNativeContact(migrated).value("code").toString(),
+             QString("LOGGER_EVENT_ID_REUSED"));
+    QCOMPARE(logger.pendingEvents().size(), 1);
+  }
+
+  void nativeContactRequiresUtcFiniteFrequencyAndKnownFields() {
+    QTemporaryDir dir;
+    FakeCredentialVault vault;
+    LoggerIngestion logger(&vault, dir.filePath("journal.json"));
+    logger.setAccountScope("account-one");
+    QVERIFY(logger.applyProfile(nativeProfile()).value("ok").toBool());
+    for (const QString &field :
+         {QString("capturedUtc"), QString("contact")}) {
+      QJsonObject invalid = nativeIntent();
+      if (field == "capturedUtc")
+        invalid.insert(field, "2026-09-12T02:03:04");
+      else {
+        QJsonObject contact = invalid.value("contact").toObject();
+        contact.insert("frequencyHz", -1);
+        invalid.insert("contact", contact);
+      }
+      QCOMPARE(logger.submitNativeContact(invalid).value("code").toString(),
+               QString("LOGGER_NATIVE_EVENT_INVALID"));
+    }
+    QJsonObject unknown = nativeIntent();
+    QJsonObject contact = unknown.value("contact").toObject();
+    contact.insert("shell", "not permitted");
+    unknown.insert("contact", contact);
+    QCOMPARE(logger.submitNativeContact(unknown).value("code").toString(),
+             QString("LOGGER_NATIVE_EVENT_INVALID"));
+    QCOMPARE(logger.pendingEvents().size(), 0);
+  }
+
+  void nativeAmbiguityRequiresExplicitRetryOrDiscard() {
+    QTemporaryDir dir;
+    FakeCredentialVault vault;
+    LoggerIngestion logger(&vault, dir.filePath("journal.json"));
+    logger.setAccountScope("account-one");
+    QVERIFY(logger.applyProfile(nativeProfile()).value("ok").toBool());
+    const QString eventId =
+        logger.submitNativeContact(nativeIntent()).value("eventId").toString();
+    logger.acknowledge(QJsonArray{QJsonObject{{"eventId", eventId},
+                                              {"accepted", false},
+                                              {"disposition", "delivery_unknown"},
+                                              {"code", "CANONICAL_RESULT_UNKNOWN"}}});
+    QCOMPARE(logger.pendingEvents().size(), 0);
+    QCOMPARE(logger.resolveNativeEvent(eventId, "retry").value("code"),
+             QJsonValue("LOGGER_NATIVE_RETRY_QUEUED"));
+    QCOMPARE(logger.pendingEvents().size(), 1);
+    QCOMPARE(logger.resolveNativeEvent(eventId, "discard").value("code"),
+             QJsonValue("LOGGER_NATIVE_DISCARDED"));
+    QCOMPARE(logger.pendingEvents().size(), 0);
+  }
+
+  void failedDiscardKeepsMetadataAndEncryptedPayload() {
+    QTemporaryDir dir;
+    FakeCredentialVault vault;
+    const QString queueDir = dir.filePath("queue");
+    QVERIFY(QDir().mkpath(queueDir));
+    const QString path = queueDir + "/journal.json";
+    LoggerIngestion logger(&vault, path);
+    logger.setAccountScope("account-one");
+    QVERIFY(logger.applyProfile(nativeProfile()).value("ok").toBool());
+    const QString eventId =
+        logger.submitNativeContact(nativeIntent()).value("eventId").toString();
+    QFile journal(path);
+    QVERIFY(journal.open(QIODevice::ReadOnly));
+    const QString alias = QJsonDocument::fromJson(journal.readAll())
+                              .array()[0]
+                              .toObject()
+                              .value("alias")
+                              .toString();
+    journal.close();
+    QVERIFY(vault.read(alias).has_value());
+    QVERIFY(QDir().rename(queueDir, dir.filePath("moved")));
+    QCOMPARE(logger.resolveNativeEvent(eventId, "discard").value("code"),
+             QJsonValue("LOGGER_JOURNAL_WRITE_FAILED"));
+    QCOMPARE(logger.pendingEvents().size(), 1);
+    QVERIFY(vault.read(alias).has_value());
+  }
+
+  void failedAcceptedReceiptKeepsMetadataAndEncryptedPayload() {
+    QTemporaryDir dir;
+    FakeCredentialVault vault;
+    const QString queueDir = dir.filePath("queue");
+    QVERIFY(QDir().mkpath(queueDir));
+    const QString path = queueDir + "/journal.json";
+    LoggerIngestion logger(&vault, path);
+    logger.setAccountScope("account-one");
+    QVERIFY(logger.applyProfile(nativeProfile()).value("ok").toBool());
+    const QString eventId =
+        logger.submitNativeContact(nativeIntent()).value("eventId").toString();
+    QFile journal(path);
+    QVERIFY(journal.open(QIODevice::ReadOnly));
+    const QString alias = QJsonDocument::fromJson(journal.readAll())
+                              .array()[0]
+                              .toObject()
+                              .value("alias")
+                              .toString();
+    journal.close();
+    QVERIFY(QDir().rename(queueDir, dir.filePath("moved")));
+    logger.acknowledge(
+        QJsonArray{QJsonObject{{"eventId", eventId}, {"accepted", true}}});
+    QCOMPARE(logger.pendingEvents().size(), 1);
+    QVERIFY(vault.read(alias).has_value());
+    QCOMPARE(logger.health().value("lastError"),
+             QVariant("LOGGER_JOURNAL_WRITE_FAILED"));
+  }
+
+  void failedRetryKeepsAmbiguousStateAndEncryptedPayload() {
+    QTemporaryDir dir;
+    FakeCredentialVault vault;
+    const QString queueDir = dir.filePath("queue");
+    QVERIFY(QDir().mkpath(queueDir));
+    const QString path = queueDir + "/journal.json";
+    LoggerIngestion logger(&vault, path);
+    logger.setAccountScope("account-one");
+    QVERIFY(logger.applyProfile(nativeProfile()).value("ok").toBool());
+    const QString eventId =
+        logger.submitNativeContact(nativeIntent()).value("eventId").toString();
+    logger.acknowledge(QJsonArray{QJsonObject{{"eventId", eventId},
+                                              {"accepted", false},
+                                              {"disposition", "delivery_unknown"},
+                                              {"code", "CANONICAL_RESULT_UNKNOWN"}}});
+    QFile journal(path);
+    QVERIFY(journal.open(QIODevice::ReadOnly));
+    const QString alias = QJsonDocument::fromJson(journal.readAll())
+                              .array()[0]
+                              .toObject()
+                              .value("alias")
+                              .toString();
+    journal.close();
+    QVERIFY(QDir().rename(queueDir, dir.filePath("moved")));
+    QCOMPARE(logger.resolveNativeEvent(eventId, "retry").value("code"),
+             QJsonValue("LOGGER_JOURNAL_WRITE_FAILED"));
+    QCOMPARE(logger.pendingEvents().size(), 0);
+    QVERIFY(vault.read(alias).has_value());
   }
 };
 

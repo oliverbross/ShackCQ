@@ -1,0 +1,56 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ShackCQ Desktop",
+  "version": "0.2.0",
+  "identifier": "online.shackcq.desktop",
+  "build": {
+    "beforeBuildCommand": "sh shackcq-tauri/scripts/build-stationd-sidecar.sh && python3 shackcq-tauri/scripts/verify-shared-ui.py",
+    "frontendDist": "../shared-digi-ui-snapshot"
+  },
+  "app": {
+    "security": {
+      "capabilities": ["desktop-main"],
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; frame-src 'none'; base-uri 'none'; form-action 'none'"
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "ShackCQ Desktop",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 980,
+        "minHeight": 640
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "externalBin": ["binaries/shackcq-nexus-runtime", "binaries/shackcq-stationd", "binaries/shackcq-hamlib-helper"],
+    "icon": [
+      "../../assets/branding/shackcq-mark-1024.png",
+      "../../desktop/resources/app-icon.icns",
+      "../../desktop/resources/app-icon.ico"
+    ],
+    "category": "Utility",
+    "shortDescription": "Local-first amateur-radio station workspace",
+    "longDescription": "ShackCQ Desktop with a supervised Nexus-native Digi runtime. Transmit remains locked pending owner acceptance.",
+    "copyright": "Copyright ShackCQ contributors",
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "entitlements": "Entitlements.plist",
+      "infoPlist": "Info.plist"
+    },
+    "windows": {
+      "wix": null,
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libwebkit2gtk-4.1-0", "libasound2", "libssl3"]
+      }
+    }
+  }
+}

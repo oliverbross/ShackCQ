@@ -16,6 +16,20 @@ does not add a duplicate source or package Hamlib command-line executables.
 Nexus was evaluated as an external upstream/reference. No Nexus source, binary,
 dependency, submodule, or derived implementation is incorporated by Phase 0.
 
+The separately authorized ShackCQ Nexus-native desktop programme incorporates
+kd9taw/Nexus v1.10.3 at immutable commit
+7618390658f8f92431dec0ac65979b84f2c0fb76 as a Git submodule. Its FT8/FT4
+Rust wrappers link its vendored WSJT-X-derived libtempo DSP under GPL terms;
+the complete selected-source notices remain in third_party/nexus/NOTICE.
+ShackCQ's adapter is GPL-3.0-only and records the exact boundary in
+docs/nexus/NATIVE_DESKTOP_PROVENANCE.md. Nexus and KD9TAW do not endorse
+ShackCQ. The desktop build excludes Nexus radio/rigctld/OmniRig, external
+logger, network-service, updater and DeepCW model paths. WSPR receive and
+null/file-sink encoding are declared and callable through the pinned Nexus
+workspace's GPL-3.0-only `wspr` crate. Its vendored fano.c/jelinek.c provenance
+relies on the WSJT-X project-wide GPL grant recorded by upstream; no physical
+audio output or RF transmit path is available in this package.
+
 The Android KX3 panadapter was independently implemented after behavior-only
 study of these pinned references:
 

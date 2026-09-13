@@ -1,0 +1,197 @@
+name: Nexus Desktop Cross-Platform Candidate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/nexus-native-desktop-cross-platform-ci-v1
+      - feature/nexus-native-logbook-authority-v1
+
+permissions:
+  contents: read
+
+env:
+  RUST_TOOLCHAIN: '1.91.0'
+  WINDOWS_GNU_RUST_TOOLCHAIN: '1.91.0-x86_64-pc-windows-gnu'
+  TAURI_CLI_VERSION: '2.11.4'
+
+jobs:
+  windows-x64-gnu-cross:
+    name: Windows x64 complete Nexus + Agent candidate
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            base-devel git make mingw-w64-x86_64-cmake
+            mingw-w64-x86_64-boost
+            mingw-w64-x86_64-gcc mingw-w64-x86_64-gcc-fortran
+            mingw-w64-x86_64-ninja mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-pkgconf mingw-w64-x86_64-python
+      - name: Verify exact checkout and Nexus pin
+        shell: msys2 {0}
+        run: |
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_REF" = refs/heads/feature/nexus-native-logbook-authority-v1 || test "$GITHUB_REF" = refs/heads/feature/nexus-native-desktop-cross-platform-ci-v1
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 68cebdc2991cf9754477e29ac82228de6f8b8107 "$GITHUB_SHA"
+          test "$(git -C third_party/nexus rev-parse HEAD)" = "7618390658f8f92431dec0ac65979b84f2c0fb76"
+          python3 scripts/check_nexus_native_desktop.py
+          python3 desktop/shackcq-tauri/scripts/verify-shared-ui.py
+      - name: Verify Windows-safe package cleanup contract
+        shell: msys2 {0}
+        env:
+          SHACKCQ_PACKAGE_CONTRACT_STATIC_ONLY: '1'
+        run: scripts/test_nexus_package_cleanup_contract.sh
+      - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          # Qt 6.11.2 has no published Windows repository metadata. 6.10.2 is
+          # the newest pinned Windows archive proven present by this workflow.
+          version: '6.10.2'
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          modules: 'qtmultimedia qtserialport qtwebsockets qtlocation qtpositioning'
+          tools: 'tools_mingw1310'
+          cache: true
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - name: Resolve the setup-node npm shim for MSYS2
+        shell: pwsh
+        run: |
+          $npx = (Get-Command npx.cmd -ErrorAction Stop).Source
+          "SHACKCQ_NODE_BIN_WINDOWS=$(Split-Path -Parent $npx)" >> $env:GITHUB_ENV
+      - name: Install pinned NSIS packager
+        shell: pwsh
+        run: |
+          choco install nsis --version=3.11 --yes --no-progress
+          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not (Test-Path -LiteralPath $makensis)) {
+            throw "pinned NSIS installed without expected makensis.exe: $makensis"
+          }
+          "SHACKCQ_NSIS_BIN_WINDOWS=$(Split-Path -Parent $makensis)" >> $env:GITHUB_ENV
+      - name: Install pinned Windows GNU Rust host toolchain
+        shell: pwsh
+        run: |
+          rustup toolchain install $env:WINDOWS_GNU_RUST_TOOLCHAIN --profile minimal
+          rustup target add --toolchain $env:WINDOWS_GNU_RUST_TOOLCHAIN x86_64-pc-windows-gnu
+          $cargo = rustup which --toolchain $env:WINDOWS_GNU_RUST_TOOLCHAIN cargo
+          if (-not (Test-Path -LiteralPath $cargo)) {
+            throw "GNU-host cargo was not resolved: $cargo"
+          }
+          "SHACKCQ_CARGO_BIN_WINDOWS=$(Split-Path -Parent $cargo)" >> $env:GITHUB_ENV
+      - name: Build unsigned Windows x64 candidate
+        env:
+          RUSTUP_TOOLCHAIN: ${{ env.WINDOWS_GNU_RUST_TOOLCHAIN }}
+          SHACKCQ_QT_PREFIX: ${{ env.QT_ROOT_DIR }}
+          SHACKCQ_VERBOSE_STATIOND_BUILD: '1'
+        shell: msys2 {0}
+        run: |
+          node_bin=$(cygpath -u "$SHACKCQ_NODE_BIN_WINDOWS")
+          nsis_bin=$(cygpath -u "$SHACKCQ_NSIS_BIN_WINDOWS")
+          cargo_bin=$(cygpath -u "$SHACKCQ_CARGO_BIN_WINDOWS")
+          export PATH="$node_bin:$nsis_bin:$cargo_bin:$PATH"
+          command -v npx.cmd
+          command -v makensis.exe
+          command -v cargo.exe
+          command -v rustc.exe
+          command -v x86_64-w64-mingw32-gcc.exe
+          command -v x86_64-w64-mingw32-windres.exe
+          command -v x86_64-w64-mingw32-ar.exe
+          test "$(rustc -vV | sed -n 's/^host: //p')" = x86_64-pc-windows-gnu
+          test "$(rustc -vV | sed -n 's/^release: //p')" = 1.91.0
+          test "$(cargo -V | awk '{print $2}')" = 1.91.0
+          test "$(x86_64-w64-mingw32-gcc -dumpmachine)" = x86_64-w64-mingw32
+          test "$(x86_64-w64-mingw32-windres --version | sed -n '1p' | wc -c)" -gt 1
+          test "$(x86_64-w64-mingw32-ar --version | sed -n '1p' | wc -c)" -gt 1
+          test -s /mingw64/include/openssl/ssl.h
+          test -s /mingw64/lib/libcrypto.dll.a
+          test -s /mingw64/lib/libssl.dll.a
+          export OPENSSL_ROOT_DIR="$(cygpath -m /mingw64)"
+          sh scripts/build_nexus_desktop_candidate.sh windows-x64 "$GITHUB_WORKSPACE/artifacts/windows-x64"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ShackCQ-Nexus-Digi-Desktop-Windows-x64-UNSIGNED-UNNOTARIZED-${{ github.sha }}
+          path: artifacts/windows-x64
+          if-no-files-found: error
+          retention-days: 14
+
+  linux-x86-64:
+    name: Linux x86_64 complete Nexus + Agent candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+      - name: Verify exact checkout and Nexus pin
+        run: |
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch || test "$GITHUB_REF" = refs/heads/feature/nexus-native-logbook-authority-v1 || test "$GITHUB_REF" = refs/heads/feature/nexus-native-desktop-cross-platform-ci-v1
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor 68cebdc2991cf9754477e29ac82228de6f8b8107 "$GITHUB_SHA"
+          test "$(git -C third_party/nexus rev-parse HEAD)" = "7618390658f8f92431dec0ac65979b84f2c0fb76"
+          python3 scripts/check_nexus_native_desktop.py
+          python3 desktop/shackcq-tauri/scripts/verify-shared-ui.py
+      - name: Verify Linux package lifecycle and cleanup contract
+        run: scripts/test_nexus_package_cleanup_contract.sh
+      - name: Install documented Linux modem and Tauri packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential \
+            cmake \
+            file \
+            gfortran \
+            libasound2-dev \
+            libayatana-appindicator3-dev \
+            libboost-dev \
+            libfftw3-dev \
+            libfuse2 \
+            libgtk-3-dev \
+            libsecret-1-dev \
+            libsoup-3.0-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            librsvg2-dev \
+            ninja-build \
+            patchelf \
+            p7zip-full \
+            pkg-config \
+            squashfs-tools \
+            xauth \
+            xvfb
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+      - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
+        with:
+          version: '6.11.2'
+          host: linux
+          target: desktop
+          arch: linux_gcc_64
+          modules: 'qtmultimedia qtserialport qtwebsockets qtlocation qtpositioning'
+          cache: true
+      - name: Install pinned Rust target
+        run: |
+          rustup toolchain install "$RUST_TOOLCHAIN" --profile minimal
+          rustup target add --toolchain "$RUST_TOOLCHAIN" x86_64-unknown-linux-gnu
+      - name: Build unsigned Linux x86_64 candidates
+        env:
+          RUSTUP_TOOLCHAIN: ${{ env.RUST_TOOLCHAIN }}
+          SHACKCQ_QT_PREFIX: ${{ env.QT_ROOT_DIR }}
+        run: scripts/build_nexus_desktop_candidate.sh linux-x86_64 "$GITHUB_WORKSPACE/artifacts/linux-x86_64"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ShackCQ-Nexus-Digi-Desktop-Linux-x86_64-UNSIGNED-UNNOTARIZED-${{ github.sha }}
+          path: artifacts/linux-x86_64
+          if-no-files-found: error
+          retention-days: 14

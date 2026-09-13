@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shackcq/desktop/CloudAgentClient.hpp"
 #include "shackcq/desktop/LoggerIngestion.hpp"
+#include "shackcq/desktop/NativeAgentIngress.hpp"
 #include "shackcq/desktop/AgentDigiController.hpp"
 #include "shackcq/desktop/DesktopPanadapter.hpp"
 #include "shackcq/desktop/DesktopPlatform.hpp"
@@ -10,33 +11,37 @@
 
 #include <QCommandLineParser>
 #include <QCoreApplication>
+#include <QDir>
 #include <QJsonDocument>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QTextStream>
 #include <QSysInfo>
 #include <QUrl>
 #include <QSerialPortInfo>
+#include <QSqlDatabase>
+#include <QSslSocket>
 
 using namespace shackcq::desktop;
 namespace {
-const QString AdminSocket = QStringLiteral("shackcq-stationd-v1");
+const QString DefaultAdminSocket = QStringLiteral("shackcq-stationd-v1");
 
 QJsonObject adminRequest(const QCommandLineParser &parser) {
   if (parser.isSet("status")) return {{"action", "status"}};
   if (parser.isSet("list-clients")) return {{"action", "list-clients"}};
   if (parser.isSet("pairing-offer")) return {{"action", "pairing-offer"}};
   if (parser.isSet("revoke")) return {{"action", "revoke"}, {"deviceId", parser.value("revoke")}};
-  if (parser.isSet("stop")) return {{"action", "stop"}};
+  if (parser.isSet("stop")) return {{"action", "stop"}, {"ownerToken", parser.value("native-owner-token")}};
   if (parser.isSet("digi-stop")) return {{"action", "digi-stop"}};
   return {};
 }
 
-int sendAdminRequest(const QJsonObject &request) {
+int sendAdminRequest(const QString &adminSocket, const QJsonObject &request) {
   QLocalSocket socket;
-  socket.connectToServer(AdminSocket, QIODevice::ReadWrite);
+  socket.connectToServer(adminSocket, QIODevice::ReadWrite);
   if (!socket.waitForConnected(10'000)) return 5;
   socket.write(QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n');
   if (!socket.waitForBytesWritten(2'000)) return 6;
@@ -56,12 +61,34 @@ int sendAdminRequest(const QJsonObject &request) {
 
 int main(int argc, char **argv) {
   QCoreApplication application(argc, argv);
+#if defined(Q_OS_LINUX)
+  const QDir executableDir(QCoreApplication::applicationDirPath());
+  QStringList packagedPluginPaths;
+  const QStringList packageCandidates = {
+      executableDir.absoluteFilePath(QStringLiteral("../lib/shackcq/plugins")),
+      executableDir.absoluteFilePath(QStringLiteral("../plugins"))};
+  for (const QString &path : packageCandidates) {
+    if (QDir(path).exists())
+      packagedPluginPaths.append(QDir(path).absolutePath());
+  }
+  // Exclude Qt's compiled-in CI prefix. Native-ingress-only packages need only
+  // their package-owned SQLite and TLS plugin roots.
+  if (!packagedPluginPaths.isEmpty() ||
+      qEnvironmentVariableIntValue("SHACKCQ_PACKAGE_RUNTIME_HERMETIC") == 1)
+    QCoreApplication::setLibraryPaths(packagedPluginPaths);
+#endif
   QCoreApplication::setApplicationName("shackcq-stationd");
   QCoreApplication::setApplicationVersion("1.0.6");
   QCommandLineParser parser;
   parser.setApplicationDescription("ShackCQ Remote Station Service v1");
   parser.addHelpOption(); parser.addVersionOption();
   parser.addOption(QCommandLineOption({"f", "foreground"}, "Run the explicitly enabled service in the foreground"));
+  parser.addOption(QCommandLineOption(QStringLiteral("native-ingress-only"), "Run cloud/logger native ingress with every hardware autoconnect path disabled"));
+  parser.addOption(QCommandLineOption(QStringLiteral("native-owner-token"), "Ephemeral owner token for graceful native-only shutdown", "token"));
+  parser.addOption(QCommandLineOption(QStringLiteral("admin-socket"), "Explicit isolated local administration socket", "name", DefaultAdminSocket));
+  parser.addOption(QCommandLineOption(QStringLiteral("ephemeral-root"), "Isolated data root; valid only with --native-ingress-only", "path"));
+  parser.addOption(QCommandLineOption(QStringLiteral("ephemeral-credentials"), "Use an in-memory credential vault; valid only with --native-ingress-only and --ephemeral-root"));
+  parser.addOption(QCommandLineOption(QStringLiteral("package-runtime-probe"), "Report packaged SQLite and TLS plugin availability without network or hardware access"));
   parser.addOption(QCommandLineOption({"s", "status"}, "Print bounded service status"));
   parser.addOption(QCommandLineOption({"p", "pairing-offer"}, "Create a short-lived pairing offer"));
   parser.addOption(QCommandLineOption(QStringLiteral("list-clients"), "List paired public device metadata"));
@@ -90,8 +117,29 @@ int main(int argc, char **argv) {
   parser.addOption(QCommandLineOption(QStringLiteral("disable-digi-tx"), "Remove local Digi TX permission and hardware acceptance"));
   parser.process(application);
 
+  if (parser.isSet("package-runtime-probe")) {
+    const QJsonObject result{
+        {"qsqlite", QSqlDatabase::drivers().contains(QStringLiteral("QSQLITE"))},
+        {"tls", QSslSocket::supportsSsl()},
+        {"tlsBackend", QSslSocket::activeBackend()},
+        {"tlsBuildVersion", QSslSocket::sslLibraryBuildVersionString()},
+        {"tlsRuntimeVersion", QSslSocket::sslLibraryVersionString()}};
+    QTextStream(stdout) << QJsonDocument(result).toJson(QJsonDocument::Compact)
+                        << '\n';
+    return result.value("qsqlite").toBool() && result.value("tls").toBool()
+               ? 0
+               : 12;
+  }
+
   const QJsonObject requestedAdminAction = adminRequest(parser);
-  if (!parser.isSet("foreground") && !requestedAdminAction.isEmpty()) return sendAdminRequest(requestedAdminAction);
+  const QString adminSocket = parser.value("admin-socket");
+  if (!QRegularExpression(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,95}$"))
+           .match(adminSocket).hasMatch()) {
+    QTextStream(stderr) << "Invalid administration socket name\n";
+    return 2;
+  }
+  if (!parser.isSet("foreground") && !requestedAdminAction.isEmpty())
+    return sendAdminRequest(adminSocket, requestedAdminAction);
   const bool setupAction = parser.isSet("pair-with-shackcq") ||
       parser.isSet("list-hamlib-models") || parser.isSet("list-serial-ports") ||
       parser.isSet("show-radio-profile") ||
@@ -99,29 +147,57 @@ int main(int argc, char **argv) {
       parser.isSet("unpair-shackcq") || parser.isSet("list-audio-devices") ||
       parser.isSet("configure-digi-audio") || parser.isSet("authorize-digi-tx") ||
       parser.isSet("disable-digi-tx");
-  if (!parser.isSet("foreground") && !setupAction) parser.showHelp(1);
+  const bool nativeIngressOnly = parser.isSet("native-ingress-only");
+  const bool ephemeralCredentials = parser.isSet("ephemeral-credentials");
+  const QString ephemeralRoot = parser.value("ephemeral-root");
+  if ((!ephemeralRoot.isEmpty() || ephemeralCredentials) &&
+      (!nativeIngressOnly || ephemeralRoot.isEmpty())) {
+    QTextStream(stderr) << "Ephemeral isolation requires --native-ingress-only and --ephemeral-root\n";
+    return 2;
+  }
+  const QString nativeOwnerToken = parser.value("native-owner-token");
+  if (nativeIngressOnly &&
+      !QRegularExpression(QStringLiteral("^[0-9a-f]{64}$"))
+           .match(nativeOwnerToken)
+           .hasMatch()) {
+    QTextStream(stderr) << "A valid ephemeral native owner token is required\n";
+    return 2;
+  }
+  if (!parser.isSet("foreground") && !nativeIngressOnly && !setupAction) parser.showHelp(1);
 
   DesktopPaths paths;
+  if (!ephemeralRoot.isEmpty())
+    paths.setEphemeralRoot(ephemeralRoot);
   QString error;
   if (!paths.create(&error)) { QTextStream(stderr) << error << '\n'; return 2; }
   DesktopConfigurationManager configuration(paths.configuration() + "/desktop-config.json");
   if (!configuration.load(&error)) { QTextStream(stderr) << error << '\n'; return 2; }
-  SystemCredentialVault vault;
+  SystemCredentialVault systemVault;
+  FakeCredentialVault fakeVault;
+  DesktopCredentialVault *vault = ephemeralCredentials
+      ? static_cast<DesktopCredentialVault *>(&fakeVault)
+      : static_cast<DesktopCredentialVault *>(&systemVault);
   DesktopRadioController radio;
   AgentDigiController digi(&radio);
-  LoggerIngestion logger(&vault, paths.databases() + "/logger-events-v1.json");
-  CloudAgentClient cloudAgent(&vault, &radio, &digi, &logger);
+  LoggerIngestion logger(vault, paths.databases() + "/logger-events-v1.json");
+  NativeAgentIngress nativeIngress(vault, &logger);
+  QString nativeIngressError;
+  nativeIngress.initialize(&nativeIngressError);
+  CloudAgentClient cloudAgent(vault, &radio, nativeIngressOnly ? nullptr : &digi,
+                              &logger);
   DesktopRotatorController rotator;
   DesktopPanadapter panadapter;
-  if (!radio.restoreConfiguration(configuration.section("radioProfiles"), &error) ||
+  if (!nativeIngressOnly &&
+      (!radio.restoreConfiguration(configuration.section("radioProfiles"), &error) ||
       !rotator.restoreConfiguration(configuration.section("rotatorProfiles"), &error) ||
-      !panadapter.restoreConfiguration(configuration.section("panadapter"), &error)) {
+       !panadapter.restoreConfiguration(configuration.section("panadapter"), &error))) {
     QTextStream(stderr) << error << '\n'; return 2;
   }
   if (!cloudAgent.restoreConfiguration(configuration.section("cloudAgent"), &error)) {
     QTextStream(stderr) << error << '\n'; return 2;
   }
-  if (!digi.restoreConfiguration(configuration.section("digiAgent"), &error)) {
+  if (!nativeIngressOnly &&
+      !digi.restoreConfiguration(configuration.section("digiAgent"), &error)) {
     QTextStream(stderr) << error << '\n'; return 2;
   }
   if (parser.isSet("list-audio-devices")) {
@@ -225,7 +301,7 @@ int main(int argc, char **argv) {
     QTextStream(stdout) << "ShackCQ Cloud Agent paired; credential stored in the operating-system vault\n";
     return 0;
   }
-  RemoteStationService service(&vault, &radio, &rotator, &panadapter);
+  RemoteStationService service(vault, &radio, &rotator, &panadapter);
   if (!service.restoreConfiguration(configuration.section("remoteStation"), &error)) {
     QTextStream(stderr) << error << '\n'; return 2;
   }
@@ -234,57 +310,115 @@ int main(int argc, char **argv) {
   });
   QObject::connect(&application, &QCoreApplication::aboutToQuit, &application, [&] {
     cloudAgent.stop();
-    digi.stop("Agent shutdown");
-    service.globalStop(); service.stop();
+    if (!nativeIngressOnly) {
+      digi.stop("Agent shutdown");
+      service.globalStop();
+      service.stop();
+    }
     configuration.setSection("remoteStation", service.configuration()); configuration.save();
     configuration.setSection("cloudAgent", cloudAgent.configuration()); configuration.save();
-    configuration.setSection("digiAgent", digi.configuration()); configuration.save();
+    if (!nativeIngressOnly) {
+      configuration.setSection("digiAgent", digi.configuration());
+      configuration.save();
+    }
   });
 
   QLocalServer admin;
   admin.setSocketOptions(QLocalServer::UserAccessOption);
   QLocalSocket existing;
-  existing.connectToServer(AdminSocket);
+  existing.connectToServer(adminSocket);
   if (existing.waitForConnected(250)) {
     QTextStream(stderr) << "Another shackcq-stationd instance already owns local administration\n";
     return 4;
   }
-  QLocalServer::removeServer(AdminSocket);
-  if (!admin.listen(AdminSocket)) { QTextStream(stderr) << admin.errorString() << '\n'; return 4; }
-  const bool remoteStationEnabled = service.configuration().value("enabled").toBool();
+  QLocalServer::removeServer(adminSocket);
+  if (!admin.listen(adminSocket)) { QTextStream(stderr) << admin.errorString() << '\n'; return 4; }
+  const bool remoteStationEnabled = !nativeIngressOnly && service.configuration().value("enabled").toBool();
   if (remoteStationEnabled && !service.start(&error)) {
     QTextStream(stderr) << error << '\n';
     return 3;
   }
-  radio.startConfiguredAutoConnect();
+  if (!nativeIngressOnly)
+    radio.startConfiguredAutoConnect();
   cloudAgent.start();
-  QObject::connect(&admin, &QLocalServer::newConnection, &application, [&] {
-    while (QLocalSocket *socket = admin.nextPendingConnection()) {
-      QObject::connect(socket, &QLocalSocket::readyRead, socket, [&, socket] {
-        const QJsonDocument document = QJsonDocument::fromJson(socket->readLine(16 * 1024));
-        const QJsonObject request = document.object();
+  NativeAgentIngressServer ingressServer(
+      &admin, &nativeIngress,
+      [&](const QJsonObject &request) {
         const QString action = request.value("action").toString();
         QVariant response;
         bool ok = true;
-        if (action == "status") response = QVariantMap{{"remoteStation", service.health()},
-                                                        {"cloudAgent", cloudAgent.health()},
-                                                        {"radio", radio.health()},
-                                                        {"digi", digi.snapshot(QString{},QString{},0).toVariantMap()}};
-        else if (action == "list-clients") response = service.pairedDevices();
-        else if (action == "pairing-offer") response = service.createPairingOffer();
-        else if (action == "revoke") { service.revokeDevice(request.value("deviceId").toString()); response = QVariantMap{{"revoked", true}}; }
-        else if (action == "stop") { const bool stopped = service.globalStop(); ok = stopped; response = QVariantMap{{"stopped", stopped}, {"code", stopped ? "GLOBAL_STOPPED" : "RX_UNCONFIRMED"}}; }
-        else if (action == "digi-stop") { const auto outcome = digi.stop("local operator STOP"); const bool stopped = outcome == AgentDigiController::StopOutcome::RxVerified; ok = stopped; const QString code = stopped ? "STOPPED_RX_VERIFIED" : outcome == AgentDigiController::StopOutcome::InProgress ? "STOP_IN_PROGRESS_RX_UNCONFIRMED" : "RX_UNCONFIRMED"; response = QVariantMap{{"stopped", stopped}, {"code", code}}; }
-        else { ok = false; response = QVariantMap{{"error", "unknown admin action"}}; }
-        socket->write(QJsonDocument(QJsonObject{{"ok", ok}, {"result", QJsonValue::fromVariant(response)}})
-                          .toJson(QJsonDocument::Compact) +
-                      '\n');
-        socket->flush(); socket->disconnectFromServer();
-        if (action == "stop" && ok) QMetaObject::invokeMethod(&application, "quit", Qt::QueuedConnection);
-      });
-      QObject::connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
-    }
-  });
+        if (action == "status") {
+          QVariantMap status{{"cloudAgent", cloudAgent.health()},
+                             {"nativeIngress", nativeIngress.capability().toVariantMap()},
+                             {"hardwareAutoconnect", !nativeIngressOnly},
+                             {"processId", QCoreApplication::applicationPid()}};
+          if (!nativeIngressOnly) {
+            status.insert("remoteStation", service.health());
+            status.insert("radio", radio.health());
+            status.insert("digi", digi.snapshot(QString{}, QString{}, 0).toVariantMap());
+          }
+          response = status;
+        } else if (action == "native-setup.pair" && nativeIngressOnly) {
+          const bool ownerMatches = request.value("ownerToken").toString() == nativeOwnerToken;
+          const QString code = request.value("code").toString();
+          const QString name = request.value("name").toString().trimmed();
+          if (!ownerMatches) {
+            ok = false;
+            response = QVariantMap{{"code", "OWNER_TOKEN_REJECTED"}};
+          } else if (code.size() > 32 || name.isEmpty() || name.size() > 80) {
+            ok = false;
+            response = QVariantMap{{"code", "AGENT_SETUP_INVALID"}};
+          } else if (!cloudAgent.pair(QUrl(QStringLiteral("https://shackcq.com")),
+                                      code, name, &error)) {
+            ok = false;
+            response = QVariantMap{{"code", "AGENT_PAIRING_FAILED"},
+                                   {"detail", error.left(240)}};
+          } else {
+            configuration.setSection("cloudAgent", cloudAgent.configuration());
+            if (!configuration.save(&error)) {
+              cloudAgent.unpair();
+              ok = false;
+              response = QVariantMap{{"code", "AGENT_SETUP_SAVE_FAILED"}};
+            } else {
+              cloudAgent.start();
+              QVariantMap map = cloudAgent.health();
+              map.insert("code", "AGENT_PAIRED");
+              response = map;
+            }
+          }
+        } else if (action == "native-setup.unpair" && nativeIngressOnly) {
+          const bool ownerMatches = request.value("ownerToken").toString() == nativeOwnerToken;
+          if (!ownerMatches) {
+            ok = false;
+            response = QVariantMap{{"code", "OWNER_TOKEN_REJECTED"}};
+          } else if (!cloudAgent.unpair(&error)) {
+            ok = false;
+            response = QVariantMap{{"code", "AGENT_UNPAIR_FAILED"},
+                                   {"detail", error.left(240)}};
+          } else {
+            configuration.setSection("cloudAgent", cloudAgent.configuration());
+            if (!configuration.save(&error)) {
+              ok = false;
+              response = QVariantMap{{"code", "AGENT_SETUP_SAVE_FAILED"}};
+            } else {
+              response = cloudAgent.health();
+              QVariantMap map = response.toMap();
+              map.insert("code", "AGENT_UNPAIRED");
+              response = map;
+            }
+          }
+        } else if (action == "list-clients" && !nativeIngressOnly) response = service.pairedDevices();
+        else if (action == "pairing-offer" && !nativeIngressOnly) response = service.createPairingOffer();
+        else if (action == "revoke" && !nativeIngressOnly) { service.revokeDevice(request.value("deviceId").toString()); response = QVariantMap{{"revoked", true}}; }
+        else if (action == "stop") { const bool ownerMatches = !nativeIngressOnly || request.value("ownerToken").toString() == nativeOwnerToken; const bool stopped = ownerMatches && (nativeIngressOnly || service.globalStop()); ok = stopped; response = QVariantMap{{"stopped", stopped}, {"code", stopped ? "GLOBAL_STOPPED" : ownerMatches ? "RX_UNCONFIRMED" : "OWNER_TOKEN_REJECTED"}}; }
+        else if (action == "digi-stop" && !nativeIngressOnly) { const auto outcome = digi.stop("local operator STOP"); const bool stopped = outcome == AgentDigiController::StopOutcome::RxVerified; ok = stopped; const QString code = stopped ? "STOPPED_RX_VERIFIED" : outcome == AgentDigiController::StopOutcome::InProgress ? "STOP_IN_PROGRESS_RX_UNCONFIRMED" : "RX_UNCONFIRMED"; response = QVariantMap{{"stopped", stopped}, {"code", code}}; }
+        else { ok = false; response = QVariantMap{{"code", nativeIngressOnly ? "HARDWARE_DISABLED" : "AGENT_ADMIN_ACTION_UNKNOWN"}}; }
+        if (action == "stop" && ok)
+          QMetaObject::invokeMethod(&application, "quit", Qt::QueuedConnection);
+        QJsonObject outcome = QJsonObject::fromVariantMap(response.toMap());
+        outcome.insert("ok", ok);
+        return outcome;
+      }, &application);
   if (parser.isSet("pairing-offer"))
     QTextStream(stdout) << QJsonDocument::fromVariant(service.createPairingOffer()).toJson(QJsonDocument::Indented);
   return application.exec();

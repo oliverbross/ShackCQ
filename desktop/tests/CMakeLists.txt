@@ -39,6 +39,11 @@ target_link_libraries(logger_ingestion_tests PRIVATE ${SHACKCQ_TEST_LIBS})
 shackcq_target_warnings(logger_ingestion_tests)
 add_test(NAME logger_ingestion_tests COMMAND logger_ingestion_tests)
 
+qt_add_executable(native_agent_ingress_tests unit/native_agent_ingress_tests.cpp)
+target_link_libraries(native_agent_ingress_tests PRIVATE ${SHACKCQ_TEST_LIBS})
+shackcq_target_warnings(native_agent_ingress_tests)
+add_test(NAME native_agent_ingress_tests COMMAND native_agent_ingress_tests)
+
 qt_add_executable(agent_digi_controller_tests unit/agent_digi_controller_tests.cpp)
 target_link_libraries(agent_digi_controller_tests PRIVATE ${SHACKCQ_TEST_LIBS})
 shackcq_target_warnings(agent_digi_controller_tests)

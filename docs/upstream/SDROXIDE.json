@@ -1,11 +1,11 @@
 {
   "repository": "https://github.com/dividebysandwich/sdroxide",
-  "releaseVersion": "1.5.3",
-  "releaseTag": "v1.5.3",
-  "reviewedCommit": "a680935b10f33768a499435e8bd37f779fa640ae",
-  "reviewedTree": "4697195080495da4a727b14234b85af89c10ecda",
+  "releaseVersion": "1.6.6",
+  "releaseTag": "v1.6.6",
+  "reviewedCommit": "d96f39d00aeb36b6e5eb412917aa04eee96f0105",
+  "reviewedTree": "0d9c5fffc82d7bbfda21f7b5911985a67153b863",
   "license": "GPL-3.0",
   "licenseSha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
-  "reviewedAtUtc": "2026-08-27T00:00:00Z",
+  "reviewedAtUtc": "2026-09-12T00:00:00Z",
   "policy": "read-only-review-required"
 }
