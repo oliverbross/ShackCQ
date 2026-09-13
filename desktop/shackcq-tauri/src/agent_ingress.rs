@@ -194,10 +194,11 @@ fn plain_request(request: &[u8]) -> Option<Value> {
 fn plain_request(request: &[u8]) -> Option<Value> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, GENERIC_READ, GENERIC_WRITE, INVALID_HANDLE_VALUE,
+    };
     use windows_sys::Win32::Storage::FileSystem::{
-        CreateFileW, ReadFile, WriteFile, FILE_ATTRIBUTE_NORMAL, GENERIC_READ, GENERIC_WRITE,
-        OPEN_EXISTING,
+        CreateFileW, ReadFile, WriteFile, FILE_ATTRIBUTE_NORMAL, OPEN_EXISTING,
     };
     use windows_sys::Win32::System::Pipes::{PeekNamedPipe, WaitNamedPipeW};
 
