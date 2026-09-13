@@ -22,6 +22,66 @@ mod loopback;
 const AGENT_ID: &str = "shackcq-desktop-local";
 const DEVICE_ID: &str = "nexus-native-rx";
 const RECORDING_LOCAL_ONLY: bool = true;
+const PRODUCTION_ORIGIN: &str = "https://shackcq.com";
+const ISOLATED_REVIEW_ORIGIN: &str = "https://localhost:18443";
+
+#[derive(Clone)]
+struct ReviewProfile {
+    origin: String,
+    instance_id: String,
+    root: std::path::PathBuf,
+    admin_socket: String,
+    ingress_secret: String,
+    tls_certificate: std::path::PathBuf,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct ReviewContext {
+    enabled: bool,
+    label: &'static str,
+    origin: String,
+    instance_id: String,
+}
+
+fn load_review_profile(app: &tauri::AppHandle) -> Result<Option<ReviewProfile>, String> {
+    if !cfg!(feature = "isolated-review") {
+        return Ok(None);
+    }
+    let origin = option_env!("SHACKCQ_ISOLATED_REVIEW_ORIGIN")
+        .ok_or("isolated review origin was not pinned at build time")?;
+    if origin != ISOLATED_REVIEW_ORIGIN || origin == PRODUCTION_ORIGIN {
+        return Err("isolated review origin is not the approved local TLS fixture".into());
+    }
+    let tls_certificate = std::env::var("SHACKCQ_ISOLATED_REVIEW_TLS_CERT")
+        .map(std::path::PathBuf::from)
+        .map_err(|_| "SHACKCQ_ISOLATED_REVIEW_TLS_CERT is required")?;
+    if !tls_certificate.is_file() {
+        return Err("isolated review TLS certificate is unavailable".into());
+    }
+    let mut random = [0u8; 16];
+    getrandom::fill(&mut random).map_err(|_| "isolated review identity unavailable")?;
+    let instance_id = hex::encode(random);
+    let mut secret = [0u8; 32];
+    getrandom::fill(&mut secret).map_err(|_| "isolated review IPC secret unavailable")?;
+    let ingress_secret = hex::encode(secret);
+    let admin_socket = format!("shackcq-review-{instance_id}");
+    agent_ingress::configure_isolated_review(admin_socket.clone(), &ingress_secret)?;
+    let root = app
+        .path()
+        .app_data_dir()
+        .map_err(|_| "isolated review profile root unavailable")?
+        .join(&instance_id);
+    std::fs::create_dir_all(&root).map_err(|_| "isolated review profile root unavailable")?;
+    Ok(Some(ReviewProfile {
+        origin: origin.into(),
+        instance_id,
+        root,
+        admin_socket,
+        ingress_secret,
+        tls_certificate,
+    }))
+}
 
 fn package_acceptance_exit_ms() -> Option<u64> {
     std::env::var("SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS")
@@ -39,11 +99,15 @@ struct RuntimeSupervisor {
     sequence: AtomicU64,
 }
 impl RuntimeSupervisor {
-    fn spawn(app: &tauri::AppHandle, pid: &AtomicU32) -> Result<Self, String> {
+    fn spawn(
+        app: &tauri::AppHandle,
+        pid: &AtomicU32,
+        review: Option<&ReviewProfile>,
+    ) -> Result<Self, String> {
         let mut nonce = [0u8; 32];
         getrandom::fill(&mut nonce).map_err(|_| "runtime nonce unavailable")?;
         let nonce = hex::encode(nonce);
-        let queue_key = if package_acceptance_exit_ms().is_some() {
+        let queue_key = if package_acceptance_exit_ms().is_some() || review.is_some() {
             let mut key = [0u8; 32];
             getrandom::fill(&mut key).map_err(|_| "queue key unavailable")?;
             hex::encode(key)
@@ -72,11 +136,14 @@ impl RuntimeSupervisor {
             } else {
                 "shackcq-nexus-runtime"
             });
-        let queue_path = app
-            .path()
-            .app_data_dir()
-            .map_err(|_| "application data directory unavailable")?
-            .join("nexus-reviewed-contacts.bin");
+        let queue_path = match review {
+            Some(profile) => profile.root.join("nexus-reviewed-contacts.bin"),
+            None => app
+                .path()
+                .app_data_dir()
+                .map_err(|_| "application data directory unavailable")?
+                .join("nexus-reviewed-contacts.bin"),
+        };
         let mut child = Command::new(executable)
             .env_clear()
             .env("SHACKCQ_RUNTIME_NONCE", &nonce)
@@ -209,6 +276,7 @@ struct Backend {
     emergency: Arc<EmergencyStop>,
     browser_local_available: Arc<AtomicBool>,
     agent_state: Mutex<String>,
+    review: Option<ReviewContext>,
 }
 struct AppState {
     backend: Arc<Backend>,
@@ -221,27 +289,35 @@ struct AgentSupervisor {
     owner_token: String,
 }
 impl AgentSupervisor {
-    fn ensure(_app: &tauri::AppHandle) -> Result<(Self, String), String> {
-        match agent_ingress::probe() {
-            agent_ingress::AgentProbe::NativeIngress => {
-                return Ok((
-                    Self {
-                        child: None,
-                        owner_token: String::new(),
-                    },
-                    "EXTERNAL_NATIVE_INGRESS".into(),
-                ))
+    fn ensure(
+        _app: &tauri::AppHandle,
+        review: Option<&ReviewProfile>,
+    ) -> Result<(Self, String), String> {
+        if review.is_some() && agent_ingress::probe() != agent_ingress::AgentProbe::Missing {
+            return Err("ISOLATED_REVIEW_AGENT_IDENTITY_IN_USE".into());
+        }
+        if review.is_none() {
+            match agent_ingress::probe() {
+                agent_ingress::AgentProbe::NativeIngress => {
+                    return Ok((
+                        Self {
+                            child: None,
+                            owner_token: String::new(),
+                        },
+                        "EXTERNAL_NATIVE_INGRESS".into(),
+                    ))
+                }
+                agent_ingress::AgentProbe::Legacy => {
+                    return Ok((
+                        Self {
+                            child: None,
+                            owner_token: String::new(),
+                        },
+                        "LEGACY_AGENT_HANDOVER_REQUIRED".into(),
+                    ))
+                }
+                agent_ingress::AgentProbe::Missing => {}
             }
-            agent_ingress::AgentProbe::Legacy => {
-                return Ok((
-                    Self {
-                        child: None,
-                        owner_token: String::new(),
-                    },
-                    "LEGACY_AGENT_HANDOVER_REQUIRED".into(),
-                ))
-            }
-            agent_ingress::AgentProbe::Missing => {}
         }
         let current = std::env::current_exe().map_err(|_| "desktop executable unavailable")?;
         let executable = current
@@ -262,11 +338,24 @@ impl AgentSupervisor {
             .arg(&owner_token)
             .arg("--admin-socket")
             .arg(agent_ingress::admin_socket_name());
-        if let Ok(root) = std::env::var("SHACKCQ_AGENT_EPHEMERAL_ROOT") {
-            if !root.is_empty() && root.len() <= 1024 {
-                command.arg("--ephemeral-root").arg(root);
-                if std::env::var("SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS").as_deref() == Ok("1") {
-                    command.arg("--ephemeral-credentials");
+        if let Some(profile) = review {
+            command
+                .arg("--ephemeral-root")
+                .arg(&profile.root)
+                .arg("--ephemeral-credentials")
+                .arg("--cloud-origin")
+                .arg(&profile.origin)
+                .arg("--review-tls-cert")
+                .arg(&profile.tls_certificate)
+                .env("SHACKCQ_NATIVE_INGRESS_SECRET_HEX", &profile.ingress_secret);
+        }
+        if review.is_none() {
+            if let Ok(root) = std::env::var("SHACKCQ_AGENT_EPHEMERAL_ROOT") {
+                if !root.is_empty() && root.len() <= 1024 {
+                    command.arg("--ephemeral-root").arg(root);
+                    if std::env::var("SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS").as_deref() == Ok("1") {
+                        command.arg("--ephemeral-credentials");
+                    }
                 }
             }
         }
@@ -576,6 +665,62 @@ fn digi_read_agent_setup(state: State<'_, AppState>) -> Value {
         })
         .unwrap_or("UNAVAILABLE"));
     status
+}
+
+#[tauri::command]
+fn digi_read_review_context(state: State<'_, AppState>) -> Value {
+    state
+        .backend
+        .review
+        .as_ref()
+        .map(|context| serde_json::to_value(context).unwrap_or(Value::Null))
+        .unwrap_or_else(|| {
+            json!({
+                "enabled": false,
+                "label": "NORMAL DISTRIBUTION",
+                "origin": PRODUCTION_ORIGIN,
+                "instanceId": Value::Null
+            })
+        })
+}
+
+#[tauri::command]
+fn digi_prepare_review_contact(state: State<'_, AppState>) -> Value {
+    let Some(review) = state.backend.review.as_ref() else {
+        return json!({"enabled":false,"code":"REVIEW_FIXTURE_UNAVAILABLE"});
+    };
+    if review.origin != ISOLATED_REVIEW_ORIGIN {
+        return json!({"enabled":false,"code":"REVIEW_ORIGIN_REJECTED"});
+    }
+    let operation_identity = format!("review-contact-{}", review.instance_id);
+    let binding = agent_ingress::binding(&operation_identity);
+    let station_profile_id = binding
+        .get("stationProfileId")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if !binding.get("ok").and_then(Value::as_bool).unwrap_or(false) || !valid_id(station_profile_id)
+    {
+        return json!({"enabled":true,"code":"REVIEW_ACCOUNT_BINDING_REQUIRED"});
+    }
+    json!({
+        "enabled": true,
+        "code": "SYNTHETIC_REVIEW_CONTACT_READY",
+        "intent": {
+            "stationProfileId": station_profile_id,
+            "radioDeviceId": DEVICE_ID,
+            "operationIdentity": operation_identity,
+            "completed": true,
+            "userAuthorized": true,
+            "qso": {
+                "callsign": "K1ABC",
+                "mode": "FT8",
+                "submode": Value::Null,
+                "frequencyHz": 14_074_000,
+                "contactStartUtc": "2026-09-13T06:00:00.000Z",
+                "comment": "SYNTHETIC REVIEW CONTACT — DISPOSABLE ENVIRONMENT"
+            }
+        }
+    })
 }
 
 #[tauri::command]
@@ -903,6 +1048,8 @@ fn native_agent_payload(contact: &ReviewedContact) -> Value {
         "authorityRevision": contact.authority_revision,
         "mappingRevision": contact.mapping_revision,
         "stationProfileId": contact.station_profile_id,
+        "provenance": contact.provenance,
+        "fixture": contact.fixture,
         "contact": contact.contact
     })
 }
@@ -968,6 +1115,11 @@ fn completed_backend(backend: &Backend, intent: CompletedContactIntent) -> Value
         return json!({"state":"REJECTED","providerState":"NOT_SENT","code":"LOGGER_DESTINATION_CHANGED"});
     }
     let captured_utc = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
+    let fixture = backend
+        .review
+        .as_ref()
+        .map(|review| intent.operation_identity == format!("review-contact-{}", review.instance_id))
+        .unwrap_or(false);
     let reviewed = ReviewedContact {
         event_id: intent.operation_identity.clone(),
         operation_identity: intent.operation_identity.clone(),
@@ -985,8 +1137,13 @@ fn completed_backend(backend: &Backend, intent: CompletedContactIntent) -> Value
             .map(|v| v as u32)
             .filter(|v| *v > 0),
         captured_utc: captured_utc.clone(),
-        provenance: "NEXUS_NATIVE".into(),
-        fixture: false,
+        provenance: if fixture {
+            "NEXUS_NATIVE_REVIEW_FIXTURE"
+        } else {
+            "NEXUS_NATIVE"
+        }
+        .into(),
+        fixture,
         contact: intent.qso.clone(),
     };
     if !bounded_json(&native_agent_payload(&reviewed), agent_ingress::MAX_PAYLOAD) {
@@ -1044,6 +1201,9 @@ fn digi_set_browser_local_enabled(
     state: State<'_, AppState>,
     enabled: bool,
 ) -> Result<Value, String> {
+    if state.backend.review.is_some() {
+        return Err("BROWSER_LOCAL_DISABLED_IN_ISOLATED_REVIEW".into());
+    }
     if enabled {
         let pairing_code = state.loopback.enable(Some(state.backend.clone()))?;
         state
@@ -1066,17 +1226,27 @@ fn digi_set_browser_local_enabled(
 fn main() {
     let app = tauri::Builder::default()
         .setup(|app| {
+            let review_profile = load_review_profile(app.handle())?;
             let emergency = Arc::new(EmergencyStop {
                 pid: AtomicU32::new(0),
             });
-            let runtime = RuntimeSupervisor::spawn(app.handle(), &emergency.pid)?;
+            let runtime =
+                RuntimeSupervisor::spawn(app.handle(), &emergency.pid, review_profile.as_ref())?;
             let browser_local_available = Arc::new(AtomicBool::new(false));
-            let (agent, agent_state) = AgentSupervisor::ensure(app.handle())?;
+            let (agent, agent_state) =
+                AgentSupervisor::ensure(app.handle(), review_profile.as_ref())?;
+            let review = review_profile.as_ref().map(|profile| ReviewContext {
+                enabled: true,
+                label: "SYNTHETIC REVIEW CONTACT — DISPOSABLE ENVIRONMENT",
+                origin: profile.origin.clone(),
+                instance_id: profile.instance_id.clone(),
+            });
             let backend = Arc::new(Backend {
                 runtime: Arc::new(Mutex::new(runtime)),
                 emergency,
                 browser_local_available: browser_local_available.clone(),
                 agent_state: Mutex::new(agent_state),
+                review,
             });
             retry_pending_contacts(backend.as_ref());
             let state = AppState {
@@ -1104,6 +1274,8 @@ fn main() {
             digi_close_session,
             digi_set_browser_local_enabled,
             digi_read_agent_setup,
+            digi_read_review_context,
+            digi_prepare_review_contact,
             digi_pair_agent,
             digi_unpair_agent,
             digi_decode_recording
@@ -1134,6 +1306,11 @@ mod tests {
         agent.shutdown();
         agent.shutdown();
         assert!(!agent.owns_child());
+    }
+    #[test]
+    fn isolated_review_origin_never_falls_back_to_production() {
+        assert_eq!(ISOLATED_REVIEW_ORIGIN, "https://localhost:18443");
+        assert_ne!(ISOLATED_REVIEW_ORIGIN, PRODUCTION_ORIGIN);
     }
     #[test]
     fn caller_command_id_and_generation_are_preserved() {

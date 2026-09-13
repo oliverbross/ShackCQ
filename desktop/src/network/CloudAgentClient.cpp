@@ -8,6 +8,7 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QEventLoop>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QNetworkAccessManager>
@@ -136,6 +137,24 @@ QVariantMap CloudAgentClient::configuration() const {
   return {{"enabled", m_enabled}};
 }
 
+bool CloudAgentClient::setReviewTlsCertificate(const QString &path,
+                                                QString *error) {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    if (error)
+      *error = "Isolated review TLS certificate is unavailable";
+    return false;
+  }
+  const auto certificates = QSslCertificate::fromData(file.readAll(), QSsl::Pem);
+  if (certificates.size() != 1 || certificates.front().isNull()) {
+    if (error)
+      *error = "Isolated review TLS certificate is invalid";
+    return false;
+  }
+  m_reviewCertificates = certificates;
+  return true;
+}
+
 bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
                             const QString &name, QString *error) {
   if (origin.scheme() != "https" || origin.host().isEmpty() ||
@@ -156,6 +175,12 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
   QUrl endpoint(origin);
   endpoint.setPath("/api/v1/agent/pair");
   QNetworkRequest request(endpoint);
+  if (!m_reviewCertificates.isEmpty()) {
+    QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
+    ssl.setProtocol(QSsl::TlsV1_3OrLater);
+    ssl.addCaCertificates(m_reviewCertificates);
+    request.setSslConfiguration(ssl);
+  }
   request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
   request.setTransferTimeout(15'000);
   const QJsonObject body{{"code", code},
@@ -331,6 +356,7 @@ void CloudAgentClient::connectNow() {
                        QByteArray("Bearer ") + m_credential.toUtf8());
   QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
   ssl.setProtocol(QSsl::TlsV1_3OrLater);
+  ssl.addCaCertificates(m_reviewCertificates);
   request.setSslConfiguration(ssl);
   setState("Connecting", "Opening outbound TLS WebSocket");
   m_socket.open(request);

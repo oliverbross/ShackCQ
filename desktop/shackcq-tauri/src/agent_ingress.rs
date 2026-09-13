@@ -5,6 +5,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::Sha256;
 use std::io::{BufRead, BufReader, Read, Write};
+use std::sync::OnceLock;
 use std::time::Duration;
 #[cfg(windows)]
 use std::time::Instant;
@@ -16,8 +17,32 @@ const PREFIX: &[u8] = b"shackcq-native-ingress-v1\0";
 const MAX_REQUEST: usize = 16 * 1024;
 const MAX_RESPONSE: usize = 16 * 1024;
 pub(crate) const MAX_PAYLOAD: usize = 10 * 1024;
+static REVIEW_SOCKET: OnceLock<String> = OnceLock::new();
+static REVIEW_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
+
+pub(crate) fn configure_isolated_review(socket: String, secret_hex: &str) -> Result<(), String> {
+    let secret = hex::decode(secret_hex).map_err(|_| "isolated review secret invalid")?;
+    if socket.is_empty()
+        || socket.len() > 96
+        || !socket
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+        || secret.len() != 32
+    {
+        return Err("isolated review IPC identity invalid".into());
+    }
+    REVIEW_SOCKET
+        .set(socket)
+        .map_err(|_| "isolated review IPC identity already set")?;
+    REVIEW_SECRET
+        .set(secret)
+        .map_err(|_| "isolated review IPC secret already set")
+}
 
 pub(crate) fn admin_socket_name() -> String {
+    if let Some(value) = REVIEW_SOCKET.get() {
+        return value.clone();
+    }
     std::env::var("SHACKCQ_AGENT_ADMIN_SOCKET")
         .ok()
         .filter(|value| {
@@ -91,12 +116,13 @@ fn request<T: Serialize>(action: &str, request_id: &str, payload: &T) -> Value {
         Ok(v) if v.len() <= MAX_PAYLOAD => v,
         _ => return json!({"ok":false,"code":"AGENT_NATIVE_INGRESS_INVALID"}),
     };
-    let secret = match keyring::Entry::new(SERVICE, ALIAS)
-        .ok()
-        .and_then(|entry| entry.get_password().ok())
-        .and_then(|value| hex::decode(value).ok())
-        .filter(|value| value.len() == 32)
-    {
+    let secret = match REVIEW_SECRET.get().cloned().or_else(|| {
+        keyring::Entry::new(SERVICE, ALIAS)
+            .ok()
+            .and_then(|entry| entry.get_password().ok())
+            .and_then(|value| hex::decode(value).ok())
+            .filter(|value| value.len() == 32)
+    }) {
         Some(value) => value,
         None => return json!({"ok":false,"code":"AGENT_NATIVE_INGRESS_UNAVAILABLE"}),
     };

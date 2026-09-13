@@ -88,6 +88,7 @@ int main(int argc, char **argv) {
   parser.addOption(QCommandLineOption(QStringLiteral("admin-socket"), "Explicit isolated local administration socket", "name", DefaultAdminSocket));
   parser.addOption(QCommandLineOption(QStringLiteral("ephemeral-root"), "Isolated data root; valid only with --native-ingress-only", "path"));
   parser.addOption(QCommandLineOption(QStringLiteral("ephemeral-credentials"), "Use an in-memory credential vault; valid only with --native-ingress-only and --ephemeral-root"));
+  parser.addOption(QCommandLineOption(QStringLiteral("review-tls-cert"), "Pinned local TLS certificate; valid only with ephemeral native ingress", "path"));
   parser.addOption(QCommandLineOption(QStringLiteral("package-runtime-probe"), "Report packaged SQLite and TLS plugin availability without network or hardware access"));
   parser.addOption(QCommandLineOption({"s", "status"}, "Print bounded service status"));
   parser.addOption(QCommandLineOption({"p", "pairing-offer"}, "Create a short-lived pairing offer"));
@@ -174,6 +175,20 @@ int main(int argc, char **argv) {
   if (!configuration.load(&error)) { QTextStream(stderr) << error << '\n'; return 2; }
   SystemCredentialVault systemVault;
   FakeCredentialVault fakeVault;
+  if (ephemeralCredentials) {
+    const QString ingressSecret =
+        qEnvironmentVariable("SHACKCQ_NATIVE_INGRESS_SECRET_HEX");
+    if (!ingressSecret.isEmpty() &&
+        (!QRegularExpression(QStringLiteral("^[0-9a-f]{64}$"))
+              .match(ingressSecret)
+              .hasMatch() ||
+        !fakeVault.write(QStringLiteral("shackcq-native-ingress-v1"),
+                         QStringLiteral("Isolated review native ingress"),
+                         ingressSecret, &error))) {
+      QTextStream(stderr) << "Isolated review ingress secret is invalid\n";
+      return 2;
+    }
+  }
   DesktopCredentialVault *vault = ephemeralCredentials
       ? static_cast<DesktopCredentialVault *>(&fakeVault)
       : static_cast<DesktopCredentialVault *>(&systemVault);
@@ -185,6 +200,20 @@ int main(int argc, char **argv) {
   nativeIngress.initialize(&nativeIngressError);
   CloudAgentClient cloudAgent(vault, &radio, nativeIngressOnly ? nullptr : &digi,
                               &logger);
+  if (parser.isSet("review-tls-cert")) {
+    const QUrl reviewOrigin(parser.value("cloud-origin"));
+    if (!ephemeralCredentials ||
+        (reviewOrigin != QUrl(QStringLiteral("https://localhost:18443")) &&
+         reviewOrigin != QUrl(QStringLiteral("https://127.0.0.1:18443"))) ||
+        !cloudAgent.setReviewTlsCertificate(parser.value("review-tls-cert"),
+                                            &error)) {
+      QTextStream(stderr) << (error.isEmpty()
+                                  ? QStringLiteral("Invalid isolated review TLS configuration")
+                                  : error)
+                          << '\n';
+      return 2;
+    }
+  }
   DesktopRotatorController rotator;
   DesktopPanadapter panadapter;
   if (!nativeIngressOnly &&
@@ -368,7 +397,7 @@ int main(int argc, char **argv) {
           } else if (code.size() > 32 || name.isEmpty() || name.size() > 80) {
             ok = false;
             response = QVariantMap{{"code", "AGENT_SETUP_INVALID"}};
-          } else if (!cloudAgent.pair(QUrl(QStringLiteral("https://shackcq.com")),
+          } else if (!cloudAgent.pair(QUrl(parser.value("cloud-origin")),
                                       code, name, &error)) {
             ok = false;
             response = QVariantMap{{"code", "AGENT_PAIRING_FAILED"},

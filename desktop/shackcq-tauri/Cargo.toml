@@ -6,6 +6,10 @@ rust-version = "1.91"
 license = "GPL-3.0-only"
 publish = false
 
+[features]
+default = []
+isolated-review = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 

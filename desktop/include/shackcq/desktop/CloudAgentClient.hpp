@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QQueue>
+#include <QSslCertificate>
 #include <QTimer>
 #include <QUrl>
 #include <QWebSocket>
@@ -28,6 +29,7 @@ public:
   QVariantMap configuration() const;
   bool pair(const QUrl &origin, const QString &code, const QString &name,
             QString *error = nullptr);
+  bool setReviewTlsCertificate(const QString &path, QString *error = nullptr);
   bool unpair(QString *error = nullptr);
   void start();
   void stop();
@@ -60,6 +62,7 @@ private:
   QTimer m_reconnect;
   QTimer m_radioCommandRetry;
   QUrl m_connectUrl;
+  QList<QSslCertificate> m_reviewCertificates;
   QString m_agentId;
   QString m_credential;
   QString m_userId;

@@ -6,7 +6,14 @@ repo=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 output=${1:?usage: build_nexus_desktop_macos.sh OUTPUT_DIRECTORY}
 tauri_cli_version=${TAURI_CLI_VERSION:-2.11.4}
 sidecar_lock_tool="$repo/scripts/claim_package_sidecar_lock.py"
-app="$repo/desktop/shackcq-tauri/target/release/bundle/macos/ShackCQ Desktop.app"
+review_build=${SHACKCQ_ISOLATED_REVIEW_BUILD:-0}
+app_name="ShackCQ Desktop"
+dmg_name="ShackCQ-Desktop-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
+if [ "$review_build" = 1 ]; then
+  app_name="ShackCQ Desktop Isolated Review"
+  dmg_name="ShackCQ-Desktop-Isolated-Review-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
+fi
+app="$repo/desktop/shackcq-tauri/target/release/bundle/macos/$app_name.app"
 qt_prefix=${QT_PREFIX:?QT_PREFIX must name an official Qt 6.11.2 macOS installation}
 macdeployqt="$qt_prefix/bin/macdeployqt"
 qtwebengine_prefix=${QTWEBENGINE_PREFIX:-}
@@ -157,7 +164,7 @@ claim_generated_sidecars() {
 }
 
 test ! -e "$output/COMPONENT_MANIFEST.json"
-test ! -e "$output/ShackCQ-Desktop-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
+test ! -e "$output/$dmg_name"
 
 if [ -n "${SHACKCQ_TEST_MAC_SIDECAR_LOCK_READY:-}" ]; then
   claim_generated_sidecars
@@ -212,7 +219,12 @@ cmake -S "$repo/desktop" -B "$build_dir" -G Ninja \
 "$repo/desktop/shackcq-tauri/scripts/build-stationd-sidecar.sh"
 (
   cd "$repo/desktop/shackcq-tauri"
-  npx --yes "@tauri-apps/cli@$tauri_cli_version" build --ci --no-sign --bundles app -- --locked
+  if [ "$review_build" = 1 ]; then
+    npx --yes "@tauri-apps/cli@$tauri_cli_version" build --ci --no-sign \
+      --bundles app --features isolated-review --config tauri.review.conf.json -- --locked
+  else
+    npx --yes "@tauri-apps/cli@$tauri_cli_version" build --ci --no-sign --bundles app -- --locked
+  fi
 )
 
 stationd="$app/Contents/MacOS/shackcq-stationd"
@@ -310,16 +322,16 @@ rm -rf "$acceptance_root"
 acceptance_root=
 
 stage=$(mktemp -d "${TMPDIR:-/tmp}/shackcq-nexus-desktop.XXXXXX")
-ditto "$app" "$stage/ShackCQ Desktop.app"
+ditto "$app" "$stage/$app_name.app"
 ln -s /Applications "$stage/Applications"
-dmg="$output/ShackCQ-Desktop-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
-hdiutil create -quiet -volname "ShackCQ Desktop" -srcfolder "$stage" -ov -format UDZO "$dmg"
+dmg="$output/$dmg_name"
+hdiutil create -quiet -volname "$app_name" -srcfolder "$stage" -ov -format UDZO "$dmg"
 hdiutil verify "$dmg"
 
 attach_output=$(hdiutil attach -readonly -nobrowse "$dmg")
 mount_point=$(printf '%s\n' "$attach_output" | awk -F '\t' '$3 ~ /^\/Volumes\// {print $3; exit}')
 test -n "$mount_point"
-mounted_app="$mount_point/ShackCQ Desktop.app"
+mounted_app="$mount_point/$app_name.app"
 mounted_stationd="$mounted_app/Contents/MacOS/shackcq-stationd"
 mounted_nexus="$mounted_app/Contents/MacOS/shackcq-nexus-runtime"
 mounted_main="$mounted_app/Contents/MacOS/shackcq-desktop"
