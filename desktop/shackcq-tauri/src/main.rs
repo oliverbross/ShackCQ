@@ -7,6 +7,7 @@ use shackcq_nexus_runtime::{
     CommandEnvelope, CommandResult, DigiMode, ReviewedContact, RuntimeCommand, RuntimePresence,
     RuntimeState, RxProfile, CONTRACT_VERSION, MAX_RECORDING_BYTES,
 };
+use std::collections::VecDeque;
 use std::fs::OpenOptions;
 use std::io::{BufRead, BufReader, Write};
 #[cfg(unix)]
@@ -24,6 +25,9 @@ const DEVICE_ID: &str = "nexus-native-rx";
 const RECORDING_LOCAL_ONLY: bool = true;
 const PRODUCTION_ORIGIN: &str = "https://shackcq.com";
 const ISOLATED_REVIEW_ORIGIN: &str = "https://localhost:18443";
+const REVIEW_FIXTURE_ADIF_KEY: &str = "APP_SHACKCQ_REVIEW_FIXTURE";
+const REVIEW_FIXTURE_ADIF_VALUE: &str = "1";
+const MAX_FROZEN_REVIEWED_OPERATIONS: usize = 5_000;
 
 #[derive(Clone)]
 struct ReviewProfile {
@@ -277,6 +281,47 @@ struct Backend {
     browser_local_available: Arc<AtomicBool>,
     agent_state: Mutex<String>,
     review: Option<ReviewContext>,
+    reviewed_operations: Mutex<FrozenReviewedOperations>,
+}
+
+#[derive(Clone)]
+struct FrozenReviewedOperation {
+    radio_device_id: String,
+    contact: ReviewedContact,
+}
+
+#[derive(Default)]
+struct FrozenReviewedOperations {
+    rows: VecDeque<FrozenReviewedOperation>,
+}
+
+impl FrozenReviewedOperations {
+    fn freeze(
+        &mut self,
+        radio_device_id: &str,
+        candidate: ReviewedContact,
+    ) -> Result<ReviewedContact, &'static str> {
+        if let Some(existing) = self
+            .rows
+            .iter()
+            .find(|row| row.contact.operation_identity == candidate.operation_identity)
+        {
+            let mut comparable = candidate;
+            comparable.captured_utc = existing.contact.captured_utc.clone();
+            if existing.radio_device_id != radio_device_id || existing.contact != comparable {
+                return Err("NATIVE_CONTACT_OPERATION_CHANGED");
+            }
+            return Ok(existing.contact.clone());
+        }
+        if self.rows.len() == MAX_FROZEN_REVIEWED_OPERATIONS {
+            return Err("NATIVE_CONTACT_OPERATION_STORE_FULL");
+        }
+        self.rows.push_back(FrozenReviewedOperation {
+            radio_device_id: radio_device_id.to_owned(),
+            contact: candidate.clone(),
+        });
+        Ok(candidate)
+    }
 }
 struct AppState {
     backend: Arc<Backend>,
@@ -489,6 +534,147 @@ struct CompletedContactIntent {
     completed: bool,
     user_authorized: bool,
     qso: Value,
+}
+
+fn valid_review_callsign(value: &str) -> bool {
+    (3..=32).contains(&value.len())
+        && value.split('/').all(|part| {
+            !part.is_empty()
+                && part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
+        })
+}
+
+fn normalize_logger_contact(qso: &Value, fixture: bool) -> Result<Value, &'static str> {
+    let row = qso.as_object().ok_or("NATIVE_CONTACT_INVALID")?;
+    let mut keys = row.keys().map(String::as_str).collect::<Vec<_>>();
+    keys.sort_unstable();
+    if keys
+        != [
+            "callsign",
+            "comment",
+            "contactStartUtc",
+            "frequencyHz",
+            "mode",
+            "submode",
+        ]
+    {
+        return Err("NATIVE_CONTACT_INVALID");
+    }
+    let callsign = row["callsign"]
+        .as_str()
+        .filter(|value| valid_review_callsign(value))
+        .ok_or("NATIVE_CONTACT_INVALID")?;
+    let mode = row["mode"]
+        .as_str()
+        .filter(|value| {
+            matches!(
+                *value,
+                "FT8" | "FT4" | "FT2" | "FST4" | "Q65" | "MSK144" | "JT65"
+            )
+        })
+        .ok_or("NATIVE_CONTACT_INVALID")?;
+    let contact_start_utc = row["contactStartUtc"]
+        .as_str()
+        .filter(|value| {
+            chrono::DateTime::parse_from_rfc3339(value)
+                .map(|parsed| parsed.offset().local_minus_utc() == 0)
+                .unwrap_or(false)
+        })
+        .ok_or("NATIVE_CONTACT_INVALID")?;
+    let frequency_hz = row["frequencyHz"]
+        .as_u64()
+        .filter(|value| (1..=10_500_000_000).contains(value))
+        .ok_or("NATIVE_CONTACT_INVALID")?;
+    let comment = row["comment"]
+        .as_str()
+        .filter(|value| value.len() <= 512)
+        .ok_or("NATIVE_CONTACT_INVALID")?;
+    let submode = match &row["submode"] {
+        Value::Null => None,
+        Value::String(value) if value.len() <= 16 => Some(value.as_str()),
+        _ => return Err("NATIVE_CONTACT_INVALID"),
+    };
+    let mut contact = serde_json::Map::new();
+    contact.insert("callsign".into(), Value::String(callsign.into()));
+    contact.insert("mode".into(), Value::String(mode.into()));
+    if let Some(value) = submode {
+        contact.insert("submode".into(), Value::String(value.into()));
+    }
+    contact.insert("frequencyHz".into(), Value::Number(frequency_hz.into()));
+    contact.insert(
+        "contactStartUtc".into(),
+        Value::String(contact_start_utc.into()),
+    );
+    let mut adif = serde_json::Map::new();
+    if !comment.is_empty() {
+        adif.insert("COMMENT".into(), Value::String(comment.into()));
+    }
+    if fixture {
+        adif.insert(
+            REVIEW_FIXTURE_ADIF_KEY.into(),
+            Value::String(REVIEW_FIXTURE_ADIF_VALUE.into()),
+        );
+    }
+    if !adif.is_empty() {
+        contact.insert("adif".into(), Value::Object(adif));
+    }
+    Ok(Value::Object(contact))
+}
+
+fn reviewed_contact_from_intent(
+    intent: &CompletedContactIntent,
+    binding: &Value,
+    review: Option<&ReviewContext>,
+    captured_utc: String,
+) -> Result<ReviewedContact, &'static str> {
+    let fixture = review
+        .map(|context| {
+            context.enabled
+                && context.origin == ISOLATED_REVIEW_ORIGIN
+                && intent.operation_identity == format!("review-contact-{}", context.instance_id)
+        })
+        .unwrap_or(false);
+    if intent.operation_identity.starts_with("review-contact-") && !fixture {
+        return Err("REVIEW_FIXTURE_CONTEXT_REJECTED");
+    }
+    let destination_authority = binding["destinationAuthority"]
+        .as_str()
+        .ok_or("LOGGER_DESTINATION_CHANGED")?;
+    if fixture && destination_authority != "WEB_LOCAL" {
+        return Err("REVIEW_FIXTURE_DESTINATION_REJECTED");
+    }
+    Ok(ReviewedContact {
+        event_id: intent.operation_identity.clone(),
+        operation_identity: intent.operation_identity.clone(),
+        profile_id: binding["profileId"]
+            .as_str()
+            .ok_or("LOGGER_NATIVE_PROFILE_UNAVAILABLE")?
+            .to_owned(),
+        source_revision: binding["sourceRevision"]
+            .as_u64()
+            .filter(|value| *value > 0)
+            .ok_or("LOGGER_NATIVE_PROFILE_UNAVAILABLE")? as u32,
+        account_id: binding["accountId"]
+            .as_str()
+            .ok_or("LOGGER_ACCOUNT_SCOPE_REQUIRED")?
+            .to_owned(),
+        station_profile_id: intent.station_profile_id.clone(),
+        destination_authority: destination_authority.to_owned(),
+        authority_revision: binding["authorityRevision"]
+            .as_u64()
+            .filter(|value| *value > 0)
+            .ok_or("LOGGER_DESTINATION_CHANGED")? as u32,
+        mapping_revision: binding["mappingRevision"]
+            .as_u64()
+            .map(|value| value as u32)
+            .filter(|value| *value > 0),
+        captured_utc,
+        provenance: "NEXUS_NATIVE".into(),
+        fixture,
+        contact: normalize_logger_contact(&intent.qso, fixture)?,
+    })
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1097,6 +1283,7 @@ fn completed_backend(backend: &Backend, intent: CompletedContactIntent) -> Value
         && !intent.operation_identity.is_empty()
         && valid_id(&intent.station_profile_id)
         && valid_id(&intent.radio_device_id)
+        && intent.radio_device_id == DEVICE_ID
         && valid_id(&intent.operation_identity)
         && intent.qso.is_object()
         && bounded_json(&intent, agent_ingress::MAX_PAYLOAD);
@@ -1114,37 +1301,27 @@ fn completed_backend(backend: &Backend, intent: CompletedContactIntent) -> Value
     if binding.get("stationProfileId") != Some(&Value::String(intent.station_profile_id.clone())) {
         return json!({"state":"REJECTED","providerState":"NOT_SENT","code":"LOGGER_DESTINATION_CHANGED"});
     }
-    let captured_utc = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
-    let fixture = backend
-        .review
-        .as_ref()
-        .map(|review| intent.operation_identity == format!("review-contact-{}", review.instance_id))
-        .unwrap_or(false);
-    let reviewed = ReviewedContact {
-        event_id: intent.operation_identity.clone(),
-        operation_identity: intent.operation_identity.clone(),
-        profile_id: binding["profileId"].as_str().unwrap_or_default().to_owned(),
-        source_revision: binding["sourceRevision"].as_u64().unwrap_or(0) as u32,
-        account_id: binding["accountId"].as_str().unwrap_or_default().to_owned(),
-        station_profile_id: intent.station_profile_id.clone(),
-        destination_authority: binding["destinationAuthority"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned(),
-        authority_revision: binding["authorityRevision"].as_u64().unwrap_or(0) as u32,
-        mapping_revision: binding["mappingRevision"]
-            .as_u64()
-            .map(|v| v as u32)
-            .filter(|v| *v > 0),
-        captured_utc: captured_utc.clone(),
-        provenance: if fixture {
-            "NEXUS_NATIVE_REVIEW_FIXTURE"
-        } else {
-            "NEXUS_NATIVE"
+    let candidate = match reviewed_contact_from_intent(
+        &intent,
+        &binding,
+        backend.review.as_ref(),
+        chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+    ) {
+        Ok(value) => value,
+        Err(code) => {
+            return json!({"state":"REJECTED","providerState":"NOT_SENT","code":code,"retryable":false})
         }
-        .into(),
-        fixture,
-        contact: intent.qso.clone(),
+    };
+    let reviewed = match backend.reviewed_operations.lock() {
+        Ok(mut operations) => match operations.freeze(&intent.radio_device_id, candidate) {
+            Ok(value) => value,
+            Err(code) => {
+                return json!({"state":"REJECTED","providerState":"NOT_SENT","code":code,"retryable":false})
+            }
+        },
+        Err(_) => {
+            return json!({"state":"REJECTED","providerState":"NOT_SENT","code":"NATIVE_CONTACT_OPERATION_STORE_UNAVAILABLE","retryable":false})
+        }
     };
     if !bounded_json(&native_agent_payload(&reviewed), agent_ingress::MAX_PAYLOAD) {
         return json!({"state":"REJECTED","providerState":"NOT_SENT","code":"AGENT_NATIVE_INGRESS_INVALID"});
@@ -1247,6 +1424,7 @@ fn main() {
                 browser_local_available: browser_local_available.clone(),
                 agent_state: Mutex::new(agent_state),
                 review,
+                reviewed_operations: Mutex::new(FrozenReviewedOperations::default()),
             });
             retry_pending_contacts(backend.as_ref());
             let state = AppState {
@@ -1297,6 +1475,46 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use shackcq_nexus_runtime::{ContactQueue, QueueKey};
+
+    fn reviewed_intent(operation_identity: &str) -> CompletedContactIntent {
+        CompletedContactIntent {
+            station_profile_id: "22222222-2222-4222-8222-222222222222".into(),
+            radio_device_id: DEVICE_ID.into(),
+            operation_identity: operation_identity.into(),
+            completed: true,
+            user_authorized: true,
+            qso: json!({
+                "callsign":"K1ABC",
+                "mode":"FT8",
+                "submode":Value::Null,
+                "frequencyHz":14_074_000,
+                "contactStartUtc":"2026-09-13T06:00:00.000Z",
+                "comment":"SYNTHETIC REVIEW CONTACT — DISPOSABLE ENVIRONMENT"
+            }),
+        }
+    }
+
+    fn reviewed_binding(authority: &str) -> Value {
+        json!({
+            "profileId":"11111111-1111-4111-8111-111111111111",
+            "sourceRevision":1,
+            "accountId":"account-one",
+            "stationProfileId":"22222222-2222-4222-8222-222222222222",
+            "destinationAuthority":authority,
+            "authorityRevision":1,
+            "mappingRevision":Value::Null
+        })
+    }
+
+    fn review_context() -> ReviewContext {
+        ReviewContext {
+            enabled: true,
+            label: "SYNTHETIC REVIEW CONTACT — DISPOSABLE ENVIRONMENT",
+            origin: ISOLATED_REVIEW_ORIGIN.into(),
+            instance_id: "fixture-instance".into(),
+        }
+    }
     #[test]
     fn agent_shutdown_is_idempotent_without_an_owned_child() {
         let mut agent = AgentSupervisor {
@@ -1389,5 +1607,133 @@ mod tests {
         assert!(write_private_recording(&path, b"replacement").is_err());
         assert_eq!(std::fs::read(&path).unwrap(), b"existing");
         std::fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn actual_review_contact_normalizes_and_survives_encrypted_queue_restart() {
+        let contact = reviewed_contact_from_intent(
+            &reviewed_intent("review-contact-fixture-instance"),
+            &reviewed_binding("WEB_LOCAL"),
+            Some(&review_context()),
+            "2026-09-14T00:00:00.000Z".into(),
+        )
+        .unwrap();
+        assert_eq!(contact.provenance, "NEXUS_NATIVE");
+        assert!(contact.fixture);
+        assert_eq!(contact.contact["submode"], Value::Null);
+        assert_eq!(
+            contact.contact["adif"]["COMMENT"],
+            "SYNTHETIC REVIEW CONTACT — DISPOSABLE ENVIRONMENT"
+        );
+        assert_eq!(
+            contact.contact["adif"][REVIEW_FIXTURE_ADIF_KEY],
+            REVIEW_FIXTURE_ADIF_VALUE
+        );
+        let checked: Value = serde_json::from_str(include_str!(
+            "../../tests/fixtures/reviewed-contact-contract-v1.json"
+        ))
+        .unwrap();
+        assert_eq!(
+            native_agent_payload(&contact),
+            checked["normalizedAgentPayload"]
+        );
+
+        let path = std::env::temp_dir().join(format!(
+            "shackcq-reviewed-contact-{}.bin",
+            hex::encode(Sha256::digest(contact.operation_identity.as_bytes()))
+        ));
+        let _ = std::fs::remove_file(&path);
+        let key = QueueKey::from_bytes([7; 32]);
+        let event_id = {
+            let mut queue = ContactQueue::open(&path, key.clone()).unwrap();
+            queue.enqueue(contact.clone()).unwrap()
+        };
+        let restarted = ContactQueue::open(&path, key).unwrap();
+        assert_eq!(restarted.len(), 1);
+        assert_eq!(restarted.pending()[0].event_id, event_id);
+        assert!(restarted.pending()[0].fixture);
+        assert_eq!(
+            restarted.pending()[0].contact["adif"][REVIEW_FIXTURE_ADIF_KEY],
+            REVIEW_FIXTURE_ADIF_VALUE
+        );
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn ordinary_contacts_remain_native_and_review_fixture_requires_local_context() {
+        let ordinary = reviewed_contact_from_intent(
+            &reviewed_intent("ordinary-contact-1"),
+            &reviewed_binding("WEB_LOCAL"),
+            None,
+            "2026-09-14T00:00:00.000Z".into(),
+        )
+        .unwrap();
+        assert_eq!(ordinary.provenance, "NEXUS_NATIVE");
+        assert!(!ordinary.fixture);
+        assert_eq!(
+            ordinary.contact["adif"]["COMMENT"],
+            reviewed_intent("x").qso["comment"]
+        );
+        assert_eq!(
+            ordinary.contact["adif"][REVIEW_FIXTURE_ADIF_KEY],
+            Value::Null
+        );
+
+        assert_eq!(
+            reviewed_contact_from_intent(
+                &reviewed_intent("review-contact-fixture-instance"),
+                &reviewed_binding("WAVELOG"),
+                Some(&review_context()),
+                "2026-09-14T00:00:00.000Z".into(),
+            )
+            .unwrap_err(),
+            "REVIEW_FIXTURE_DESTINATION_REJECTED"
+        );
+        assert_eq!(
+            reviewed_contact_from_intent(
+                &reviewed_intent("review-contact-untrusted"),
+                &reviewed_binding("WEB_LOCAL"),
+                None,
+                "2026-09-14T00:00:00.000Z".into(),
+            )
+            .unwrap_err(),
+            "REVIEW_FIXTURE_CONTEXT_REJECTED"
+        );
+    }
+
+    #[test]
+    fn reviewed_operation_freezes_capture_and_rejects_changed_body() {
+        let first = reviewed_contact_from_intent(
+            &reviewed_intent("ordinary-contact-1"),
+            &reviewed_binding("WEB_LOCAL"),
+            None,
+            "2026-09-14T00:00:00.000Z".into(),
+        )
+        .unwrap();
+        let later = reviewed_contact_from_intent(
+            &reviewed_intent("ordinary-contact-1"),
+            &reviewed_binding("WEB_LOCAL"),
+            None,
+            "2026-09-14T00:10:00.000Z".into(),
+        )
+        .unwrap();
+        let mut frozen = FrozenReviewedOperations::default();
+        let accepted = frozen.freeze(DEVICE_ID, first).unwrap();
+        let replayed = frozen.freeze(DEVICE_ID, later).unwrap();
+        assert_eq!(accepted, replayed);
+
+        let mut changed_intent = reviewed_intent("ordinary-contact-1");
+        changed_intent.qso["callsign"] = Value::String("K2XYZ".into());
+        let changed = reviewed_contact_from_intent(
+            &changed_intent,
+            &reviewed_binding("WEB_LOCAL"),
+            None,
+            "2026-09-14T00:20:00.000Z".into(),
+        )
+        .unwrap();
+        assert_eq!(
+            frozen.freeze(DEVICE_ID, changed).unwrap_err(),
+            "NATIVE_CONTACT_OPERATION_CHANGED"
+        );
     }
 }

@@ -45,10 +45,19 @@ QJsonObject nativeIntent(const QString &operation = QStringLiteral("nexus-qso-1"
           {"destinationAuthority", "WEB_LOCAL"},
           {"authorityRevision", 1},
           {"stationProfileId", "22222222-2222-4222-8222-222222222222"},
-          {"contact", QJsonObject{{"callsign", "VK8ABC"},
+           {"contact", QJsonObject{{"callsign", "VK8ABC"},
                                    {"contactStartUtc", "2026-09-12T02:02:00.000Z"},
                                    {"frequencyHz", 14074000},
-                                   {"mode", "FT8"}}}};
+                                    {"mode", "FT8"}}}};
+}
+QJsonObject checkedReviewAgentPayload() {
+  QFile file(QStringLiteral(SHACKCQ_REVIEWED_CONTACT_FIXTURE));
+  if (!file.open(QIODevice::ReadOnly))
+    return {};
+  return QJsonDocument::fromJson(file.readAll())
+      .object()
+      .value("normalizedAgentPayload")
+      .toObject();
 }
 void u8(QByteArray &out, quint8 value) { out.append(char(value)); }
 void u32(QByteArray &out, quint32 value) {
@@ -267,6 +276,27 @@ private slots:
     QCOMPARE(restarted.pendingEvents().size(), 1);
     QCOMPARE(restarted.pendingEvents()[0].toObject().value("eventId").toString(),
              eventId);
+  }
+
+  void actualReviewedContactFixturePassesNativeIngestionUnchanged() {
+    QTemporaryDir dir;
+    FakeCredentialVault vault;
+    LoggerIngestion logger(&vault, dir.filePath("journal.json"));
+    logger.setAccountScope("account-one");
+    QVERIFY(logger.applyProfile(nativeProfile()).value("ok").toBool());
+    const QJsonObject payload = checkedReviewAgentPayload();
+    QVERIFY(!payload.isEmpty());
+    QCOMPARE(payload.value("provenance"), QJsonValue("NEXUS_NATIVE"));
+    QCOMPARE(payload.value("fixture"), QJsonValue(true));
+    QVERIFY(!payload.value("contact").toObject().contains("submode"));
+    const QJsonObject first = logger.submitNativeContact(payload);
+    QCOMPARE(first.value("code"), QJsonValue("LOGGER_NATIVE_QUEUED"));
+    const QJsonArray events = logger.pendingEvents();
+    QCOMPARE(events.size(), 1);
+    QCOMPARE(events[0].toObject().value("contact"), payload.value("contact"));
+    QCOMPARE(events[0].toObject().value("source"), QJsonValue("NEXUS_NATIVE"));
+    QCOMPARE(logger.submitNativeContact(payload).value("code"),
+             QJsonValue("LOGGER_NATIVE_DUPLICATE"));
   }
 
   void nativeAuthorityChangeAndOperationReuseFailClosed() {

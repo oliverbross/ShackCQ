@@ -36,6 +36,8 @@ add_test(NAME cloud_agent_client_tests COMMAND cloud_agent_client_tests)
 
 qt_add_executable(logger_ingestion_tests unit/logger_ingestion_tests.cpp)
 target_link_libraries(logger_ingestion_tests PRIVATE ${SHACKCQ_TEST_LIBS})
+target_compile_definitions(logger_ingestion_tests PRIVATE
+    SHACKCQ_REVIEWED_CONTACT_FIXTURE="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/reviewed-contact-contract-v1.json")
 shackcq_target_warnings(logger_ingestion_tests)
 add_test(NAME logger_ingestion_tests COMMAND logger_ingestion_tests)
 
