@@ -314,16 +314,16 @@ class QsoDatabaseInstrumentedTest {
         assertTrue(database.deliveries().isEmpty())
     }
 
-    @Test fun schemaSixteenReopenPreservesCanonicalQsoAndRepairsProjection() {
+    @Test fun schemaSeventeenReopenPreservesCanonicalQsoAndRepairsProjection() {
         val qso = Qso(
-            id = "schema-16-reopen", callsign = "OM0RX", frequencyHz = 14_060_000, mode = "CW",
+            id = "schema-17-reopen", callsign = "OM0RX", frequencyHz = 14_060_000, mode = "CW",
             rstSent = "599", rstReceived = "579", createdAt = 1_700_000_250,
             grid = "JN88TQ", stationCallsign = "OM0RX", stationProfileId = "7",
         )
         assertTrue(database.save(qso))
         database.writableDatabase.execSQL(
             "INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)",
-            arrayOf("schema-16-fixture", "preserved"),
+            arrayOf("schema-17-fixture", "preserved"),
         )
         database.writableDatabase.delete("qso_projection", "qso_id=?", arrayOf(qso.id))
         assertEquals(1, database.verifyProjection().canonicalRows)
@@ -334,12 +334,12 @@ class QsoDatabaseInstrumentedTest {
 
         database.readableDatabase.rawQuery("PRAGMA user_version", null).use { cursor ->
             assertTrue(cursor.moveToFirst())
-            assertEquals(16, cursor.getInt(0))
+            assertEquals(17, cursor.getInt(0))
         }
         assertEquals("OM0RX", database.qso(qso.id)?.stationCallsign)
         database.readableDatabase.rawQuery(
             "SELECT value FROM settings WHERE key=?",
-            arrayOf("schema-16-fixture"),
+            arrayOf("schema-17-fixture"),
         ).use { cursor ->
             assertTrue(cursor.moveToFirst())
             assertEquals("preserved", cursor.getString(0))

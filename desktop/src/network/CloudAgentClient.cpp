@@ -7,12 +7,15 @@
 
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDebug>
 #include <QEventLoop>
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QMetaEnum>
 #include <QRegularExpression>
 #include <QRandomGenerator>
 #include <QSslError>
@@ -35,6 +38,10 @@ bool boundedId(const QString &value) {
   static const QRegularExpression pattern(
       QStringLiteral("^[A-Za-z0-9._:-]{1,128}$"));
   return pattern.match(value).hasMatch();
+}
+QString enumName(const QMetaEnum &meta, int value) {
+  const char *key = meta.valueToKey(value);
+  return key ? QString::fromLatin1(key) : QString::number(value);
 }
 }
 
@@ -80,9 +87,29 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
                            "binary frames prohibited");
           });
   connect(&m_socket, &QWebSocket::sslErrors, this,
-          [this](const QList<QSslError> &) {
+          [this](const QList<QSslError> &errors) {
+            QStringList categories;
+            const auto meta = QMetaEnum::fromType<QSslError::SslError>();
+            for (qsizetype index = 0;
+                 index < std::min<qsizetype>(errors.size(), 8); ++index) {
+              categories.append(enumName(meta, errors.at(index).error()));
+            }
+            qWarning().noquote()
+                << "Cloud Agent WSS TLS verification failed; categories="
+                << categories.join(',');
             setState("Failed", "TLS verification failed");
-            m_socket.close();
+            m_socket.abort();
+          });
+  connect(&m_socket, &QWebSocket::errorOccurred, this,
+          [this](QAbstractSocket::SocketError error) {
+            const auto meta =
+                QMetaEnum::fromType<QAbstractSocket::SocketError>();
+            QString detail = m_socket.errorString().left(160);
+            detail.replace('\n', ' ');
+            detail.replace('\r', ' ');
+            qWarning().noquote()
+                << "Cloud Agent WSS transport failed; category="
+                << enumName(meta, error) << "; detail=" << detail;
           });
   connect(&m_socket, &QWebSocket::disconnected, this, [this] {
     m_heartbeat.stop();
@@ -136,6 +163,24 @@ QVariantMap CloudAgentClient::configuration() const {
   return {{"enabled", m_enabled}};
 }
 
+bool CloudAgentClient::setReviewTlsCertificate(const QString &path,
+                                                QString *error) {
+  QFile file(path);
+  if (!file.open(QIODevice::ReadOnly)) {
+    if (error)
+      *error = "Isolated review TLS certificate is unavailable";
+    return false;
+  }
+  const auto certificates = QSslCertificate::fromData(file.readAll(), QSsl::Pem);
+  if (certificates.size() != 1 || certificates.front().isNull()) {
+    if (error)
+      *error = "Isolated review TLS certificate is invalid";
+    return false;
+  }
+  m_reviewCertificates = certificates;
+  return true;
+}
+
 bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
                             const QString &name, QString *error) {
   if (origin.scheme() != "https" || origin.host().isEmpty() ||
@@ -156,6 +201,12 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
   QUrl endpoint(origin);
   endpoint.setPath("/api/v1/agent/pair");
   QNetworkRequest request(endpoint);
+  QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
+  ssl.setProtocol(QSsl::TlsV1_2OrLater);
+  if (!m_reviewCertificates.isEmpty()) {
+    ssl.addCaCertificates(m_reviewCertificates);
+  }
+  request.setSslConfiguration(ssl);
   request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
   request.setTransferTimeout(15'000);
   const QJsonObject body{{"code", code},
@@ -243,6 +294,8 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
   m_connectUrl = connectUrl;
   m_credential = credential;
   m_userId = userId;
+  if (m_logger)
+    m_logger->setAccountScope(m_userId);
   m_stationProfileId = stationProfileId;
   m_accountLabel = accountLabel;
   m_stationLabel = stationLabel;
@@ -258,6 +311,8 @@ bool CloudAgentClient::unpair(QString *error) {
   m_agentId.clear();
   m_credential.clear();
   m_userId.clear();
+  if (m_logger)
+    m_logger->setAccountScope({});
   m_stationProfileId.clear();
   m_accountLabel.clear();
   m_stationLabel.clear();
@@ -293,6 +348,8 @@ void CloudAgentClient::start() {
     m_accountLabel.clear();
     m_stationLabel.clear();
   }
+  if (m_logger)
+    m_logger->setAccountScope(m_userId);
   if (parse.error != QJsonParseError::NoError || !boundedId(m_agentId) ||
       m_connectUrl.scheme() != "wss" || m_connectUrl.host().isEmpty() ||
       m_credential.size() < 32 || m_credential.size() > 256) {
@@ -324,7 +381,11 @@ void CloudAgentClient::connectNow() {
   request.setRawHeader("Authorization",
                        QByteArray("Bearer ") + m_credential.toUtf8());
   QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
-  ssl.setProtocol(QSsl::TlsV1_3OrLater);
+  ssl.setProtocol(QSsl::TlsV1_2OrLater);
+  if (!m_reviewCertificates.isEmpty()) {
+    ssl.addCaCertificates(m_reviewCertificates);
+  }
+  m_socket.setSslConfiguration(ssl);
   request.setSslConfiguration(ssl);
   setState("Connecting", "Opening outbound TLS WebSocket");
   m_socket.open(request);
@@ -348,7 +409,7 @@ void CloudAgentClient::sendHello() {
               {"platform", QSysInfo::productType().left(40)},
               {"version", QCoreApplication::applicationVersion().left(40)},
               {"build", buildIdentity()},
-              {"loggerSources", QJsonArray{"WSJTX", "N1MM"}},
+              {"loggerSources", QJsonArray{"WSJTX", "N1MM", "NEXUS_NATIVE"}},
               {"devices", devices}});
 }
 

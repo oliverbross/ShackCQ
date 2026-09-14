@@ -29,11 +29,11 @@ REQUIRED_DOCS = [
     "TABLET_ACCEPTANCE_SWEEP_2_LIVE_CHECKLIST.md",
 ]
 SCHEMA_PATTERNS = {
-    "QSO schema 16": r"class QsoDatabase[^\n]+SQLiteOpenHelper\(context, databaseName, null, 16\)",
+    "QSO schema 17": r"class QsoDatabase[^\n]+SQLiteOpenHelper\(context, databaseName, null, 17\)",
     "Neural schema 5": r"SQLiteOpenHelper\(context, databaseName, null, 5\)",
     "Digi schema 2": r"SQLiteOpenHelper\(context, databaseName, null, 2\)",
     "Groups.io schema 2": r"SQLiteOpenHelper\(appContext, databaseName, null, 2\)",
-    "projection contract 5": r"QSO schema 16 · projection contract 5 · Neural 5 · Digi 2 · Groups\.io 2",
+    "projection contract 6": r"QSO schema 17 · projection contract 6 · Neural 5 · Digi 2 · Groups\.io 2",
     "Contest schema 2": r"class ContestSessionStore[^\n]+SQLiteOpenHelper\(context, name, null, 2\)",
     "Contest staging table": r"CREATE TABLE IF NOT EXISTS contest_qso_entry",
     "DX Chaser schema 1": r"class DxChaserStore[^\n]+SQLiteOpenHelper\(context, DATABASE_NAME, null, 1\)",

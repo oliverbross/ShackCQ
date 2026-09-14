@@ -1,5 +1,6 @@
 ShackCQ is GPL-3.0-only. See COPYING and NOTICE in the source distribution.
-Qt 6.11.2 modules are used under their applicable LGPL-3.0/GPL terms.
+Qt modules are used under their applicable LGPL-3.0/GPL terms. Each package's
+LEGAL_PROVENANCE.txt and PACKAGE_MANIFEST.json record its exact Qt runtime.
 Hamlib 4.7.2 is vendored with its original notices under core/third_party/hamlib.
 SGP4 provenance and licence are recorded under core/third_party/sgp4.
 SDRoxide was a review-only behavioral reference at commit

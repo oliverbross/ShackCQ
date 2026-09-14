@@ -13,8 +13,9 @@ include(FetchContent)
 option(SHACKCQ_BUILD_TESTS "Build focused desktop tests" ON)
 option(SHACKCQ_REQUIRE_HAMLIB "Fail configuration when the pinned Hamlib build is unavailable" OFF)
 option(SHACKCQ_BUILD_NATIVE_DIGI "Build and link the existing native Rust modem engine" ON)
+set(SHACKCQ_QT_VERSION "6.11.2" CACHE STRING "Exact supported Qt version for this platform build")
 
-find_package(Qt6 6.11.2 EXACT REQUIRED COMPONENTS
+find_package(Qt6 ${SHACKCQ_QT_VERSION} EXACT REQUIRED COMPONENTS
     Core Gui Quick QuickControls2 Qml Network Sql SerialPort Multimedia WebSockets
     Concurrent Svg Positioning Location Test QuickTest Widgets)
 find_package(OpenSSL 3 REQUIRED COMPONENTS Crypto SSL)
@@ -57,6 +58,7 @@ set(SHACKCQ_DESKTOP_SERVICE_SOURCES
     src/network/ClusterController.cpp
     src/network/CloudAgentClient.cpp
     src/network/LoggerIngestion.cpp
+    src/network/NativeAgentIngress.cpp
     src/network/AgentDigiController.cpp
     src/network/RemoteStationService.cpp
     src/network/RemoteStationClient.cpp

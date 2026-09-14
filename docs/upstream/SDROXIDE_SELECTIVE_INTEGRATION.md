@@ -42,3 +42,23 @@ Observed licence: repository `LICENSE` contains GPL version 3; workspace metadat
 ## Modification and dependency impact
 
 There is no direct or material source adaptation in Phase 0, so no upstream copyright header is transplanted. The planned production implementation is new GPL-3.0-only ShackCQ code and adds no third-party runtime dependency. SDRoxide is not vendored, submoduled, linked, packaged, or fetched at build time. Names identify an interoperability/reference source only and imply no endorsement.
+
+## v1.6.6 watcher review
+
+The read-only watcher was advanced on 2026-09-12 to release `v1.6.6`, commit
+`d96f39d00aeb36b6e5eb412917aa04eee96f0105`, tree
+`0d9c5fffc82d7bbfda21f7b5911985a67153b863`, after an immutable
+`v1.5.3..v1.6.6` comparison. The range contains 284 commits and 300 changed
+files. The seven changed TCI implementation/test paths preserve the existing
+semicolon command framing and status parser. They widen the WebSocket upgrade
+read budget for Windows, improve refusal/timeout diagnostics, add mode mappings,
+and add TX pacing probes; no passband/filter, RIT, or XIT setter was added.
+ShackCQ's independently implemented parser and stricter TX-readback ownership
+therefore remain compatible and unchanged.
+
+Large DSP, receiver, skimmer, relay, and UI additions in the same range are not
+linked, vendored, or copied by ShackCQ. They do not expand this selective
+integration. The repository `LICENSE` remains byte-identical GPL-3 with SHA-256
+`3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986`.
+No radio, network TCI session, TX, or installed-Agent mutation was used for this
+compatibility review.

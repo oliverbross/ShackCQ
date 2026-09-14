@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "package": "@shackcq/shared-digi-ui",
+  "packageVersion": "1.0.0",
+  "contract": {
+    "major": 1,
+    "minor": 0
+  },
+  "sourceRevision": "82b32a62f83d386731842070d4907076f217b09b",
+  "entrypoint": "index.html",
+  "tauriBinding": "fixed-invoke-v1",
+  "tauriCommands": [
+    "digi_list_targets",
+    "digi_read_presence",
+    "digi_submit_command",
+    "digi_configure_audio",
+    "digi_emergency_stop",
+    "digi_set_browser_local_enabled",
+    "digi_submit_completed_contact",
+    "digi_close_session",
+    "digi_read_agent_setup",
+    "digi_pair_agent",
+    "digi_unpair_agent",
+    "digi_decode_recording",
+    "digi_read_review_context",
+    "digi_prepare_review_contact"
+  ],
+  "assets": [
+    {
+      "path": "assets/index-CtiA_d1n.css",
+      "bytes": 83442,
+      "sha256": "35ee8f003a3da80e7659f1c751fc2a6515c92e67bbb8b3436b4b7dfd133463a9"
+    },
+    {
+      "path": "assets/index-kx8qjoIU.js",
+      "bytes": 240002,
+      "sha256": "cfec708bf401cadb784590712cf05873369537989fc8e08166c796bd983edb41"
+    },
+    {
+      "path": "index.html",
+      "bytes": 450,
+      "sha256": "2dc443137e9c9b5b8195a72326d7c364be3435d48e039c598586870cf1b2e065"
+    }
+  ]
+}

@@ -1,2 +1,6 @@
 # Hamlib is a byte-preserved vendor import. Never rewrite its line endings.
 core/third_party/hamlib/** -text
+
+# The desktop Web snapshot is an immutable byte-addressed artifact. Windows
+# checkouts must not translate LF bytes before its manifest digest is verified.
+desktop/shared-digi-ui-snapshot/** -text

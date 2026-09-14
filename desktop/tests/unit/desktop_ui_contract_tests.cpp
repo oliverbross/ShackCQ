@@ -193,6 +193,8 @@ void DesktopUiContractTests::macosAgentUsesUnambiguousRuntimeAndRadioStates() {
   QVERIFY(cloudSource.contains("m_pendingRadioCommands.clear()"));
   QVERIFY(cloudSource.contains("m_radioCommandRetry.start()"));
   QVERIFY(cloudSource.contains("completeRadioCommand(pending)"));
+  QVERIFY(cloudSource.contains(
+      "QJsonArray{\"WSJTX\", \"N1MM\", \"NEXUS_NATIVE\"}"));
 
   QFile helper(QStringLiteral(SHACKCQ_DESKTOP_APP_DIR
                               "/../app/hamlib_helper_main.cpp"));

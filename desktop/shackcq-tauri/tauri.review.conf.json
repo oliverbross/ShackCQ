@@ -1,0 +1,20 @@
+{
+  "productName": "ShackCQ Desktop Isolated Review",
+  "identifier": "online.shackcq.desktop.isolated-review",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ShackCQ Desktop — Isolated Review",
+        "width": 1440,
+        "height": 900,
+        "minWidth": 980,
+        "minHeight": 640
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg"]
+  }
+}
