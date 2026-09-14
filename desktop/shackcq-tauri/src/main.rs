@@ -102,6 +102,22 @@ struct RuntimeSupervisor {
     generation: u64,
     sequence: AtomicU64,
 }
+
+fn persisted_queue_key(
+    result: Result<String, keyring::Error>,
+    queue_exists: bool,
+) -> Result<Option<String>, String> {
+    match result {
+        Ok(value) if value.len() == 64 && hex::decode(&value).is_ok() => Ok(Some(value)),
+        Ok(_) => Err("stored queue encryption key is invalid; retained data was not replaced".into()),
+        Err(keyring::Error::NoEntry) if queue_exists => {
+            Err("queue encryption key is missing for retained data; the queue was not replaced".into())
+        }
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(_) => Err("credential vault is locked, denied, or unavailable; retained data was not replaced".into()),
+    }
+}
+
 impl RuntimeSupervisor {
     fn spawn(
         app: &tauri::AppHandle,
@@ -111,6 +127,14 @@ impl RuntimeSupervisor {
         let mut nonce = [0u8; 32];
         getrandom::fill(&mut nonce).map_err(|_| "runtime nonce unavailable")?;
         let nonce = hex::encode(nonce);
+        let queue_path = match review {
+            Some(profile) => profile.root.join("nexus-reviewed-contacts.bin"),
+            None => app
+                .path()
+                .app_data_dir()
+                .map_err(|_| "application data directory unavailable")?
+                .join("nexus-reviewed-contacts.bin"),
+        };
         let queue_key = if package_acceptance_exit_ms().is_some() || review.is_some() {
             let mut key = [0u8; 32];
             getrandom::fill(&mut key).map_err(|_| "queue key unavailable")?;
@@ -118,9 +142,9 @@ impl RuntimeSupervisor {
         } else {
             let entry = keyring::Entry::new("ShackCQ Desktop", "nexus-reviewed-contact-queue")
                 .map_err(|_| "credential vault unavailable")?;
-            match entry.get_password() {
-                Ok(value) if value.len() == 64 => value,
-                _ => {
+            match persisted_queue_key(entry.get_password(), queue_path.exists())? {
+                Some(value) => value,
+                None => {
                     let mut key = [0u8; 32];
                     getrandom::fill(&mut key).map_err(|_| "queue key unavailable")?;
                     let value = hex::encode(key);
@@ -140,14 +164,6 @@ impl RuntimeSupervisor {
             } else {
                 "shackcq-nexus-runtime"
             });
-        let queue_path = match review {
-            Some(profile) => profile.root.join("nexus-reviewed-contacts.bin"),
-            None => app
-                .path()
-                .app_data_dir()
-                .map_err(|_| "application data directory unavailable")?
-                .join("nexus-reviewed-contacts.bin"),
-        };
         let mut child = Command::new(executable)
             .env_clear()
             .env("SHACKCQ_RUNTIME_NONCE", &nonce)
@@ -1529,6 +1545,23 @@ mod tests {
     fn isolated_review_origin_never_falls_back_to_production() {
         assert_eq!(ISOLATED_REVIEW_ORIGIN, "https://localhost:18443");
         assert_ne!(ISOLATED_REVIEW_ORIGIN, PRODUCTION_ORIGIN);
+    }
+    #[test]
+    fn queue_key_is_created_only_for_a_genuinely_new_queue() {
+        assert!(matches!(
+            persisted_queue_key(Err(keyring::Error::NoEntry), false),
+            Ok(None)
+        ));
+        assert_eq!(
+            persisted_queue_key(Err(keyring::Error::NoEntry), true).unwrap_err(),
+            "queue encryption key is missing for retained data; the queue was not replaced"
+        );
+        assert!(persisted_queue_key(Ok("not-a-valid-key".into()), false).is_err());
+        let unavailable = keyring::Error::NoStorageAccess(Box::new(std::io::Error::other("locked")));
+        assert_eq!(
+            persisted_queue_key(Err(unavailable), false).unwrap_err(),
+            "credential vault is locked, denied, or unavailable; retained data was not replaced"
+        );
     }
     #[test]
     fn caller_command_id_and_generation_are_preserved() {

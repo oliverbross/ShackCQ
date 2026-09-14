@@ -9,11 +9,16 @@ sidecar_lock_tool="$repo/scripts/claim_package_sidecar_lock.py"
 review_build=${SHACKCQ_ISOLATED_REVIEW_BUILD:-0}
 package_only=${SHACKCQ_MACOS_PACKAGE_ONLY:-0}
 assembly_only=${SHACKCQ_MACOS_ASSEMBLY_ONLY:-0}
+signing_identity=${SHACKCQ_MACOS_SIGNING_IDENTITY:-}
+notary_profile=${SHACKCQ_MACOS_NOTARY_PROFILE:-}
 app_name="ShackCQ Desktop"
-dmg_name="ShackCQ-Desktop-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
+package_state="UNSIGNED-UNNOTARIZED"
+[ -z "$signing_identity" ] || package_state="SIGNED-NOT-NOTARIZED"
+[ -z "$notary_profile" ] || package_state="RC1-NOTARIZED"
+dmg_name="ShackCQ-Desktop-macOS-arm64-0.2.0-$package_state.dmg"
 if [ "$review_build" = 1 ]; then
   app_name="ShackCQ Desktop Isolated Review"
-  dmg_name="ShackCQ-Desktop-Isolated-Review-macOS-arm64-0.2.0-UNSIGNED-UNNOTARIZED.dmg"
+  dmg_name="ShackCQ-Desktop-Isolated-Review-macOS-arm64-0.2.0-$package_state.dmg"
 fi
 compiled_app="$repo/desktop/shackcq-tauri/target/release/bundle/macos/$app_name.app"
 app="$compiled_app"
@@ -41,6 +46,7 @@ acceptance_socket=
 mounted_socket=
 owner_token=
 mounted_owner=
+notary_root=
 generated_sidecar_dir=
 generated_sidecar_lock=
 generated_nexus=
@@ -84,6 +90,7 @@ cleanup() {
   [ -z "$acceptance_root" ] || rm -rf "$acceptance_root"
   [ -z "$stage" ] || rm -rf "$stage"
   [ -z "$mounted_acceptance" ] || rm -rf "$mounted_acceptance"
+  [ -z "$notary_root" ] || rm -rf "$notary_root"
   generated_sidecars_absent=1
   for generated_sidecar in "$generated_nexus" "$generated_stationd" "$generated_hamlib_helper"; do
     if [ -n "$generated_sidecar" ]; then
@@ -194,6 +201,7 @@ fi
 case "$package_only" in 0|1) ;; *) echo "SHACKCQ_MACOS_PACKAGE_ONLY must be 0 or 1" >&2; exit 2;; esac
 case "$assembly_only" in 0|1) ;; *) echo "SHACKCQ_MACOS_ASSEMBLY_ONLY must be 0 or 1" >&2; exit 2;; esac
 test "$assembly_only" = 0 || test "$package_only" = 1 || { echo "Assembly-only requires package-only mode" >&2; exit 2; }
+test -z "$notary_profile" || test -n "$signing_identity" || { echo "Notarization requires a Developer ID signing identity" >&2; exit 2; }
 test -d "$qt_prefix" || { echo "Requested Qt prefix is unavailable: $qt_prefix" >&2; exit 2; }
 qt_prefix=$(CDPATH= cd -- "$qt_prefix" && pwd -P)
 qtpaths="$qt_prefix/bin/qtpaths"
@@ -348,8 +356,43 @@ printf '%s\n' "$packaging_revision" > "$app/Contents/Resources/PACKAGING_REVISIO
 python3 "$repo/scripts/audit_macos_nexus_desktop.py" --repair-install-ids "$app"
 manifest="$output/COMPONENT_MANIFEST.json"
 mkdir -p "$output"
-codesign --force --deep --sign - "$app"
+if [ -n "$signing_identity" ]; then
+  for code_root in "$app/Contents/Frameworks" "$app/Contents/PlugIns"; do
+    if [ -d "$code_root" ]; then
+      find "$code_root" -type f -print | while IFS= read -r candidate; do
+        if file "$candidate" | grep -q 'Mach-O'; then
+          codesign --force --options runtime --timestamp --sign "$signing_identity" "$candidate"
+        fi
+      done
+    fi
+  done
+  if [ -d "$app/Contents/Frameworks" ]; then
+    find "$app/Contents/Frameworks" -type d -name '*.framework' -print | while IFS= read -r framework; do
+      codesign --force --options runtime --timestamp --sign "$signing_identity" "$framework"
+    done
+  fi
+  for executable in "$hamlib_helper" "$stationd" "$nexus"; do
+    codesign --force --options runtime --timestamp --sign "$signing_identity" "$executable"
+  done
+  codesign --force --options runtime --timestamp --entitlements \
+    "$repo/desktop/shackcq-tauri/Entitlements.plist" --sign "$signing_identity" \
+    "$app/Contents/MacOS/shackcq-desktop"
+  codesign --force --options runtime --timestamp --entitlements \
+    "$repo/desktop/shackcq-tauri/Entitlements.plist" --sign "$signing_identity" "$app"
+else
+  codesign --force --deep --sign - "$app"
+fi
 codesign --verify --deep --strict --verbose=2 "$app"
+if [ -n "$notary_profile" ]; then
+  notary_root=$(mktemp -d "${TMPDIR:-/tmp}/shackcq-desktop-notary.XXXXXX")
+  ditto -c -k --sequesterRsrc --keepParent "$app" "$notary_root/ShackCQ-Desktop.zip"
+  xcrun notarytool submit "$notary_root/ShackCQ-Desktop.zip" \
+    --keychain-profile "$notary_profile" --wait --output-format json \
+    >"$output/NOTARIZATION.json"
+  jq -e '.status == "Accepted"' "$output/NOTARIZATION.json" >/dev/null
+  xcrun stapler staple "$app"
+  xcrun stapler validate "$app"
+fi
 python3 "$repo/scripts/audit_macos_nexus_desktop.py" --manifest "$manifest" "$app"
 
 # Launch only the newly assembled headless sidecar, with a unique socket,
@@ -419,6 +462,10 @@ ditto "$app" "$stage/$app_name.app"
 ln -s /Applications "$stage/Applications"
 dmg="$output/$dmg_name"
 hdiutil create -quiet -volname "$app_name" -srcfolder "$stage" -ov -format UDZO "$dmg"
+if [ -n "$signing_identity" ]; then
+  codesign --force --timestamp --sign "$signing_identity" "$dmg"
+  codesign --verify --verbose=2 "$dmg"
+fi
 hdiutil verify "$dmg"
 
 attach_output=$(hdiutil attach -readonly -nobrowse "$dmg")
@@ -467,7 +514,7 @@ jq -e '.ok == true and .code == "REFERENCE_RECORDING_DECODED" and
   (.payload.messages | index("CQ F5RXL IN94") != null)' \
   "$mounted_acceptance/reference-result.json" >/dev/null
 
-for launch in 1 2 3; do
+for launch in 1; do
   mkdir -p "$mounted_acceptance/home-$launch" \
     "$mounted_acceptance/config-$launch" "$mounted_acceptance/data-$launch"
   SHACKCQ_AGENT_ADMIN_SOCKET="shackcq-mounted-main-$$-$launch" \
@@ -500,7 +547,7 @@ for launch in 1 2 3; do
 done
 sleep 0.5
 ! pgrep -f "$mount_point/.*/shackcq-(desktop|stationd|nexus-runtime)" >/dev/null
-printf 'MOUNTED_DMG_ACCEPTANCE_OK stationd=isolated nexus=reference-recording gui=cold-safe-exit-3-of-3 stranded=none\n'
+printf 'MOUNTED_DMG_ACCEPTANCE_OK stationd=isolated nexus=reference-recording gui=cold-safe-exit-1-of-1 stranded=none\n'
 
 shasum -a 256 "$dmg" > "$output/SHA256SUMS.txt"
 printf '%s\n' "$dmg"

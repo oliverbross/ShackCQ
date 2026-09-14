@@ -201,12 +201,12 @@ bool CloudAgentClient::pair(const QUrl &origin, const QString &rawCode,
   QUrl endpoint(origin);
   endpoint.setPath("/api/v1/agent/pair");
   QNetworkRequest request(endpoint);
+  QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
+  ssl.setProtocol(QSsl::TlsV1_2OrLater);
   if (!m_reviewCertificates.isEmpty()) {
-    QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
-    ssl.setProtocol(QSsl::TlsV1_2OrLater);
     ssl.addCaCertificates(m_reviewCertificates);
-    request.setSslConfiguration(ssl);
   }
+  request.setSslConfiguration(ssl);
   request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
   request.setTransferTimeout(15'000);
   const QJsonObject body{{"code", code},
@@ -381,10 +381,8 @@ void CloudAgentClient::connectNow() {
   request.setRawHeader("Authorization",
                        QByteArray("Bearer ") + m_credential.toUtf8());
   QSslConfiguration ssl = QSslConfiguration::defaultConfiguration();
-  if (m_reviewCertificates.isEmpty()) {
-    ssl.setProtocol(QSsl::TlsV1_3OrLater);
-  } else {
-    ssl.setProtocol(QSsl::TlsV1_2OrLater);
+  ssl.setProtocol(QSsl::TlsV1_2OrLater);
+  if (!m_reviewCertificates.isEmpty()) {
     ssl.addCaCertificates(m_reviewCertificates);
   }
   m_socket.setSslConfiguration(ssl);
