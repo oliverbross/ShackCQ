@@ -11,6 +11,10 @@ package_only=${SHACKCQ_MACOS_PACKAGE_ONLY:-0}
 assembly_only=${SHACKCQ_MACOS_ASSEMBLY_ONLY:-0}
 signing_identity=${SHACKCQ_MACOS_SIGNING_IDENTITY:-}
 notary_profile=${SHACKCQ_MACOS_NOTARY_PROFILE:-}
+metadata_signing_state=AD_HOC_ONLY
+metadata_notarization_state=NOT_PERFORMED
+[ -z "$signing_identity" ] || metadata_signing_state=DEVELOPER_ID_VERIFIED
+[ -z "$notary_profile" ] || metadata_notarization_state=ACCEPTED_STAPLED
 app_name="ShackCQ Desktop"
 package_state="UNSIGNED-UNNOTARIZED"
 [ -z "$signing_identity" ] || package_state="SIGNED-NOT-NOTARIZED"
@@ -364,7 +368,9 @@ python3 "$repo/scripts/write_nexus_package_metadata.py" \
   --nexus 7618390658f8f92431dec0ac65979b84f2c0fb76 \
   --platform macos-arm64 --qt 6.11.2 \
   --rust "$(rustc --version | awk '{print $2}')" \
-  --tauri-cli "$tauri_cli_version"
+  --tauri-cli "$tauri_cli_version" \
+  --signing-state "$metadata_signing_state" \
+  --notarization-state "$metadata_notarization_state"
 printf '%s\n' "$compiled_source_revision" > "$app/Contents/Resources/COMPILED_SOURCE_REVISION.txt"
 printf '%s\n' "$packaging_revision" > "$app/Contents/Resources/PACKAGING_REVISION.txt"
 python3 "$repo/scripts/audit_macos_nexus_desktop.py" --repair-install-ids "$app"

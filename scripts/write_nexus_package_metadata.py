@@ -19,8 +19,26 @@ def main() -> int:
     parser.add_argument("--qt", required=True)
     parser.add_argument("--rust", required=True)
     parser.add_argument("--tauri-cli", required=True)
+    parser.add_argument(
+        "--signing-state",
+        choices=("UNSIGNED", "AD_HOC_ONLY", "DEVELOPER_ID_VERIFIED"),
+    )
+    parser.add_argument(
+        "--notarization-state",
+        choices=("NOT_APPLICABLE", "NOT_PERFORMED", "ACCEPTED_STAPLED"),
+    )
     args = parser.parse_args()
     is_macos = args.platform == "macos-arm64"
+    signing_state = args.signing_state or ("AD_HOC_ONLY" if is_macos else "UNSIGNED")
+    notarization_state = args.notarization_state or (
+        "NOT_PERFORMED" if is_macos else "NOT_APPLICABLE"
+    )
+    if not is_macos and (
+        signing_state != "UNSIGNED" or notarization_state != "NOT_APPLICABLE"
+    ):
+        parser.error("non-macOS package metadata must remain unsigned and not applicable")
+    if notarization_state == "ACCEPTED_STAPLED" and signing_state != "DEVELOPER_ID_VERIFIED":
+        parser.error("accepted notarization requires verified Developer ID signing")
     payload = {
         "schemaVersion": 1,
         "product": "ShackCQ Desktop",
@@ -60,8 +78,8 @@ def main() -> int:
             "physicalAudioOutputAvailable": False,
             "productionEnabled": False,
         },
-        "signing": "AD_HOC_ONLY" if is_macos else "UNSIGNED",
-        "notarization": "NOT_PERFORMED" if is_macos else "NOT_APPLICABLE",
+        "signing": signing_state,
+        "notarization": notarization_state,
         "hardwareAcceptance": "NOT_PERFORMED",
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

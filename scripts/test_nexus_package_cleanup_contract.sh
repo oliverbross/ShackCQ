@@ -214,6 +214,13 @@ python3 "$repo/scripts/write_nexus_package_metadata.py" --output "$mac_metadata_
   --rust test-rust --tauri-cli test-tauri
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["signing"] == "AD_HOC_ONLY" and d["notarization"] == "NOT_PERFORMED" and d["platformBaseline"] == "macOS 13 arm64"' \
   "$mac_metadata_probe"
+python3 "$repo/scripts/write_nexus_package_metadata.py" --output "$mac_metadata_probe" \
+  --source test-source --web test-web --nexus test-nexus \
+  --frontend-content-sha test-content --platform macos-arm64 --qt 6.11.2 \
+  --rust test-rust --tauri-cli test-tauri \
+  --signing-state DEVELOPER_ID_VERIFIED --notarization-state NOT_PERFORMED
+python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["signing"] == "DEVELOPER_ID_VERIFIED" and d["notarization"] == "NOT_PERFORMED"' \
+  "$mac_metadata_probe"
 legal_probe="$contract_scratch/legal"
 sh "$legal" "$legal_probe" "$repo" 6.10.2 windows-x64
 for legal_name in COPYING NOTICE THIRD_PARTY_NOTICES.txt Qt-LGPL-3.0-only.txt Qt-GPL-3.0-only.txt \
