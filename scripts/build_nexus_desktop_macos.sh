@@ -282,9 +282,23 @@ printf 'QT_PREFLIGHT_OK prefix=%s version=%s deploy=%s plugins=%s cache=%s\n' \
   "$qt_prefix" "$reported_qt_version" "$macdeployqt" "$qt_plugin_dir" "$build_dir/CMakeCache.txt"
 
 if [ "$package_only" = 1 ]; then
-  test "$review_build" = 1 || { echo "Package-only recovery is restricted to the isolated-review bundle" >&2; exit 2; }
   test -d "$compiled_app" || { echo "Retained compiled app is unavailable: $compiled_app" >&2; exit 2; }
   git -C "$repo" cat-file -e "$compiled_source_revision^{commit}"
+  if [ "$review_build" != 1 ]; then
+    git -C "$repo" merge-base --is-ancestor "$compiled_source_revision" "$packaging_revision" || {
+      echo "Normal package-only recovery requires an ancestor compiled source" >&2
+      exit 2
+    }
+    git -C "$repo" diff --quiet "$compiled_source_revision..$packaging_revision" -- \
+      desktop/shackcq-tauri desktop/src desktop/include || {
+      echo "Normal package-only recovery refuses changed compiled inputs" >&2
+      exit 2
+    }
+    test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$compiled_app/Contents/Info.plist")" = "online.shackcq.desktop" || {
+      echo "Normal package-only recovery requires the normal Desktop bundle" >&2
+      exit 2
+    }
+  fi
   assembly_root="$output/assembly"
   test ! -e "$assembly_root" || { echo "Assembly destination already exists: $assembly_root" >&2; exit 2; }
   mkdir -p "$assembly_root"
