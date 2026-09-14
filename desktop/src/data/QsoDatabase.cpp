@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QCryptographicHash>
+#include <QDate>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QSqlError>
@@ -10,6 +11,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <QTimeZone>
+#include <cmath>
 #include <limits>
 
 namespace shackcq::desktop {
@@ -31,9 +33,15 @@ QsoRecord fromQuery(const QSqlQuery &q) {
     r.operatorCallsign = q.value("operator_callsign").toString(); r.dxcc = q.value("dxcc").toString();
     r.country = q.value("country").toString(); r.cqZone = q.value("cq_zone").toString(); r.ituZone = q.value("itu_zone").toString();
     r.contestId = q.value("contest_id").toString(); r.satelliteName = q.value("satellite_name").toString();
-    r.satelliteMode = q.value("satellite_mode").toString(); r.potaRef = q.value("pota_ref").toString();
+    r.satelliteMode = q.value("satellite_mode").toString(); r.propagationMode = q.value("propagation_mode").toString();
+    r.antennaPath = q.value("antenna_path").toString(); r.txPower = q.isNull("tx_power") ? std::numeric_limits<double>::quiet_NaN() : q.value("tx_power").toDouble(); r.antenna = q.value("antenna").toString();
+    r.potaRef = q.value("pota_ref").toString();
     r.sotaRef = q.value("sota_ref").toString(); r.iota = q.value("iota").toString(); r.wwffRef = q.value("wwff_ref").toString();
-    r.qslReceived = q.value("qsl_received").toString(); r.lotwReceived = q.value("lotw_received").toString();
+    r.qslManager = q.value("qsl_manager").toString(); r.qslMessage = q.value("qsl_message").toString();
+    r.qslSent = q.value("qsl_sent").toString(); r.qslReceived = q.value("qsl_received").toString();
+    r.qslSentDate = q.value("qsl_sent_date").toString(); r.qslReceivedDate = q.value("qsl_received_date").toString();
+    r.qslSentMethod = q.value("qsl_sent_method").toString(); r.qslReceivedMethod = q.value("qsl_received_method").toString();
+    r.lotwReceived = q.value("lotw_received").toString();
     r.eqslReceived = q.value("eqsl_received").toString(); r.qrzReceived = q.value("qrz_received").toString();
     r.provenance = q.value("provenance").toString(); r.remoteId = q.value("remote_id").toString();
     r.createdAt = q.value("created_at").toLongLong(); r.updatedAt = q.value("updated_at").toLongLong();
@@ -77,6 +85,16 @@ bool QsoDatabase::execute(const QString &sql, QString *error) const {
 }
 
 bool QsoDatabase::migrate(QString *error) {
+    QSqlQuery versionQuery(m_database);
+    if (!versionQuery.exec(QStringLiteral("PRAGMA user_version")) || !versionQuery.next()) {
+        if (error) *error = sqlError(versionQuery);
+        return false;
+    }
+    const int sourceVersion = versionQuery.value(0).toInt();
+    if (sourceVersion > SchemaVersion) {
+        if (error) *error = QStringLiteral("Database schema %1 is newer than supported schema %2").arg(sourceVersion).arg(SchemaVersion);
+        return false;
+    }
     if (!m_database.transaction()) { if (error) *error = m_database.lastError().text(); return false; }
     const QStringList statements = {
         QStringLiteral("CREATE TABLE IF NOT EXISTS desktop_meta(key TEXT PRIMARY KEY,value TEXT NOT NULL)"),
@@ -87,8 +105,11 @@ bool QsoDatabase::migrate(QString *error) {
                        "station_profile_id TEXT NOT NULL DEFAULT '',station_callsign TEXT NOT NULL DEFAULT '',operator_callsign TEXT NOT NULL DEFAULT '',"
                        "dxcc TEXT NOT NULL DEFAULT '',country TEXT NOT NULL DEFAULT '',cq_zone TEXT NOT NULL DEFAULT '',itu_zone TEXT NOT NULL DEFAULT '',"
                        "contest_id TEXT NOT NULL DEFAULT '',satellite_name TEXT NOT NULL DEFAULT '',satellite_mode TEXT NOT NULL DEFAULT '',"
+                       "propagation_mode TEXT NOT NULL DEFAULT '',antenna_path TEXT NOT NULL DEFAULT '',tx_power REAL,antenna TEXT NOT NULL DEFAULT '',"
                        "pota_ref TEXT NOT NULL DEFAULT '',sota_ref TEXT NOT NULL DEFAULT '',iota TEXT NOT NULL DEFAULT '',wwff_ref TEXT NOT NULL DEFAULT '',"
-                       "qsl_received TEXT NOT NULL DEFAULT 'N',lotw_received TEXT NOT NULL DEFAULT 'N',eqsl_received TEXT NOT NULL DEFAULT 'N',qrz_received TEXT NOT NULL DEFAULT 'N',"
+                       "qsl_manager TEXT NOT NULL DEFAULT '',qsl_message TEXT NOT NULL DEFAULT '',qsl_sent TEXT NOT NULL DEFAULT '',qsl_received TEXT NOT NULL DEFAULT 'N',"
+                       "qsl_sent_date TEXT NOT NULL DEFAULT '',qsl_received_date TEXT NOT NULL DEFAULT '',qsl_sent_method TEXT NOT NULL DEFAULT '',qsl_received_method TEXT NOT NULL DEFAULT '',"
+                       "lotw_received TEXT NOT NULL DEFAULT 'N',eqsl_received TEXT NOT NULL DEFAULT 'N',qrz_received TEXT NOT NULL DEFAULT 'N',"
                        "provenance TEXT NOT NULL DEFAULT 'local',remote_id TEXT NOT NULL DEFAULT '',extra_adif_json TEXT NOT NULL DEFAULT '{}',"
                        "created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,deleted INTEGER NOT NULL DEFAULT 0)"),
         QStringLiteral("CREATE TABLE IF NOT EXISTS qso_projection("
@@ -102,12 +123,32 @@ bool QsoDatabase::migrate(QString *error) {
         QStringLiteral("CREATE INDEX IF NOT EXISTS projection_call_idx ON qso_projection(callsign_norm,band,mode,confirmed)"),
         QStringLiteral("CREATE INDEX IF NOT EXISTS projection_entity_idx ON qso_projection(dxcc,band,mode,confirmed)"),
         QStringLiteral("CREATE INDEX IF NOT EXISTS projection_grid_idx ON qso_projection(grid,band,mode)"),
-        QStringLiteral("INSERT OR IGNORE INTO desktop_meta(key,value) VALUES('database_revision','0')"),
-        QStringLiteral("PRAGMA user_version=16")
+        QStringLiteral("INSERT OR IGNORE INTO desktop_meta(key,value) VALUES('database_revision','0')")
     };
     for (const auto &statement : statements) {
         if (!execute(statement, error)) { m_database.rollback(); return false; }
     }
+    QSet<QString> columns;
+    QSqlQuery columnQuery(m_database);
+    if (!columnQuery.exec(QStringLiteral("PRAGMA table_info(qso)"))) { if (error) *error = sqlError(columnQuery); m_database.rollback(); return false; }
+    while (columnQuery.next()) columns.insert(columnQuery.value(1).toString());
+    const QMap<QString, QString> advancedColumns{
+        {"propagation_mode", "TEXT NOT NULL DEFAULT ''"}, {"antenna_path", "TEXT NOT NULL DEFAULT ''"},
+        {"tx_power", "REAL"}, {"antenna", "TEXT NOT NULL DEFAULT ''"},
+        {"qsl_manager", "TEXT NOT NULL DEFAULT ''"}, {"qsl_message", "TEXT NOT NULL DEFAULT ''"},
+        {"qsl_sent", "TEXT NOT NULL DEFAULT ''"}, {"qsl_sent_date", "TEXT NOT NULL DEFAULT ''"},
+        {"qsl_received_date", "TEXT NOT NULL DEFAULT ''"}, {"qsl_sent_method", "TEXT NOT NULL DEFAULT ''"},
+        {"qsl_received_method", "TEXT NOT NULL DEFAULT ''"},
+    };
+    for (auto it = advancedColumns.cbegin(); it != advancedColumns.cend(); ++it) {
+        if (!columns.contains(it.key()) && !execute(QStringLiteral("ALTER TABLE qso ADD COLUMN %1 %2").arg(it.key(), it.value()), error)) {
+            m_database.rollback(); return false;
+        }
+    }
+    if (sourceVersion < SchemaVersion && !execute(QStringLiteral("UPDATE qso SET propagation_mode='SAT' WHERE propagation_mode='' AND (satellite_name<>'' OR satellite_mode<>'')"), error)) {
+        m_database.rollback(); return false;
+    }
+    if (!execute(QStringLiteral("PRAGMA user_version=17"), error)) { m_database.rollback(); return false; }
     if (!m_database.commit()) { if (error) *error = m_database.lastError().text(); return false; }
     return true;
 }
@@ -125,16 +166,77 @@ bool QsoDatabase::save(const QsoRecord &input, QString *error) {
         &r.rstReceived, &r.grid, &r.comment, &r.stationProfileId,
         &r.stationCallsign, &r.operatorCallsign, &r.dxcc, &r.country,
         &r.cqZone, &r.ituZone, &r.contestId, &r.satelliteName,
-        &r.satelliteMode, &r.potaRef, &r.sotaRef, &r.iota, &r.wwffRef,
-        &r.qslReceived, &r.lotwReceived, &r.eqslReceived, &r.qrzReceived,
+        &r.satelliteMode, &r.propagationMode, &r.antennaPath, &r.antenna,
+        &r.potaRef, &r.sotaRef, &r.iota, &r.wwffRef, &r.qslManager, &r.qslMessage,
+        &r.qslSent, &r.qslReceived, &r.qslSentDate, &r.qslReceivedDate,
+        &r.qslSentMethod, &r.qslReceivedMethod, &r.lotwReceived, &r.eqslReceived, &r.qrzReceived,
         &r.provenance, &r.remoteId,
     };
     for (QString *field : textFields) {
         if (field->isNull()) *field = QStringLiteral("");
     }
     r.callsign = normalizedCallsign(r.callsign);
+    r.propagationMode = r.propagationMode.trimmed().toUpper();
+    r.antennaPath = r.antennaPath.trimmed().toUpper();
+    r.qslSent = r.qslSent.trimmed().toUpper();
+    r.qslReceived = r.qslReceived.trimmed().toUpper();
+    r.qslSentMethod = r.qslSentMethod.trimmed().toUpper();
+    r.qslReceivedMethod = r.qslReceivedMethod.trimmed().toUpper();
+    r.potaRef = r.potaRef.trimmed().toUpper(); r.sotaRef = r.sotaRef.trimmed().toUpper();
+    r.wwffRef = r.wwffRef.trimmed().toUpper(); r.iota = r.iota.trimmed().toUpper();
+    r.satelliteName = r.satelliteName.trimmed().toUpper(); r.satelliteMode = r.satelliteMode.trimmed().toUpper();
+    r.antenna = r.antenna.trimmed(); r.qslManager = r.qslManager.trimmed().toUpper(); r.qslMessage = r.qslMessage.trimmed();
+    r.qslSentDate = r.qslSentDate.trimmed(); r.qslReceivedDate = r.qslReceivedDate.trimmed();
+    for (QString *field : textFields) if (field->isNull()) *field = QStringLiteral("");
     if (r.callsign.isEmpty() || r.frequencyHz <= 0 || r.mode.trimmed().isEmpty()) {
         if (error) *error = QStringLiteral("Callsign, positive frequency, and mode are required");
+        return false;
+    }
+    if ((!std::isnan(r.txPower) && (!std::isfinite(r.txPower) || r.txPower < 0 || r.txPower > 100000)) ||
+        (!r.antennaPath.isEmpty() && !QStringList{"S","L","G","O"}.contains(r.antennaPath))) {
+        if (error) *error = QStringLiteral("Invalid TX power or antenna path");
+        return false;
+    }
+    if ((!r.qslSent.isEmpty() && !QStringList{"Y","N","Q","R","I"}.contains(r.qslSent)) ||
+        !QStringList{"Y","N","R","I","V"}.contains(r.qslReceived) ||
+        (!r.qslSentMethod.isEmpty() && !QStringList{"B","D","E","M"}.contains(r.qslSentMethod)) ||
+        (!r.qslReceivedMethod.isEmpty() && !QStringList{"B","D","E","M"}.contains(r.qslReceivedMethod))) {
+        if (error) *error = QStringLiteral("Invalid QSL status or method");
+        return false;
+    }
+    const auto validDate = [](const QString &value) {
+        if (value.isEmpty()) return true;
+        const QDate date = QDate::fromString(value, Qt::ISODate);
+        return date.isValid() && date.toString(Qt::ISODate) == value;
+    };
+    if (!validDate(r.qslSentDate) || !validDate(r.qslReceivedDate) ||
+        (!r.qslSentDate.isEmpty() && !QStringList{"Y","Q","I"}.contains(r.qslSent)) ||
+        (!r.qslReceivedDate.isEmpty() && !QStringList{"Y","I","V"}.contains(r.qslReceived))) {
+        if (error) *error = QStringLiteral("Invalid QSL date or status/date combination");
+        return false;
+    }
+    static const QSet<QString> propagationModes{"AS","AUR","AUE","BS","ECH","EME","ES","F2","FAI","INTERNET","ION","IRL","MS","RPT","RS","SAT","TEP","TR"};
+    const bool importedUnknownPropagation = (r.provenance == QStringLiteral("import") || r.provenance == QStringLiteral("remote")) &&
+                                            !r.propagationMode.isEmpty() && !propagationModes.contains(r.propagationMode);
+    if ((!r.satelliteName.isEmpty() || !r.satelliteMode.isEmpty()) && r.propagationMode != QStringLiteral("SAT") && !importedUnknownPropagation) {
+        if (error) *error = QStringLiteral("Satellite name and mode require propagation mode SAT");
+        return false;
+    }
+    const QRegularExpression control(QStringLiteral("[\\x00-\\x1f\\x7f]"));
+    const auto invalidText = [&](const QString &value, int maximum) { return value.size() > maximum || value.contains(control); };
+    if ((!r.propagationMode.isEmpty() && !propagationModes.contains(r.propagationMode) && !importedUnknownPropagation) || invalidText(r.satelliteName,80) ||
+        invalidText(r.satelliteMode,40) || invalidText(r.antenna,160) || invalidText(r.qslManager,80) || invalidText(r.qslMessage,512)) {
+        if (error) *error = QStringLiteral("Invalid advanced QSO text or propagation mode");
+        return false;
+    }
+    const QRegularExpression pota(QStringLiteral("^[A-Z0-9]{1,4}-\\d{4,5}(?:@[A-Z0-9]{2,6}(?:-[A-Z0-9]{1,3})?)?$"));
+    const QRegularExpression sota(QStringLiteral("^[A-Z0-9]{1,4}/[A-Z0-9]{1,4}-\\d{3}$"));
+    const QRegularExpression wwff(QStringLiteral("^[A-Z0-9]{1,4}FF-\\d{4}$"));
+    const QRegularExpression iota(QStringLiteral("^[A-Z]{2}-\\d{3}$"));
+    const auto normalizeReferences=[](QString &value,const QRegularExpression &pattern){QStringList refs;for(const QString &part:value.split(',',Qt::SkipEmptyParts)){const QString ref=part.trimmed();if(!refs.contains(ref))refs.append(ref);}value=refs.isEmpty()?QStringLiteral(""):refs.join(',');if(value.size()>256)return false;for(const QString &ref:refs)if(!pattern.match(ref).hasMatch())return false;return true;};
+    if (!normalizeReferences(r.potaRef,pota) || !normalizeReferences(r.sotaRef,sota) ||
+        !normalizeReferences(r.wwffRef,wwff) || !normalizeReferences(r.iota,iota)) {
+        if (error) *error = QStringLiteral("Invalid award reference");
         return false;
     }
     if (r.id.isEmpty()) r.id = QUuid::createUuid().toString(QUuid::WithoutBraces);
@@ -147,15 +249,20 @@ bool QsoDatabase::save(const QsoRecord &input, QString *error) {
     q.prepare(QStringLiteral(
         "INSERT INTO qso(id,callsign,frequency_hz,frequency_rx_hz,band,band_rx,mode,submode,rst_sent,rst_received,grid,comment,"
         "station_profile_id,station_callsign,operator_callsign,dxcc,country,cq_zone,itu_zone,contest_id,satellite_name,satellite_mode,"
-        "pota_ref,sota_ref,iota,wwff_ref,qsl_received,lotw_received,eqsl_received,qrz_received,provenance,remote_id,extra_adif_json,created_at,updated_at,deleted) "
+        "propagation_mode,antenna_path,tx_power,antenna,pota_ref,sota_ref,iota,wwff_ref,qsl_manager,qsl_message,qsl_sent,qsl_received,"
+        "qsl_sent_date,qsl_received_date,qsl_sent_method,qsl_received_method,lotw_received,eqsl_received,qrz_received,provenance,remote_id,extra_adif_json,created_at,updated_at,deleted) "
         "VALUES(:id,:call,:freq,:rx,:band,:bandrx,:mode,:sub,:rsts,:rstr,:grid,:comment,:profile,:station,:operator,:dxcc,:country,:cq,:itu,"
-        ":contest,:sat,:satmode,:pota,:sota,:iota,:wwff,:qsl,:lotw,:eqsl,:qrz,:provenance,:remote,:extra,:created,:updated,:deleted) "
+        ":contest,:sat,:satmode,:prop,:path,:power,:antenna,:pota,:sota,:iota,:wwff,:qslmanager,:qslmessage,:qslsent,:qslreceived,"
+        ":qslsdate,:qslrdate,:qslsentmethod,:qslreceivedmethod,:lotw,:eqsl,:qrz,:provenance,:remote,:extra,:created,:updated,:deleted) "
         "ON CONFLICT(id) DO UPDATE SET callsign=excluded.callsign,frequency_hz=excluded.frequency_hz,frequency_rx_hz=excluded.frequency_rx_hz,"
         "band=excluded.band,band_rx=excluded.band_rx,mode=excluded.mode,submode=excluded.submode,rst_sent=excluded.rst_sent,rst_received=excluded.rst_received,"
         "grid=excluded.grid,comment=excluded.comment,station_profile_id=excluded.station_profile_id,station_callsign=excluded.station_callsign,"
         "operator_callsign=excluded.operator_callsign,dxcc=excluded.dxcc,country=excluded.country,cq_zone=excluded.cq_zone,itu_zone=excluded.itu_zone,"
-        "contest_id=excluded.contest_id,satellite_name=excluded.satellite_name,satellite_mode=excluded.satellite_mode,pota_ref=excluded.pota_ref,"
-        "sota_ref=excluded.sota_ref,iota=excluded.iota,wwff_ref=excluded.wwff_ref,qsl_received=excluded.qsl_received,lotw_received=excluded.lotw_received,"
+        "contest_id=excluded.contest_id,satellite_name=excluded.satellite_name,satellite_mode=excluded.satellite_mode,propagation_mode=excluded.propagation_mode,"
+        "antenna_path=excluded.antenna_path,tx_power=excluded.tx_power,antenna=excluded.antenna,pota_ref=excluded.pota_ref,"
+        "sota_ref=excluded.sota_ref,iota=excluded.iota,wwff_ref=excluded.wwff_ref,qsl_manager=excluded.qsl_manager,qsl_message=excluded.qsl_message,"
+        "qsl_sent=excluded.qsl_sent,qsl_received=excluded.qsl_received,qsl_sent_date=excluded.qsl_sent_date,qsl_received_date=excluded.qsl_received_date,"
+        "qsl_sent_method=excluded.qsl_sent_method,qsl_received_method=excluded.qsl_received_method,lotw_received=excluded.lotw_received,"
         "eqsl_received=excluded.eqsl_received,qrz_received=excluded.qrz_received,provenance=excluded.provenance,remote_id=excluded.remote_id,"
         "extra_adif_json=excluded.extra_adif_json,updated_at=excluded.updated_at,deleted=excluded.deleted"));
     q.bindValue(":id",r.id); q.bindValue(":call",r.callsign); q.bindValue(":freq",r.frequencyHz); q.bindValue(":rx",r.frequencyRxHz);
@@ -164,8 +271,11 @@ bool QsoDatabase::save(const QsoRecord &input, QString *error) {
     q.bindValue(":profile",r.stationProfileId); q.bindValue(":station",normalizedCallsign(r.stationCallsign)); q.bindValue(":operator",normalizedCallsign(r.operatorCallsign));
     q.bindValue(":dxcc",r.dxcc); q.bindValue(":country",r.country); q.bindValue(":cq",r.cqZone); q.bindValue(":itu",r.ituZone);
     q.bindValue(":contest",r.contestId); q.bindValue(":sat",r.satelliteName); q.bindValue(":satmode",r.satelliteMode);
+    q.bindValue(":prop",r.propagationMode); q.bindValue(":path",r.antennaPath); q.bindValue(":power",std::isfinite(r.txPower)?QVariant(r.txPower):QVariant{}); q.bindValue(":antenna",r.antenna);
     q.bindValue(":pota",r.potaRef); q.bindValue(":sota",r.sotaRef); q.bindValue(":iota",r.iota); q.bindValue(":wwff",r.wwffRef);
-    q.bindValue(":qsl",r.qslReceived); q.bindValue(":lotw",r.lotwReceived); q.bindValue(":eqsl",r.eqslReceived); q.bindValue(":qrz",r.qrzReceived);
+    q.bindValue(":qslmanager",r.qslManager); q.bindValue(":qslmessage",r.qslMessage); q.bindValue(":qslsent",r.qslSent); q.bindValue(":qslreceived",r.qslReceived);
+    q.bindValue(":qslsdate",r.qslSentDate); q.bindValue(":qslrdate",r.qslReceivedDate); q.bindValue(":qslsentmethod",r.qslSentMethod); q.bindValue(":qslreceivedmethod",r.qslReceivedMethod);
+    q.bindValue(":lotw",r.lotwReceived); q.bindValue(":eqsl",r.eqslReceived); q.bindValue(":qrz",r.qrzReceived);
     q.bindValue(":provenance",r.provenance); q.bindValue(":remote",r.remoteId);
     q.bindValue(":extra",QString::fromUtf8(QJsonDocument(r.extraAdif).toJson(QJsonDocument::Compact)));
     q.bindValue(":created",r.createdAt); q.bindValue(":updated",r.updatedAt); q.bindValue(":deleted",r.deleted);
@@ -285,7 +395,7 @@ bool QsoDatabase::verifyProjection(QString *error) const {
 }
 
 QVariantMap qsoToVariant(const QsoRecord &r) {
-    return{{"id",r.id},{"callsign",r.callsign},{"frequencyHz",r.frequencyHz},{"frequencyRxHz",r.frequencyRxHz},{"band",r.band},{"bandRx",r.bandRx},{"mode",r.mode},{"submode",r.submode},{"rstSent",r.rstSent},{"rstReceived",r.rstReceived},{"grid",r.grid},{"comment",r.comment},{"stationProfileId",r.stationProfileId},{"stationCallsign",r.stationCallsign},{"operatorCallsign",r.operatorCallsign},{"dxcc",r.dxcc},{"country",r.country},{"contestId",r.contestId},{"satelliteName",r.satelliteName},{"satelliteMode",r.satelliteMode},{"potaRef",r.potaRef},{"sotaRef",r.sotaRef},{"iota",r.iota},{"wwffRef",r.wwffRef},{"provenance",r.provenance},{"remoteId",r.remoteId},{"createdAt",r.createdAt},{"deleted",r.deleted},{"extraAdif",r.extraAdif.toVariantMap()}};
+    return{{"id",r.id},{"callsign",r.callsign},{"frequencyHz",r.frequencyHz},{"frequencyRxHz",r.frequencyRxHz},{"band",r.band},{"bandRx",r.bandRx},{"mode",r.mode},{"submode",r.submode},{"rstSent",r.rstSent},{"rstReceived",r.rstReceived},{"grid",r.grid},{"comment",r.comment},{"stationProfileId",r.stationProfileId},{"stationCallsign",r.stationCallsign},{"operatorCallsign",r.operatorCallsign},{"dxcc",r.dxcc},{"country",r.country},{"contestId",r.contestId},{"satelliteName",r.satelliteName},{"satelliteMode",r.satelliteMode},{"propagationMode",r.propagationMode},{"antennaPath",r.antennaPath},{"txPower",std::isfinite(r.txPower)?QVariant(r.txPower):QVariant{}},{"antenna",r.antenna},{"potaRef",r.potaRef},{"sotaRef",r.sotaRef},{"iota",r.iota},{"wwffRef",r.wwffRef},{"qslManager",r.qslManager},{"qslMessage",r.qslMessage},{"qslSent",r.qslSent},{"qslReceived",r.qslReceived},{"qslSentDate",r.qslSentDate},{"qslReceivedDate",r.qslReceivedDate},{"qslSentMethod",r.qslSentMethod},{"qslReceivedMethod",r.qslReceivedMethod},{"provenance",r.provenance},{"remoteId",r.remoteId},{"createdAt",r.createdAt},{"deleted",r.deleted},{"extraAdif",r.extraAdif.toVariantMap()}};
 }
 
 QsoTableModel::QsoTableModel(QsoDatabase *database,QObject *parent):QAbstractTableModel(parent),m_database(database){reload();}

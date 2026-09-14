@@ -6,6 +6,7 @@
 #include <QSaveFile>
 #include <QTimeZone>
 #include <QUuid>
+#include <cmath>
 
 namespace shackcq::desktop {
 namespace {
@@ -44,6 +45,17 @@ qint64 frequencyHz(const QString &mhz) {
     return ok ? qRound64(value * 1000000.0) : 0;
 }
 
+QString adifDate(const QString &date) { return QString(date).remove('-'); }
+QString isoDate(const QString &date) { return date.size()==8?QStringLiteral("%1-%2-%3").arg(date.left(4),date.mid(4,2),date.mid(6,2)):date; }
+
+bool safeExtraAdifName(const QString &name) {
+    const QString upper = name.toUpper();
+    static const QRegularExpression valid(QStringLiteral("^[A-Z][A-Z0-9_]{0,63}$"));
+    static const QRegularExpression sensitive(QStringLiteral("(?:^|_)(?:TOKEN|SECRET|PASSWORD|API_KEY|AUTH)(?:_|$)"));
+    static const QSet<QString> denied{"ID","QSO_ID","APP_SHACKCQ_ID","APP_SHACKCQ_OPERATION_ID"};
+    return valid.match(upper).hasMatch() && !denied.contains(upper) && !sensitive.match(upper).hasMatch();
+}
+
 } // namespace
 
 AdifService::AdifService(QsoDatabase *database, QObject *parent) : QObject(parent), m_database(database) {}
@@ -61,12 +73,21 @@ QByteArray AdifService::serialize(const QsoRecord &record) {
     out += field("STATION_CALLSIGN", record.stationCallsign); out += field("OPERATOR", record.operatorCallsign);
     out += field("DXCC", record.dxcc); out += field("COUNTRY", record.country); out += field("CQZ", record.cqZone); out += field("ITUZ", record.ituZone);
     out += field("CONTEST_ID", record.contestId); out += field("SAT_NAME", record.satelliteName); out += field("SAT_MODE", record.satelliteMode);
+    out += field("PROP_MODE", record.propagationMode); out += field("ANT_PATH", record.antennaPath);
+    out += field("TX_PWR", std::isfinite(record.txPower) ? QString::number(record.txPower, 'g', 12) : QString{}); out += field("MY_ANTENNA", record.antenna);
     out += field("POTA_REF", record.potaRef); out += field("SOTA_REF", record.sotaRef); out += field("IOTA", record.iota); out += field("WWFF_REF", record.wwffRef);
-    out += field("QSL_RCVD", record.qslReceived); out += field("LOTW_QSL_RCVD", record.lotwReceived);
+    out += field("QSL_VIA", record.qslManager); out += field("QSLMSG", record.qslMessage);
+    out += field("QSL_SENT", record.qslSent); out += field("QSL_RCVD", record.qslReceived);
+    out += field("QSLSDATE", adifDate(record.qslSentDate)); out += field("QSLRDATE", adifDate(record.qslReceivedDate));
+    out += field("QSL_SENT_VIA", record.qslSentMethod); out += field("QSL_RCVD_VIA", record.qslReceivedMethod);
+    out += field("LOTW_QSL_RCVD", record.lotwReceived);
     out += field("EQSL_QSL_RCVD", record.eqslReceived); out += field("APP_SHACKCQ_QRZ_RCVD", record.qrzReceived);
-    static const QSet<QString> reserved{"QSO_DATE","TIME_ON","CALL","FREQ","BAND","MODE","SUBMODE","RST_SENT","RST_RCVD","GRIDSQUARE","COMMENT","STATION_CALLSIGN","OPERATOR","DXCC","COUNTRY","CQZ","ITUZ","CONTEST_ID","SAT_NAME","SAT_MODE","POTA_REF","SOTA_REF","IOTA","WWFF_REF","QSL_RCVD","LOTW_QSL_RCVD","EQSL_QSL_RCVD","APP_SHACKCQ_QRZ_RCVD"};
+    static const QSet<QString> reserved{"QSO_DATE","TIME_ON","CALL","FREQ","BAND","MODE","SUBMODE","RST_SENT","RST_RCVD","GRIDSQUARE","COMMENT","STATION_CALLSIGN","OPERATOR","DXCC","COUNTRY","CQZ","ITUZ","CONTEST_ID","SAT_NAME","SAT_MODE","PROP_MODE","ANT_PATH","TX_PWR","MY_ANTENNA","POTA_REF","SOTA_REF","IOTA","WWFF_REF","QSL_VIA","QSLMSG","QSL_SENT","QSL_RCVD","QSLSDATE","QSLRDATE","QSL_SENT_VIA","QSL_RCVD_VIA","LOTW_QSL_RCVD","EQSL_QSL_RCVD","APP_SHACKCQ_QRZ_RCVD"};
     QStringList names = record.extraAdif.keys(); names.sort();
-    for (const auto &name : names) if (!reserved.contains(name.toUpper())) out += field(name.toUpper().toLatin1(), record.extraAdif.value(name).toString());
+    for (const auto &name : names) {
+        const QString value = record.extraAdif.value(name).toString();
+        if (!reserved.contains(name.toUpper()) && safeExtraAdifName(name) && value.toUtf8().size() <= 512) out += field(name.toUpper().toLatin1(), value);
+    }
     out += "<EOR>\r\n";
     return out;
 }
@@ -81,15 +102,23 @@ std::optional<QsoRecord> AdifService::parseRecord(const QByteArray &record, QStr
     q.rstSent = map.value("RST_SENT", "59"); q.rstReceived = map.value("RST_RCVD", "59"); q.grid = map.value("GRIDSQUARE"); q.comment = map.value("COMMENT");
     q.stationCallsign = map.value("STATION_CALLSIGN"); q.operatorCallsign = map.value("OPERATOR"); q.dxcc = map.value("DXCC"); q.country = map.value("COUNTRY");
     q.cqZone = map.value("CQZ"); q.ituZone = map.value("ITUZ"); q.contestId = map.value("CONTEST_ID"); q.satelliteName = map.value("SAT_NAME"); q.satelliteMode = map.value("SAT_MODE");
+    q.propagationMode = map.value("PROP_MODE"); q.antennaPath = map.value("ANT_PATH");
+    if (map.contains("TX_PWR") && !map.value("TX_PWR").trimmed().isEmpty()) {
+        bool powerOk = false; q.txPower = map.value("TX_PWR").trimmed().toDouble(&powerOk);
+        if (!powerOk || !std::isfinite(q.txPower)) { if (error) *error = QStringLiteral("ADIF TX_PWR must be numeric"); return std::nullopt; }
+    }
+    q.antenna = map.value("MY_ANTENNA");
     q.potaRef = map.value("POTA_REF"); q.sotaRef = map.value("SOTA_REF"); q.iota = map.value("IOTA"); q.wwffRef = map.value("WWFF_REF");
-    q.qslReceived = map.value("QSL_RCVD", "N"); q.lotwReceived = map.value("LOTW_QSL_RCVD", "N"); q.eqslReceived = map.value("EQSL_QSL_RCVD", "N"); q.qrzReceived = map.value("APP_SHACKCQ_QRZ_RCVD", "N");
+    q.qslManager = map.value("QSL_VIA"); q.qslMessage = map.value("QSLMSG"); q.qslSent = map.value("QSL_SENT"); q.qslReceived = map.value("QSL_RCVD", "N");
+    q.qslSentDate = isoDate(map.value("QSLSDATE")); q.qslReceivedDate = isoDate(map.value("QSLRDATE")); q.qslSentMethod = map.value("QSL_SENT_VIA"); q.qslReceivedMethod = map.value("QSL_RCVD_VIA");
+    q.lotwReceived = map.value("LOTW_QSL_RCVD", "N"); q.eqslReceived = map.value("EQSL_QSL_RCVD", "N"); q.qrzReceived = map.value("APP_SHACKCQ_QRZ_RCVD", "N");
     q.provenance = QStringLiteral("import");
     QDate date = QDate::fromString(map.value("QSO_DATE"), QStringLiteral("yyyyMMdd"));
     QString timeValue = map.value("TIME_ON").left(6).leftJustified(6, '0');
     QTime time = QTime::fromString(timeValue, QStringLiteral("HHmmss"));
     q.createdAt = date.isValid() && time.isValid() ? QDateTime(date, time, QTimeZone::UTC).toSecsSinceEpoch() : QDateTime::currentSecsSinceEpoch();
-    static const QSet<QString> known{"QSO_DATE","TIME_ON","CALL","FREQ","FREQ_RX","BAND","BAND_RX","MODE","SUBMODE","RST_SENT","RST_RCVD","GRIDSQUARE","COMMENT","STATION_CALLSIGN","OPERATOR","DXCC","COUNTRY","CQZ","ITUZ","CONTEST_ID","SAT_NAME","SAT_MODE","POTA_REF","SOTA_REF","IOTA","WWFF_REF","QSL_RCVD","LOTW_QSL_RCVD","EQSL_QSL_RCVD","APP_SHACKCQ_QRZ_RCVD"};
-    for (auto it = map.cbegin(); it != map.cend(); ++it) if (!known.contains(it.key())) q.extraAdif.insert(it.key(), it.value());
+    static const QSet<QString> known{"QSO_DATE","TIME_ON","CALL","FREQ","FREQ_RX","BAND","BAND_RX","MODE","SUBMODE","RST_SENT","RST_RCVD","GRIDSQUARE","COMMENT","STATION_CALLSIGN","OPERATOR","DXCC","COUNTRY","CQZ","ITUZ","CONTEST_ID","SAT_NAME","SAT_MODE","PROP_MODE","ANT_PATH","TX_PWR","MY_ANTENNA","POTA_REF","SOTA_REF","IOTA","WWFF_REF","QSL_VIA","QSLMSG","QSL_SENT","QSL_RCVD","QSLSDATE","QSLRDATE","QSL_SENT_VIA","QSL_RCVD_VIA","LOTW_QSL_RCVD","EQSL_QSL_RCVD","APP_SHACKCQ_QRZ_RCVD"};
+    for (auto it = map.cbegin(); it != map.cend(); ++it) if (!known.contains(it.key()) && safeExtraAdifName(it.key()) && it.value().toUtf8().size() <= 512) q.extraAdif.insert(it.key(), it.value());
     if (q.frequencyHz <= 0 || q.mode.isEmpty()) { if (error) *error = QStringLiteral("ADIF record requires FREQ and MODE"); return std::nullopt; }
     return q;
 }

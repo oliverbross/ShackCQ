@@ -109,7 +109,7 @@ endif()
 shackcq_target_warnings(shackcq_desktop_services)
 target_compile_definitions(shackcq_desktop_services PRIVATE
     SHACKCQ_BUILD_SHA="$ENV{GITHUB_SHA}"
-    SHACKCQ_DESKTOP_SCHEMA=16)
+    SHACKCQ_DESKTOP_SCHEMA=17)
 
 if(SHACKCQ_BUILD_NATIVE_DIGI)
     find_program(SHACKCQ_CARGO_EXECUTABLE cargo REQUIRED)

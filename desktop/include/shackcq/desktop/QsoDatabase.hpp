@@ -26,7 +26,7 @@ class QsoDatabase final : public QObject {
     Q_PROPERTY(QString path READ path CONSTANT)
     Q_PROPERTY(qulonglong revision READ revision NOTIFY revisionChanged)
 public:
-    static constexpr int SchemaVersion = 16;
+    static constexpr int SchemaVersion = 17;
     explicit QsoDatabase(QString path, QObject *parent = nullptr);
     ~QsoDatabase() override;
 
