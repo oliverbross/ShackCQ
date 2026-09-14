@@ -97,9 +97,9 @@ jobs:
           node_bin=$(cygpath -u "$SHACKCQ_NODE_BIN_WINDOWS")
           nsis_bin=$(cygpath -u "$SHACKCQ_NSIS_BIN_WINDOWS")
           cargo_bin=$(cygpath -u "$SHACKCQ_CARGO_BIN_WINDOWS")
-          binutils_target_bin=/mingw64/x86_64-w64-mingw32/bin
-          test -d "$binutils_target_bin"
-          export PATH="$node_bin:$nsis_bin:$cargo_bin:$binutils_target_bin:$PATH"
+          mingw_bin=/mingw64/bin
+          test -d "$mingw_bin"
+          export PATH="$node_bin:$nsis_bin:$cargo_bin:$mingw_bin:$PATH"
           command -v npx.cmd
           command -v makensis.exe
           command -v cargo.exe

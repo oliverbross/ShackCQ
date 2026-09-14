@@ -321,8 +321,8 @@ windows_build_lines = step_block(windows_build)
 for required in [
     "      - name: Build unsigned Windows x64 candidate",
     "        shell: msys2 {0}",
-    "          binutils_target_bin=/mingw64/x86_64-w64-mingw32/bin",
-    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$binutils_target_bin:$PATH"',
+    "          mingw_bin=/mingw64/bin",
+    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$mingw_bin:$PATH"',
     "          windres_path=$(command -v x86_64-w64-mingw32-windres.exe)",
     "          ar_path=$(command -v x86_64-w64-mingw32-ar.exe)",
     '          "$windres_path" -O coff -i "$RUNNER_TEMP/shackcq-preflight.rc" -o "$RUNNER_TEMP/shackcq-preflight.o"',
@@ -332,7 +332,7 @@ for required in [
 ]:
     assert required in windows_build_lines, required
 assert windows_build_lines.index(
-    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$binutils_target_bin:$PATH"'
+    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$mingw_bin:$PATH"'
 ) < windows_build_lines.index(
     "          windres_path=$(command -v x86_64-w64-mingw32-windres.exe)"
 )
