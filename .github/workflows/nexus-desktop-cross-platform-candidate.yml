@@ -2,6 +2,15 @@ name: Nexus Desktop Cross-Platform Candidate
 
 on:
   workflow_dispatch:
+    inputs:
+      platform:
+        description: Bounded candidate platform
+        required: true
+        default: windows-x64
+        type: choice
+        options:
+          - windows-x64
+          - linux-x86-64
   push:
     branches:
       - feature/nexus-native-desktop-cross-platform-ci-v1
@@ -18,6 +27,7 @@ env:
 jobs:
   windows-x64-gnu-cross:
     name: Windows x64 complete Nexus + Agent candidate
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'windows-x64'
     runs-on: windows-2025
     timeout-minutes: 90
     steps:
@@ -132,6 +142,7 @@ jobs:
 
   linux-x86-64:
     name: Linux x86_64 complete Nexus + Agent candidate
+    if: github.event_name != 'workflow_dispatch' || inputs.platform == 'linux-x86-64'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:

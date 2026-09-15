@@ -41,6 +41,16 @@ target_compile_definitions(logger_ingestion_tests PRIVATE
 shackcq_target_warnings(logger_ingestion_tests)
 add_test(NAME logger_ingestion_tests COMMAND logger_ingestion_tests)
 
+qt_add_executable(desktop_rotator_fleet_tests unit/desktop_rotator_fleet_tests.cpp)
+target_link_libraries(desktop_rotator_fleet_tests PRIVATE ${SHACKCQ_TEST_LIBS})
+shackcq_target_warnings(desktop_rotator_fleet_tests)
+add_test(NAME desktop_rotator_fleet_tests COMMAND desktop_rotator_fleet_tests)
+
+qt_add_executable(desktop_radio_fleet_tests unit/desktop_radio_fleet_tests.cpp)
+target_link_libraries(desktop_radio_fleet_tests PRIVATE ${SHACKCQ_TEST_LIBS})
+shackcq_target_warnings(desktop_radio_fleet_tests)
+add_test(NAME desktop_radio_fleet_tests COMMAND desktop_radio_fleet_tests)
+
 qt_add_executable(native_agent_ingress_tests unit/native_agent_ingress_tests.cpp)
 target_link_libraries(native_agent_ingress_tests PRIVATE ${SHACKCQ_TEST_LIBS})
 shackcq_target_warnings(native_agent_ingress_tests)

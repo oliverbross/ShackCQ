@@ -2,8 +2,8 @@
   "schema": 1,
   "sourceRepository": "https://github.com/oliverbross/ShackCQ-Web",
   "sourcePath": "packages/shared-digi-ui",
-  "webCommit": "82b32a62f83d386731842070d4907076f217b09b",
-  "contentSha256": "507c89592c46948f29f013e7c66fd35ae717e5257f16c92405b64d839d69dbd1",
+  "webCommit": "f4ae0bcb3866fa46ebf052fbd106561ee07de29f",
+  "contentSha256": "2065c352cade566118a2576bdd2d0d1d056468a94522e7af4628b552722b6266",
   "snapshotPath": "desktop/shared-digi-ui-snapshot",
   "contractVersion": 1,
   "nativeCommands": [
@@ -20,6 +20,12 @@
     "digi_unpair_agent",
     "digi_decode_recording",
     "digi_read_review_context",
-    "digi_prepare_review_contact"
+    "digi_prepare_review_contact",
+    "station_read_setup",
+    "station_configure_logger",
+    "station_configure_radios",
+    "station_set_radio_connection",
+    "station_configure_rotators",
+    "station_set_rotator_connection"
   ]
 }

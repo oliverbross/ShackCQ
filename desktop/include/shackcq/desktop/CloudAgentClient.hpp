@@ -15,6 +15,8 @@
 namespace shackcq::desktop {
 
 class LoggerIngestion;
+class DesktopRotatorFleet;
+class DesktopRadioFleet;
 
 class CloudAgentClient final : public QObject {
   Q_OBJECT
@@ -35,6 +37,8 @@ public:
   void stop();
   QVariantMap health() const;
   QJsonObject processControlFrame(const QJsonObject &frame);
+  void setRotatorFleet(DesktopRotatorFleet *fleet);
+  void setRadioFleet(DesktopRadioFleet *fleet);
 
 signals:
   void stateChanged();
@@ -46,6 +50,8 @@ private:
   void completeRadioCommand(const QJsonObject &frame);
   void sendHello();
   void sendSnapshot();
+  void sendRadioFleetSnapshots();
+  void sendRotatorSnapshots();
   void sendLoggerEvents();
   void sendObject(const QJsonObject &object);
   QJsonObject capabilityDescriptor() const;
@@ -57,6 +63,8 @@ private:
   DesktopRadioController *m_radio{};
   AgentDigiController *m_digi{};
   LoggerIngestion *m_logger{};
+  DesktopRotatorFleet *m_rotators{};
+  DesktopRadioFleet *m_radios{};
   QWebSocket m_socket;
   QTimer m_heartbeat;
   QTimer m_reconnect;

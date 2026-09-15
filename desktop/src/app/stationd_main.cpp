@@ -6,7 +6,9 @@
 #include "shackcq/desktop/DesktopPanadapter.hpp"
 #include "shackcq/desktop/DesktopPlatform.hpp"
 #include "shackcq/desktop/DesktopRadioController.hpp"
+#include "shackcq/desktop/DesktopRadioFleet.hpp"
 #include "shackcq/desktop/DesktopRotatorController.hpp"
+#include "shackcq/desktop/DesktopRotatorFleet.hpp"
 #include "shackcq/desktop/RemoteStationService.hpp"
 
 #include <QCommandLineParser>
@@ -193,13 +195,17 @@ int main(int argc, char **argv) {
       ? static_cast<DesktopCredentialVault *>(&fakeVault)
       : static_cast<DesktopCredentialVault *>(&systemVault);
   DesktopRadioController radio;
+  DesktopRadioFleet radios;
   AgentDigiController digi(&radio);
   LoggerIngestion logger(vault, paths.databases() + "/logger-events-v1.json");
   NativeAgentIngress nativeIngress(vault, &logger);
   QString nativeIngressError;
   nativeIngress.initialize(&nativeIngressError);
+  DesktopRotatorFleet rotators;
   CloudAgentClient cloudAgent(vault, &radio, nativeIngressOnly ? nullptr : &digi,
                               &logger);
+  cloudAgent.setRotatorFleet(&rotators);
+  cloudAgent.setRadioFleet(&radios);
   if (parser.isSet("review-tls-cert")) {
     const QUrl reviewOrigin(parser.value("cloud-origin"));
     if (!ephemeralCredentials ||
@@ -216,10 +222,13 @@ int main(int argc, char **argv) {
   }
   DesktopRotatorController rotator;
   DesktopPanadapter panadapter;
-  if (!nativeIngressOnly &&
-      (!radio.restoreConfiguration(configuration.section("radioProfiles"), &error) ||
-      !rotator.restoreConfiguration(configuration.section("rotatorProfiles"), &error) ||
-       !panadapter.restoreConfiguration(configuration.section("panadapter"), &error))) {
+  const QVariantMap rotatorSection = configuration.section("rotatorProfiles");
+  if (!radios.restoreConfiguration(configuration.section("radioFleetProfiles"), &error) ||
+      !rotators.restoreConfiguration(rotatorSection, &error) ||
+      (!nativeIngressOnly &&
+       (!radio.restoreConfiguration(configuration.section("radioProfiles"), &error) ||
+        (!rotatorSection.contains("profiles") && !rotator.restoreConfiguration(rotatorSection, &error)) ||
+        !panadapter.restoreConfiguration(configuration.section("panadapter"), &error)))) {
     QTextStream(stderr) << error << '\n'; return 2;
   }
   if (!cloudAgent.restoreConfiguration(configuration.section("cloudAgent"), &error)) {
@@ -339,6 +348,8 @@ int main(int argc, char **argv) {
   });
   QObject::connect(&application, &QCoreApplication::aboutToQuit, &application, [&] {
     cloudAgent.stop();
+    rotators.stopAll();
+    radios.stopAll();
     if (!nativeIngressOnly) {
       digi.stop("Agent shutdown");
       service.globalStop();
@@ -346,6 +357,8 @@ int main(int argc, char **argv) {
     }
     configuration.setSection("remoteStation", service.configuration()); configuration.save();
     configuration.setSection("cloudAgent", cloudAgent.configuration()); configuration.save();
+    configuration.setSection("rotatorProfiles", rotators.configuration()); configuration.save();
+    configuration.setSection("radioFleetProfiles", radios.configuration()); configuration.save();
     if (!nativeIngressOnly) {
       configuration.setSection("digiAgent", digi.configuration());
       configuration.save();
@@ -379,6 +392,11 @@ int main(int argc, char **argv) {
         if (action == "status") {
           QVariantMap status{{"cloudAgent", cloudAgent.health()},
                              {"nativeIngress", nativeIngress.capability().toVariantMap()},
+                             {"logger", logger.health()},
+                             {"radios", radios.descriptors()},
+                             {"radioProfiles", radios.configuration()},
+                             {"rotators", rotators.descriptors()},
+                             {"rotatorProfiles", rotators.configuration()},
                              {"hardwareAutoconnect", !nativeIngressOnly},
                              {"processId", QCoreApplication::applicationPid()}};
           if (!nativeIngressOnly) {
@@ -387,6 +405,36 @@ int main(int argc, char **argv) {
             status.insert("digi", digi.snapshot(QString{}, QString{}, 0).toVariantMap());
           }
           response = status;
+        } else if (action == "radio.configure" && nativeIngressOnly) {
+          const bool ownerMatches = request.value("ownerToken").toString() == nativeOwnerToken;
+          const QVariantMap section{{"schemaVersion", 1}, {"profiles", request.value("profiles").toArray().toVariantList()}};
+          if (!ownerMatches) { ok=false; response=QVariantMap{{"code","OWNER_TOKEN_REJECTED"}}; }
+          else if (!radios.restoreConfiguration(section, &error)) { ok=false; response=QVariantMap{{"code","RADIO_PROFILE_INVALID"},{"detail",error.left(240)}}; }
+          else { configuration.setSection("radioFleetProfiles",radios.configuration()); if(!configuration.save(&error)){ok=false;response=QVariantMap{{"code","RADIO_PROFILE_SAVE_FAILED"}};}else response=QVariantMap{{"code","RADIO_PROFILES_SAVED"},{"radios",radios.descriptors()}}; }
+        } else if ((action == "radio.connect" || action == "radio.disconnect") && nativeIngressOnly) {
+          const bool ownerMatches=request.value("ownerToken").toString()==nativeOwnerToken;const QString id=request.value("deviceId").toString();
+          if(!ownerMatches){ok=false;response=QVariantMap{{"code","OWNER_TOKEN_REJECTED"}};}
+          else if(action=="radio.connect"&&!radios.connectProfile(id,&error)){ok=false;response=QVariantMap{{"code","RADIO_CONNECT_FAILED"},{"detail",error.left(240)}};}
+          else {if(action=="radio.disconnect")radios.disconnectProfile(id);response=QVariantMap{{"code",action=="radio.connect"?"RADIO_CONNECTED":"RADIO_DISCONNECTED"}};}
+        } else if (action == "logger.configure" && nativeIngressOnly) {
+          const bool ownerMatches = request.value("ownerToken").toString() == nativeOwnerToken;
+          if (!ownerMatches) { ok=false; response=QVariantMap{{"code","OWNER_TOKEN_REJECTED"}}; }
+          else {
+            const QJsonObject result = logger.applyProfile(request.value("profile").toObject());
+            ok = result.value("ok").toBool();
+            response = result.toVariantMap();
+          }
+        } else if (action == "rotator.configure" && nativeIngressOnly) {
+          const bool ownerMatches = request.value("ownerToken").toString() == nativeOwnerToken;
+          const QVariantMap section{{"schemaVersion", 2}, {"profiles", request.value("profiles").toArray().toVariantList()}};
+          if (!ownerMatches) { ok=false; response=QVariantMap{{"code","OWNER_TOKEN_REJECTED"}}; }
+          else if (!rotators.restoreConfiguration(section, &error)) { ok=false; response=QVariantMap{{"code","ROTATOR_PROFILE_INVALID"},{"detail",error.left(240)}}; }
+          else { configuration.setSection("rotatorProfiles",rotators.configuration()); if(!configuration.save(&error)){ok=false;response=QVariantMap{{"code","ROTATOR_PROFILE_SAVE_FAILED"}};}else response=QVariantMap{{"code","ROTATOR_PROFILES_SAVED"},{"rotators",rotators.descriptors()}}; }
+        } else if ((action == "rotator.connect" || action == "rotator.disconnect") && nativeIngressOnly) {
+          const bool ownerMatches=request.value("ownerToken").toString()==nativeOwnerToken;const QString id=request.value("deviceId").toString();
+          if(!ownerMatches){ok=false;response=QVariantMap{{"code","OWNER_TOKEN_REJECTED"}};}
+          else if(action=="rotator.connect"&&!rotators.connectProfile(id,&error)){ok=false;response=QVariantMap{{"code","ROTATOR_CONNECT_FAILED"},{"detail",error.left(240)}};}
+          else {if(action=="rotator.disconnect")rotators.disconnectProfile(id);response=QVariantMap{{"code",action=="rotator.connect"?"ROTATOR_CONNECTED":"ROTATOR_DISCONNECTED"}};}
         } else if (action == "native-setup.pair" && nativeIngressOnly) {
           const bool ownerMatches = request.value("ownerToken").toString() == nativeOwnerToken;
           const QString code = request.value("code").toString();
@@ -439,7 +487,7 @@ int main(int argc, char **argv) {
         } else if (action == "list-clients" && !nativeIngressOnly) response = service.pairedDevices();
         else if (action == "pairing-offer" && !nativeIngressOnly) response = service.createPairingOffer();
         else if (action == "revoke" && !nativeIngressOnly) { service.revokeDevice(request.value("deviceId").toString()); response = QVariantMap{{"revoked", true}}; }
-        else if (action == "stop") { const bool ownerMatches = !nativeIngressOnly || request.value("ownerToken").toString() == nativeOwnerToken; const bool stopped = ownerMatches && (nativeIngressOnly || service.globalStop()); ok = stopped; response = QVariantMap{{"stopped", stopped}, {"code", stopped ? "GLOBAL_STOPPED" : ownerMatches ? "RX_UNCONFIRMED" : "OWNER_TOKEN_REJECTED"}}; }
+        else if (action == "stop") { const bool ownerMatches = !nativeIngressOnly || request.value("ownerToken").toString() == nativeOwnerToken; if(ownerMatches){radios.stopAll();rotators.stopAll();} const bool stopped = ownerMatches && (nativeIngressOnly || service.globalStop()); ok = stopped; response = QVariantMap{{"stopped", stopped}, {"code", stopped ? "GLOBAL_STOPPED" : ownerMatches ? "RX_UNCONFIRMED" : "OWNER_TOKEN_REJECTED"}}; }
         else if (action == "digi-stop" && !nativeIngressOnly) { const auto outcome = digi.stop("local operator STOP"); const bool stopped = outcome == AgentDigiController::StopOutcome::RxVerified; ok = stopped; const QString code = stopped ? "STOPPED_RX_VERIFIED" : outcome == AgentDigiController::StopOutcome::InProgress ? "STOP_IN_PROGRESS_RX_UNCONFIRMED" : "RX_UNCONFIRMED"; response = QVariantMap{{"stopped", stopped}, {"code", code}}; }
         else { ok = false; response = QVariantMap{{"code", nativeIngressOnly ? "HARDWARE_DISABLED" : "AGENT_ADMIN_ACTION_UNKNOWN"}}; }
         if (action == "stop" && ok)

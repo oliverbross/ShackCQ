@@ -755,7 +755,11 @@ void LoggerIngestion::setError(Profile *profile, const QString &code) {
   m_lastError = code;
 }
 QVariantMap LoggerIngestion::health() const {
+  QVariantList profileStates;
+  QStringList ids=m_profiles.keys();std::sort(ids.begin(),ids.end());
+  for(const QString &id:ids){const Profile *profile=m_profiles.value(id);profileStates.push_back(QVariantMap{{"id",profile->id},{"source",profile->source},{"instanceId",profile->instanceId},{"loopbackPort",profile->port},{"state",profile->state},{"error",profile->error},{"lastPacketUtc",profile->lastPacket.isValid()?profile->lastPacket.toString(Qt::ISODateWithMs):QString{}}});}
   return {{"profiles", m_profiles.size()},
+          {"profileStates", profileStates},
           {"pendingEvents", m_journal.size()},
           {"lastError", m_lastError},
           {"authority", "LOOPBACK_RECEIVE_ONLY"},

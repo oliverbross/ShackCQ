@@ -162,6 +162,7 @@ void DesktopRotatorController::disconnectRotator() {
   m_protocol = "none";
   m_state = "Disconnected / automation disarmed";
   m_targetPrepared = false;
+  m_positionObserved = false;
   emit snapshotChanged();
   emit preparedChanged();
 }
@@ -320,6 +321,7 @@ void DesktopRotatorController::poll() {
   if (rot_get_position(static_cast<ROT *>(m_rotator), &az, &el) == RIG_OK) {
     m_azimuth = az;
     m_elevation = el;
+    m_positionObserved = true;
     emit snapshotChanged();
   }
 #endif
@@ -364,6 +366,7 @@ void DesktopRotatorController::consume(const QByteArray &bytes) {
   }
   m_azimuth = azimuth;
   m_elevation = elevation;
+  m_positionObserved = true;
   emit snapshotChanged();
 }
 

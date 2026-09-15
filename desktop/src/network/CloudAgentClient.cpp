@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "shackcq/desktop/CloudAgentClient.hpp"
 #include "shackcq/desktop/LoggerIngestion.hpp"
+#include "shackcq/desktop/DesktopRotatorFleet.hpp"
+#include "shackcq/desktop/DesktopRadioFleet.hpp"
 
 #include <algorithm>
 #include <initializer_list>
@@ -25,12 +27,13 @@
 namespace shackcq::desktop {
 namespace {
 constexpr qsizetype MaxControlBytes = 64 * 1024;
-QJsonObject protocol() { return {{"major", 1}, {"minor", 2}}; }
+QJsonObject protocol() { return {{"major", 1}, {"minor", 3}}; }
 QString buildIdentity() {
   const QString configured = QStringLiteral(SHACKCQ_BUILD_SHA).left(80);
   return configured.isEmpty() ? QStringLiteral("local-uncommitted-build")
                               : configured;
 }
+
 QString compact(const QJsonObject &value) {
   return QString::fromUtf8(QJsonDocument(value).toJson(QJsonDocument::Compact));
 }
@@ -43,6 +46,33 @@ QString enumName(const QMetaEnum &meta, int value) {
   const char *key = meta.valueToKey(value);
   return key ? QString::fromLatin1(key) : QString::number(value);
 }
+}
+
+void CloudAgentClient::setRotatorFleet(DesktopRotatorFleet *fleet) {
+  if (m_rotators == fleet)
+    return;
+  if (m_rotators)
+    disconnect(m_rotators, nullptr, this, nullptr);
+  m_rotators = fleet;
+  if (m_rotators)
+    connect(m_rotators, &DesktopRotatorFleet::snapshotChanged, this, [this] {
+      if (m_generation != 0)
+        sendRotatorSnapshots();
+    });
+}
+
+void CloudAgentClient::setRadioFleet(DesktopRadioFleet *fleet) {
+  if (m_radios == fleet) return;
+  if (m_radios) disconnect(m_radios, nullptr, this, nullptr);
+  m_radios = fleet;
+  if (!m_radios) return;
+  connect(m_radios, &DesktopRadioFleet::snapshotChanged, this, [this] {
+    if (m_generation != 0) sendRadioFleetSnapshots();
+  });
+  connect(m_radios, &DesktopRadioFleet::inventoryChanged, this, [this] {
+    if (m_generation != 0)
+      m_socket.close(QWebSocketProtocol::CloseCodeNormal, "radio inventory changed");
+  });
 }
 
 CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
@@ -394,7 +424,9 @@ void CloudAgentClient::connectNow() {
 void CloudAgentClient::sendHello() {
   const QString currentDeviceId = deviceId();
   QJsonArray devices;
-  if (!currentDeviceId.isEmpty()) {
+  if (m_radios && m_radios->count() > 0) {
+    devices = QJsonArray::fromVariantList(m_radios->descriptors());
+  } else if (!currentDeviceId.isEmpty()) {
     devices.append(QJsonObject{{"id", currentDeviceId},
                                {"name", m_radio->model().left(80)},
                                {"hamlibModelId", m_radio->hamlibModelId()},
@@ -410,7 +442,8 @@ void CloudAgentClient::sendHello() {
               {"version", QCoreApplication::applicationVersion().left(40)},
               {"build", buildIdentity()},
               {"loggerSources", QJsonArray{"WSJTX", "N1MM", "NEXUS_NATIVE"}},
-              {"devices", devices}});
+              {"devices", devices},
+              {"rotators", m_rotators ? QJsonArray::fromVariantList(m_rotators->descriptors()) : QJsonArray{}}});
 }
 
 void CloudAgentClient::receiveText(const QString &text) {
@@ -441,6 +474,8 @@ void CloudAgentClient::receiveText(const QString &text) {
     m_heartbeat.start();
     setState("Live", "Cloud Agent connected; receive controls only");
     sendSnapshot();
+    sendRadioFleetSnapshots();
+    sendRotatorSnapshots();
     sendLoggerEvents();
     return;
   }
@@ -466,8 +501,18 @@ void CloudAgentClient::receiveText(const QString &text) {
     sendSnapshot();
     return;
   }
+  if (frame.value("type") == "rotator.command" && m_rotators) {
+    sendObject(m_rotators->processCommand(frame, m_agentId, m_generation));
+    sendRotatorSnapshots();
+    return;
+  }
   if (frame.value("type") != "radio.command")
     return;
+  if (m_radios && m_radios->contains(frame.value("deviceId").toString())) {
+    sendObject(m_radios->processCommand(frame, m_agentId, m_generation));
+    sendRadioFleetSnapshots();
+    return;
+  }
   if (m_radio->radioOperationActive() || !m_pendingRadioCommands.isEmpty()) {
     if (m_pendingRadioCommands.size() >= 16) {
       sendObject({{"type", "radio.command.result"},
@@ -723,11 +768,27 @@ void CloudAgentClient::sendSnapshot() {
     sendObject(m_digi->snapshot(m_agentId, deviceId(), m_generation));
 }
 
+void CloudAgentClient::sendRotatorSnapshots() {
+  if (!m_rotators || m_generation == 0 ||
+      m_socket.state() != QAbstractSocket::ConnectedState)
+    return;
+  for (const QJsonValue &value : m_rotators->snapshots(m_agentId, m_generation))
+    sendObject(value.toObject());
+}
+
+void CloudAgentClient::sendRadioFleetSnapshots() {
+  if (!m_radios || m_generation == 0 ||
+      m_socket.state() != QAbstractSocket::ConnectedState)
+    return;
+  for (const QJsonValue &value : m_radios->snapshots(m_agentId, m_generation))
+    sendObject(value.toObject());
+}
+
 void CloudAgentClient::sendObject(const QJsonObject &object) {
   const QByteArray bytes =
       QJsonDocument(object).toJson(QJsonDocument::Compact);
   const QString type=object.value("type").toString();
-  if((type=="digi.snapshot"||type=="radio.snapshot")&&m_socket.bytesToWrite()>128*1024)return;
+  if((type=="digi.snapshot"||type=="radio.snapshot"||type=="rotator.snapshot")&&m_socket.bytesToWrite()>128*1024)return;
   if(m_socket.bytesToWrite()>1024*1024){m_socket.close(QWebSocketProtocol::CloseCodePolicyViolated,"outgoing queue limit");return;}
   if (bytes.size() <= MaxControlBytes &&
       m_socket.state() == QAbstractSocket::ConnectedState)

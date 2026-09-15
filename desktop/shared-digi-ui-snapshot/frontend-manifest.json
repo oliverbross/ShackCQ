@@ -6,7 +6,7 @@
     "major": 1,
     "minor": 0
   },
-  "sourceRevision": "82b32a62f83d386731842070d4907076f217b09b",
+  "sourceRevision": "f4ae0bcb3866fa46ebf052fbd106561ee07de29f",
   "entrypoint": "index.html",
   "tauriBinding": "fixed-invoke-v1",
   "tauriCommands": [
@@ -23,23 +23,29 @@
     "digi_unpair_agent",
     "digi_decode_recording",
     "digi_read_review_context",
-    "digi_prepare_review_contact"
+    "digi_prepare_review_contact",
+    "station_read_setup",
+    "station_configure_logger",
+    "station_configure_radios",
+    "station_set_radio_connection",
+    "station_configure_rotators",
+    "station_set_rotator_connection"
   ],
   "assets": [
     {
-      "path": "assets/index-CtiA_d1n.css",
-      "bytes": 83442,
-      "sha256": "35ee8f003a3da80e7659f1c751fc2a6515c92e67bbb8b3436b4b7dfd133463a9"
+      "path": "assets/index-BsuFx-js.js",
+      "bytes": 247963,
+      "sha256": "9bec26d70dd0acbdfe211cbfc0dbcee9c1c8187d2375c1dab69d3b7ab46f1f4b"
     },
     {
-      "path": "assets/index-kx8qjoIU.js",
-      "bytes": 240002,
-      "sha256": "cfec708bf401cadb784590712cf05873369537989fc8e08166c796bd983edb41"
+      "path": "assets/index-Czn2ozcF.css",
+      "bytes": 96055,
+      "sha256": "2106dc503bbf94866e8ebd93827402ac181700937f8ed4cb4841d7f6e4bcdf7e"
     },
     {
       "path": "index.html",
       "bytes": 450,
-      "sha256": "2dc443137e9c9b5b8195a72326d7c364be3435d48e039c598586870cf1b2e065"
+      "sha256": "22da674e53849ea8963ea39b041f235e4483969f8c5c97cc8885caa1c91109d5"
     }
   ]
 }

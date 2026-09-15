@@ -67,10 +67,12 @@ set(SHACKCQ_DESKTOP_SERVICE_SOURCES
     src/platform/DesktopParityPlatform.cpp
     src/platform/DesktopFunctionalOwners.cpp
     src/radio/DesktopRadioController.cpp
+    src/radio/DesktopRadioFleet.cpp
     src/radio/HamlibHelperTransport.cpp
     src/radio/ReceiverListModel.cpp
     src/radio/TciClient.cpp
     src/rotator/DesktopRotatorController.cpp
+    src/rotator/DesktopRotatorFleet.cpp
     src/panadapter/DesktopPanadapter.cpp
     src/panadapter/PanadapterSceneItem.cpp
 )

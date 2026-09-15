@@ -805,7 +805,7 @@ fn targets_from_agent(status: &Value, binding: &Value) -> Value {
     } else {
         Vec::new()
     };
-    json!({"agents":[{"id":AGENT_ID,"name":if paired {station_label} else {"ShackCQ Desktop local runtime"},"stationProfileId":station_profile_id,"protocolMinor":2,"presence":"online","canonicalBindingReady":binding_ready}],"radios":[{"id":DEVICE_ID,"agentId":AGENT_ID,"deviceId":DEVICE_ID,"name":"Nexus native receive runtime","manufacturer":"ShackCQ","model":"Nexus v1.10.3 RX-only"}],"stations":stations})
+    json!({"agents":[{"id":AGENT_ID,"name":if paired {station_label} else {"ShackCQ Desktop local runtime"},"stationProfileId":station_profile_id,"protocolMinor":3,"presence":"online","canonicalBindingReady":binding_ready}],"radios":[{"id":DEVICE_ID,"agentId":AGENT_ID,"deviceId":DEVICE_ID,"name":"Nexus native receive runtime","manufacturer":"ShackCQ","model":"Nexus v1.10.3 RX-only"}],"stations":stations})
 }
 
 #[tauri::command]
@@ -949,6 +949,78 @@ fn digi_unpair_agent(state: State<'_, AppState>) -> Value {
         .lock()
         .map(|agent| agent.setup_request("native-setup.unpair", json!({})))
         .unwrap_or_else(|_| json!({"ok":false,"code":"AGENT_SETUP_UNAVAILABLE"}))
+}
+
+#[tauri::command]
+fn station_read_setup(state: State<'_, AppState>) -> Value {
+    state
+        .agent
+        .lock()
+        .map(|agent| agent.setup_request("status", json!({})))
+        .unwrap_or_else(|_| json!({"ok":false,"code":"STATION_SETUP_UNAVAILABLE"}))
+}
+
+#[tauri::command]
+fn station_configure_logger(state: State<'_, AppState>, profile: Value) -> Value {
+    if !profile.is_object() || serde_json::to_vec(&profile).map_or(true, |bytes| bytes.len() > 4096) {
+        return json!({"ok":false,"code":"LOGGER_PROFILE_INVALID"});
+    }
+    state
+        .agent
+        .lock()
+        .map(|agent| agent.setup_request("logger.configure", json!({"profile":profile})))
+        .unwrap_or_else(|_| json!({"ok":false,"code":"STATION_SETUP_UNAVAILABLE"}))
+}
+
+#[tauri::command]
+fn station_configure_rotators(state: State<'_, AppState>, profiles: Value) -> Value {
+    if !profiles.is_array()
+        || profiles.as_array().is_some_and(|rows| rows.len() > 8)
+        || serde_json::to_vec(&profiles).map_or(true, |bytes| bytes.len() > 32 * 1024)
+    {
+        return json!({"ok":false,"code":"ROTATOR_PROFILE_INVALID"});
+    }
+    state
+        .agent
+        .lock()
+        .map(|agent| agent.setup_request("rotator.configure", json!({"profiles":profiles})))
+        .unwrap_or_else(|_| json!({"ok":false,"code":"STATION_SETUP_UNAVAILABLE"}))
+}
+
+#[tauri::command]
+fn station_configure_radios(state: State<'_, AppState>, profiles: Value) -> Value {
+    if !profiles.is_array()
+        || profiles.as_array().is_some_and(|rows| rows.len() > 8)
+        || serde_json::to_vec(&profiles).map_or(true, |bytes| bytes.len() > 32 * 1024)
+    {
+        return json!({"ok":false,"code":"RADIO_PROFILE_INVALID"});
+    }
+    state.agent.lock()
+        .map(|agent| agent.setup_request("radio.configure", json!({"profiles":profiles})))
+        .unwrap_or_else(|_| json!({"ok":false,"code":"STATION_SETUP_UNAVAILABLE"}))
+}
+
+#[tauri::command]
+fn station_set_radio_connection(state: State<'_, AppState>, device_id: String, connected: bool) -> Value {
+    if !valid_id(&device_id) { return json!({"ok":false,"code":"RADIO_DEVICE_INVALID"}); }
+    state.agent.lock()
+        .map(|agent| agent.setup_request(if connected { "radio.connect" } else { "radio.disconnect" }, json!({"deviceId":device_id})))
+        .unwrap_or_else(|_| json!({"ok":false,"code":"STATION_SETUP_UNAVAILABLE"}))
+}
+
+#[tauri::command]
+fn station_set_rotator_connection(state: State<'_, AppState>, device_id: String, connected: bool) -> Value {
+    if !valid_id(&device_id) {
+        return json!({"ok":false,"code":"ROTATOR_DEVICE_INVALID"});
+    }
+    state
+        .agent
+        .lock()
+        .map(|agent| agent.setup_request(
+            if connected { "rotator.connect" } else { "rotator.disconnect" },
+            json!({"deviceId":device_id}),
+        ))
+        .unwrap_or_else(|_| json!({"ok":false,"code":"STATION_SETUP_UNAVAILABLE"}))
 }
 
 struct PrivateRecording {
@@ -1472,7 +1544,13 @@ fn main() {
             digi_prepare_review_contact,
             digi_pair_agent,
             digi_unpair_agent,
-            digi_decode_recording
+            digi_decode_recording,
+            station_read_setup,
+            station_configure_logger,
+            station_configure_radios,
+            station_set_radio_connection,
+            station_configure_rotators,
+            station_set_rotator_connection
         ])
         .build(tauri::generate_context!())
         .expect("ShackCQ Desktop runtime failed");

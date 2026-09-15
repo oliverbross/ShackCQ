@@ -26,6 +26,7 @@ public:
     double preparedElevation() const { return m_preparedElevation; }
     bool automationArmed() const { return false; }
     QString protocol() const { return m_protocol; }
+    bool positionObserved() const { return m_positionObserved; }
     Q_INVOKABLE bool connectRotator(int modelId, const QString &port, int baudRate);
     Q_INVOKABLE bool connectNative(const QString &protocol, const QString &route,
                                    int baudRate);
@@ -71,6 +72,7 @@ private:
     double m_minElevation{-10};
     double m_maxElevation{180};
     QVariantList m_forbiddenSectors;
+    bool m_positionObserved{};
 };
 
 } // namespace shackcq::desktop
