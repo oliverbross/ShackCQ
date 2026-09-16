@@ -85,6 +85,8 @@ grep -F "trap 'exit 143' TERM" "$macos" >/dev/null
 grep -F 'git -C "$repo" diff --ignore-cr-at-eol --exit-code --' "$candidate" >/dev/null
 grep -F '7z l "${packages[0]}" | tr -d '\''\r'\'' | sed '\''s#\\#/#g'\'' >"$nsis_listing"' "$candidate" >/dev/null
 grep -F '    "$payload_root"|"$payload_root"/*) ;;' "$candidate" >/dev/null
+grep -F '      libgfortran-5.dll libquadmath-0.dll; do' "$candidate" >/dev/null
+grep -F '    test -s "$windows_runtime_dir/$mingw_runtime" || \' "$candidate" >/dev/null
 ! grep -E '7z l .*\|[[:space:]]*grep' "$candidate"
 ! grep -F 'rm -rf "$repo/desktop/shackcq-tauri/binaries"' "$candidate" "$macos"
 grep -F 'rm -f -- "$generated_sidecar"' "$candidate" "$macos" >/dev/null
