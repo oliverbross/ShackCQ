@@ -85,7 +85,8 @@ grep -F "trap 'exit 143' TERM" "$macos" >/dev/null
 grep -F 'git -C "$repo" diff --ignore-cr-at-eol --exit-code --' "$candidate" >/dev/null
 grep -F '7z l "${packages[0]}" | tr -d '\''\r'\'' | sed '\''s#\\#/#g'\'' >"$nsis_listing"' "$candidate" >/dev/null
 grep -F '    "$payload_root"|"$payload_root"/*) ;;' "$candidate" >/dev/null
-grep -F '      libgfortran-5.dll libquadmath-0.dll; do' "$candidate" >/dev/null
+grep -F 'for mingw_runtime in libgfortran-5.dll libquadmath-0.dll; do' "$candidate" >/dev/null
+grep -F 'mingw_runtime_bin=${SHACKCQ_MINGW_RUNTIME_BIN:-/mingw64/bin}' "$candidate" >/dev/null
 grep -F '    cp "$mingw_source" "$windows_runtime_dir/$mingw_runtime"' "$candidate" >/dev/null
 grep -F '  find "$windows_runtime_dir/sqldrivers" -maxdepth 1 -type f \' "$candidate" >/dev/null
 grep -F "    ! -iname 'qsqlite.dll' -delete" "$candidate" >/dev/null
@@ -357,10 +358,13 @@ for required in [
     "      - name: Build unsigned Windows x64 candidate",
     "        shell: msys2 {0}",
     "          mingw_bin=/mingw64/bin",
-    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$mingw_bin:$PATH"',
-    "          for tool in gcc g++ gfortran windres ar objdump ranlib strip dlltool nm ld as; do",
-    '            prefixed_tool="$mingw_bin/x86_64-w64-mingw32-$tool.exe"',
+    '          qt_toolchain_bin="$(dirname "$(dirname "$qt_root")")/Tools/mingw1310_64/bin"',
+    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$qt_toolchain_bin:$mingw_bin:$PATH"',
+    '          export SHACKCQ_MINGW_RUNTIME_BIN="$qt_toolchain_bin"',
+    "          for tool in gcc g++ windres ar objdump ranlib strip dlltool nm ld as; do",
+    '            prefixed_tool="$qt_toolchain_bin/x86_64-w64-mingw32-$tool.exe"',
     '            test -e "$prefixed_tool" || cp "$source_tool" "$prefixed_tool"',
+    '          test -e "$mingw_bin/x86_64-w64-mingw32-gfortran.exe" || \\',
     "          windres_path=$(command -v x86_64-w64-mingw32-windres.exe)",
     "          ar_path=$(command -v x86_64-w64-mingw32-ar.exe)",
     '          "$windres_path" -O coff -i "$RUNNER_TEMP/shackcq-preflight.rc" -o "$RUNNER_TEMP/shackcq-preflight.o"',
@@ -370,7 +374,7 @@ for required in [
 ]:
     assert required in windows_build_lines, required
 assert windows_build_lines.index(
-    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$mingw_bin:$PATH"'
+    '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$qt_toolchain_bin:$mingw_bin:$PATH"'
 ) < windows_build_lines.index(
     "          windres_path=$(command -v x86_64-w64-mingw32-windres.exe)"
 )

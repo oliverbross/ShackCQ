@@ -577,12 +577,38 @@ if [ "$platform" = windows-x64 ]; then
   test -s "$windows_runtime_dir/Qt6Core.dll"
   test -s "$windows_runtime_dir/sqldrivers/qsqlite.dll"
   find "$windows_runtime_dir/tls" -type f -iname 'q*backend.dll' -print -quit | grep -q .
-  : >"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
-  for mingw_runtime in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll \
-      libgfortran-5.dll libquadmath-0.dll; do
+  mingw_runtime_bin=${SHACKCQ_MINGW_RUNTIME_BIN:-/mingw64/bin}
+  if command -v cygpath >/dev/null 2>&1; then
+    mingw_runtime_bin=$(cygpath -u "$mingw_runtime_bin")
+  fi
+  test -x "$mingw_runtime_bin/gcc.exe"
+  {
+    printf 'C_CPP_RUNTIME_BYTES_SOURCE=%s\n' "$mingw_runtime_bin"
+    "$mingw_runtime_bin/gcc.exe" --version | sed -n '1p'
+  } >"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
+  for mingw_runtime in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+    mingw_source="$mingw_runtime_bin/$mingw_runtime"
+    test -s "$mingw_source"
+    cp "$mingw_source" "$windows_runtime_dir/$mingw_runtime"
+    printf '%s  %s\n' "$(sha256sum "$mingw_source" | awk '{print $1}')" \
+      "$mingw_runtime" >>"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
+    mingw_package=$(pacman -Qqo "/mingw64/bin/$mingw_runtime")
+    pacman -Q "$mingw_package" >>"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
+    while IFS= read -r mingw_license; do
+      test -s "$mingw_license"
+      cp "$mingw_license" \
+        "$package_metadata_dir/MINGW-${mingw_package}-$(basename "$mingw_license")"
+    done < <(pacman -Ql "$mingw_package" | \
+      awk '$2 ~ /\/share\/licenses\// && $2 !~ /\/$/ { print $2 }')
+  done
+  printf 'FORTRAN_RUNTIME_BYTES_SOURCE=/mingw64/bin\n' \
+    >>"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
+  for mingw_runtime in libgfortran-5.dll libquadmath-0.dll; do
     mingw_source="/mingw64/bin/$mingw_runtime"
     test -s "$mingw_source"
     cp "$mingw_source" "$windows_runtime_dir/$mingw_runtime"
+    printf '%s  %s\n' "$(sha256sum "$mingw_source" | awk '{print $1}')" \
+      "$mingw_runtime" >>"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
     mingw_package=$(pacman -Qqo "$mingw_source")
     pacman -Q "$mingw_package" >>"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
     while IFS= read -r mingw_license; do

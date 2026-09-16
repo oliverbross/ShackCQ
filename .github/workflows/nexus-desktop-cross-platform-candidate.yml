@@ -194,19 +194,28 @@ jobs:
           nsis_bin=$(cygpath -u "$SHACKCQ_NSIS_BIN_WINDOWS")
           cargo_bin=$(cygpath -u "$SHACKCQ_CARGO_BIN_WINDOWS")
           mingw_bin=/mingw64/bin
+          qt_root=$(cygpath -u "$QT_ROOT_DIR")
+          qt_toolchain_bin="$(dirname "$(dirname "$qt_root")")/Tools/mingw1310_64/bin"
           test -d "$mingw_bin"
-          export PATH="$node_bin:$nsis_bin:$cargo_bin:$mingw_bin:$PATH"
+          test -x "$qt_toolchain_bin/gcc.exe"
+          test -x "$qt_toolchain_bin/g++.exe"
+          export PATH="$node_bin:$nsis_bin:$cargo_bin:$qt_toolchain_bin:$mingw_bin:$PATH"
+          export SHACKCQ_MINGW_RUNTIME_BIN="$qt_toolchain_bin"
           # Native MSYS2 names these tools without the Linux cross-prefix, while
           # the retained Nexus/FFTW toolchain deliberately consumes the
-          # x86_64-w64-mingw32-* contract. Keep the compiler in its original
-          # directory and add only the missing aliases so GCC's relative search
-          # paths and the existing package audit remain valid.
-          for tool in gcc g++ gfortran windres ar objdump ranlib strip dlltool nm ld as; do
-            source_tool="$mingw_bin/$tool.exe"
-            prefixed_tool="$mingw_bin/x86_64-w64-mingw32-$tool.exe"
+          # x86_64-w64-mingw32-* contract. Compile every C/C++ object with the
+          # exact GCC 13.1 toolchain used by the official Qt archive so the
+          # single packaged libstdc++ runtime is ABI-coherent. Keep only
+          # gfortran on MSYS2 because the Qt tool archive does not ship it.
+          for tool in gcc g++ windres ar objdump ranlib strip dlltool nm ld as; do
+            source_tool="$qt_toolchain_bin/$tool.exe"
+            prefixed_tool="$qt_toolchain_bin/x86_64-w64-mingw32-$tool.exe"
             test -x "$source_tool"
             test -e "$prefixed_tool" || cp "$source_tool" "$prefixed_tool"
           done
+          test -x "$mingw_bin/gfortran.exe"
+          test -e "$mingw_bin/x86_64-w64-mingw32-gfortran.exe" || \
+            cp "$mingw_bin/gfortran.exe" "$mingw_bin/x86_64-w64-mingw32-gfortran.exe"
           command -v npx.cmd
           command -v makensis.exe
           command -v cargo.exe
@@ -219,6 +228,7 @@ jobs:
           test "$(rustc -vV | sed -n 's/^release: //p')" = 1.91.0
           test "$(cargo -V | awk '{print $2}')" = 1.91.0
           test "$("$gcc_path" -dumpmachine)" = x86_64-w64-mingw32
+          test "$("$gcc_path" -dumpfullversion)" = 13.1.0
           "$windres_path" --version | sed -n '1p'
           "$ar_path" --version | sed -n '1p'
           printf '1 VERSIONINFO\nFILEVERSION 0,2,0,0\nBEGIN\nEND\n' >"$RUNNER_TEMP/shackcq-preflight.rc"
