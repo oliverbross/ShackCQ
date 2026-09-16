@@ -353,12 +353,22 @@ struct AppState {
 struct AgentSupervisor {
     child: Option<Child>,
     owner_token: String,
+    executable: std::path::PathBuf,
 }
 impl AgentSupervisor {
     fn ensure(
         _app: &tauri::AppHandle,
         review: Option<&ReviewProfile>,
     ) -> Result<(Self, String), String> {
+        let current = std::env::current_exe().map_err(|_| "desktop executable unavailable")?;
+        let executable = current
+            .parent()
+            .ok_or("desktop directory unavailable")?
+            .join(if cfg!(windows) {
+                "shackcq-stationd.exe"
+            } else {
+                "shackcq-stationd"
+            });
         if review.is_some() && agent_ingress::probe() != agent_ingress::AgentProbe::Missing {
             return Err("ISOLATED_REVIEW_AGENT_IDENTITY_IN_USE".into());
         }
@@ -369,6 +379,7 @@ impl AgentSupervisor {
                         Self {
                             child: None,
                             owner_token: String::new(),
+                            executable,
                         },
                         "EXTERNAL_NATIVE_INGRESS".into(),
                     ))
@@ -378,6 +389,7 @@ impl AgentSupervisor {
                         Self {
                             child: None,
                             owner_token: String::new(),
+                            executable,
                         },
                         "LEGACY_AGENT_HANDOVER_REQUIRED".into(),
                     ))
@@ -385,19 +397,10 @@ impl AgentSupervisor {
                 agent_ingress::AgentProbe::Missing => {}
             }
         }
-        let current = std::env::current_exe().map_err(|_| "desktop executable unavailable")?;
-        let executable = current
-            .parent()
-            .ok_or("desktop directory unavailable")?
-            .join(if cfg!(windows) {
-                "shackcq-stationd.exe"
-            } else {
-                "shackcq-stationd"
-            });
         let mut token = [0u8; 32];
         getrandom::fill(&mut token).map_err(|_| "AGENT_NATIVE_INGRESS_UNAVAILABLE")?;
         let owner_token = hex::encode(token);
-        let mut command = Command::new(executable);
+        let mut command = Command::new(&executable);
         command
             .arg("--native-ingress-only")
             .arg("--native-owner-token")
@@ -437,6 +440,7 @@ impl AgentSupervisor {
                     Self {
                         child: Some(child),
                         owner_token,
+                        executable,
                     },
                     "OWNED_NATIVE_INGRESS".into(),
                 ));
@@ -460,6 +464,34 @@ impl AgentSupervisor {
             return json!({"ok":false,"code":"AGENT_SETUP_EXTERNAL_REQUIRED"});
         }
         agent_ingress::setup_request(action, &self.owner_token, fields)
+    }
+
+    fn read_setup(&self) -> Value {
+        let mut status = agent_ingress::setup_status();
+        let inventory_missing = status
+            .as_object()
+            .is_none_or(|value| !value.contains_key("radioModels"));
+        if inventory_missing {
+            let inventory = Command::new(&self.executable)
+                .arg("--list-local-hardware")
+                .stdin(Stdio::null())
+                .stderr(Stdio::null())
+                .output()
+                .ok()
+                .filter(|output| output.status.success() && output.stdout.len() <= 512 * 1024)
+                .and_then(|output| serde_json::from_slice::<Value>(&output.stdout).ok());
+            if let (Some(target), Some(source)) = (status.as_object_mut(), inventory.and_then(|value| value.as_object().cloned())) {
+                target.extend(source);
+            }
+        }
+        if let Some(target) = status.as_object_mut() {
+            target.insert(
+                "desktopOwnership".into(),
+                json!(if self.owns_child() { "OWNED" } else { "EXTERNAL" }),
+            );
+            target.insert("canConfigure".into(), json!(self.owns_child()));
+        }
+        status
     }
 
     fn shutdown(&mut self) {
@@ -961,7 +993,7 @@ fn station_read_setup(state: State<'_, AppState>) -> Value {
     state
         .agent
         .lock()
-        .map(|agent| agent.setup_request("status", json!({})))
+        .map(|agent| agent.read_setup())
         .unwrap_or_else(|_| json!({"ok":false,"code":"STATION_SETUP_UNAVAILABLE"}))
 }
 

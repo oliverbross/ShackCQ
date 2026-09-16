@@ -32,6 +32,25 @@ namespace shackcq::desktop {
 namespace {
 constexpr int RadioProfilesSchema = 3;
 
+#ifdef SHACKCQ_HAVE_HAMLIB
+QString hamlibTransport(rig_port_t port) {
+  switch (port) {
+  case RIG_PORT_SERIAL:
+    return QStringLiteral("serial");
+  case RIG_PORT_NETWORK:
+    return QStringLiteral("tcp");
+  case RIG_PORT_UDP_NETWORK:
+    return QStringLiteral("udp");
+  case RIG_PORT_USB:
+    return QStringLiteral("usb");
+  case RIG_PORT_NONE:
+    return QStringLiteral("none");
+  default:
+    return QStringLiteral("other");
+  }
+}
+#endif
+
 QVariantMap hamlibSnapshot(const QString &model, quint64 frequency,
                            const QString &mode) {
   return {
@@ -71,7 +90,7 @@ int collectModel(const struct rig_caps *caps, void *data) {
        QString::fromUtf8(caps->model_name),
        QStringLiteral("backend-%1").arg(RIG_BACKEND_NUM(caps->rig_model)),
        QString::fromLatin1(rig_strstatus(caps->status)),
-       QStringLiteral("port-type-%1").arg(static_cast<int>(caps->port_type))});
+       hamlibTransport(caps->port_type)});
   return 1;
 }
 #endif

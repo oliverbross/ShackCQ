@@ -6,12 +6,66 @@
 #include <QUrl>
 #include <algorithm>
 #include <cmath>
+#include <tuple>
 
 #ifdef SHACKCQ_HAVE_HAMLIB
 #include <hamlib/rotator.h>
 #endif
 
 namespace shackcq::desktop {
+
+#ifdef SHACKCQ_HAVE_HAMLIB
+namespace {
+QString rotatorTransport(rig_port_t port) {
+  switch (port) {
+  case RIG_PORT_SERIAL:
+    return QStringLiteral("serial");
+  case RIG_PORT_NETWORK:
+    return QStringLiteral("tcp");
+  case RIG_PORT_UDP_NETWORK:
+    return QStringLiteral("udp");
+  case RIG_PORT_USB:
+    return QStringLiteral("usb");
+  case RIG_PORT_NONE:
+    return QStringLiteral("none");
+  default:
+    return QStringLiteral("other");
+  }
+}
+
+int collectRotatorModel(const struct rot_caps *caps, rig_ptr_t data) {
+  if (!caps || !data || caps->rot_model == ROT_MODEL_NONE)
+    return 1;
+  auto *rows = static_cast<QVariantList *>(data);
+  rows->push_back(QVariantMap{
+      {"id", static_cast<int>(caps->rot_model)},
+      {"manufacturer", QString::fromUtf8(caps->mfg_name)},
+      {"model", QString::fromUtf8(caps->model_name)},
+      {"transport", rotatorTransport(caps->port_type)}});
+  return 1;
+}
+} // namespace
+#endif
+
+QVariantList DesktopRotatorController::modelCatalog() {
+  QVariantList rows;
+#ifdef SHACKCQ_HAVE_HAMLIB
+  rig_set_debug(RIG_DEBUG_NONE);
+  rot_load_all_backends();
+  rot_list_foreach(collectRotatorModel, &rows);
+  std::sort(rows.begin(), rows.end(), [](const QVariant &left,
+                                         const QVariant &right) {
+    const QVariantMap a = left.toMap(), b = right.toMap();
+    return std::make_tuple(a.value("manufacturer").toString(),
+                           a.value("model").toString(),
+                           a.value("id").toInt()) <
+           std::make_tuple(b.value("manufacturer").toString(),
+                           b.value("model").toString(),
+                           b.value("id").toInt());
+  });
+#endif
+  return rows;
+}
 
 DesktopRotatorController::DesktopRotatorController(QObject *parent)
     : QObject(parent) {

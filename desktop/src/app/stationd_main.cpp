@@ -31,6 +31,34 @@ using namespace shackcq::desktop;
 namespace {
 const QString DefaultAdminSocket = QStringLiteral("shackcq-stationd-v1");
 
+QVariantList radioModelCatalog() {
+  HamlibModelRegistry registry;
+  QVariantList rows;
+  for (const RadioModel &model : registry.allModels())
+    rows.push_back(QVariantMap{{"id", model.id},
+                               {"manufacturer", model.manufacturer},
+                               {"model", model.model},
+                               {"backend", model.backend},
+                               {"transport", model.transport}});
+  return rows;
+}
+
+QVariantList serialPortCatalog() {
+  QVariantList rows;
+  for (const QSerialPortInfo &port : QSerialPortInfo::availablePorts())
+    rows.push_back(QVariantMap{{"route", port.systemLocation()},
+                               {"name", port.portName()},
+                               {"description", port.description()}});
+  return rows;
+}
+
+QVariantMap localHardwareCatalog() {
+  return {{"radioModels", radioModelCatalog()},
+          {"rotatorModels", DesktopRotatorController::modelCatalog()},
+          {"serialPorts", serialPortCatalog()},
+          {"audioDevices", AgentDigiController::audioDevices().toVariantList()}};
+}
+
 QJsonObject adminRequest(const QCommandLineParser &parser) {
   if (parser.isSet("status")) return {{"action", "status"}};
   if (parser.isSet("list-clients")) return {{"action", "list-clients"}};
@@ -116,6 +144,7 @@ int main(int argc, char **argv) {
   parser.addOption(QCommandLineOption(QStringLiteral("clear-hamlib-profile"), "Disconnect and remove the persisted Hamlib profile"));
   parser.addOption(QCommandLineOption(QStringLiteral("unpair-shackcq"), "Remove the cloud Agent credential from the operating-system vault"));
   parser.addOption(QCommandLineOption(QStringLiteral("list-audio-devices"), "List audio devices without opening them"));
+  parser.addOption(QCommandLineOption(QStringLiteral("list-local-hardware"), "List radio, rotator, serial and audio choices without opening hardware"));
   parser.addOption(QCommandLineOption(QStringLiteral("configure-digi-audio"), "Persist an explicit local Digi audio profile id", "profile-id"));
   parser.addOption(QCommandLineOption(QStringLiteral("digi-input"), "Exact input id from --list-audio-devices", "device-id"));
   parser.addOption(QCommandLineOption(QStringLiteral("digi-output"), "Exact radio TX output id from --list-audio-devices", "device-id"));
@@ -152,6 +181,7 @@ int main(int argc, char **argv) {
       parser.isSet("show-radio-profile") ||
       parser.isSet("configure-hamlib") || parser.isSet("clear-hamlib-profile") ||
       parser.isSet("unpair-shackcq") || parser.isSet("list-audio-devices") ||
+      parser.isSet("list-local-hardware") ||
       parser.isSet("configure-digi-audio") || parser.isSet("authorize-digi-tx") ||
       parser.isSet("disable-digi-tx");
   const bool nativeIngressOnly = parser.isSet("native-ingress-only");
@@ -246,6 +276,12 @@ int main(int argc, char **argv) {
     QTextStream(stdout) << QJsonDocument(AgentDigiController::audioDevices()).toJson(QJsonDocument::Indented);
     return 0;
   }
+  if (parser.isSet("list-local-hardware")) {
+    QTextStream(stdout)
+        << QJsonDocument::fromVariant(localHardwareCatalog())
+               .toJson(QJsonDocument::Indented);
+    return 0;
+  }
   if (parser.isSet("configure-digi-audio")) {
     bool rateOk=false;const int rate=parser.value("digi-sample-rate").toInt(&rateOk);
     const QVariantMap section{{"schemaVersion",1},{"audioProfile",QVariantMap{{"id",parser.value("configure-digi-audio")},{"inputDeviceId",parser.value("digi-input")},{"outputDeviceId",parser.value("digi-output")},{"sampleRate",rate},{"inputChannel",0},{"outputChannel",0}}},{"localTxPermitted",false},{"hardwareAccepted",false},{"acceptedRadioIdentity",QString{}}};
@@ -261,24 +297,13 @@ int main(int argc, char **argv) {
     if(!digi.restoreConfiguration(section,&error)){QTextStream(stderr)<<error<<'\n';return 11;}configuration.setSection("digiAgent",digi.configuration());if(!configuration.save(&error)){QTextStream(stderr)<<error<<'\n';return 2;}QTextStream(stdout)<<(enable?"Local KX3 Digi TX acceptance recorded; cloud policy still applies\n":"Local Digi TX permission removed and all prepared state discarded\n");return 0;
   }
   if (parser.isSet("list-hamlib-models")) {
-    HamlibModelRegistry registry;
-    QJsonArray rows;
-    for (const RadioModel &model : registry.allModels())
-      rows.push_back(QJsonObject{{"id", model.id},
-                                 {"manufacturer", model.manufacturer},
-                                 {"model", model.model},
-                                 {"backend", model.backend},
-                                 {"transport", model.transport}});
-    QTextStream(stdout) << QJsonDocument(rows).toJson(QJsonDocument::Indented);
+    QTextStream(stdout) << QJsonDocument::fromVariant(radioModelCatalog())
+                               .toJson(QJsonDocument::Indented);
     return 0;
   }
   if (parser.isSet("list-serial-ports")) {
-    QJsonArray rows;
-    for (const QSerialPortInfo &port : QSerialPortInfo::availablePorts())
-      rows.push_back(QJsonObject{{"route", port.portName()},
-                                 {"systemLocation", port.systemLocation()},
-                                 {"description", port.description()}});
-    QTextStream(stdout) << QJsonDocument(rows).toJson(QJsonDocument::Indented);
+    QTextStream(stdout) << QJsonDocument::fromVariant(serialPortCatalog())
+                               .toJson(QJsonDocument::Indented);
     return 0;
   }
   if (parser.isSet("show-radio-profile")) {
@@ -387,6 +412,7 @@ int main(int argc, char **argv) {
   if (!nativeIngressOnly)
     radio.startConfiguredAutoConnect();
   cloudAgent.start();
+  const QVariantMap hardwareCatalog = localHardwareCatalog();
   NativeAgentIngressServer ingressServer(
       &admin, &nativeIngress,
       [&](const QJsonObject &request) {
@@ -403,6 +429,9 @@ int main(int argc, char **argv) {
                              {"rotatorProfiles", rotators.configuration()},
                              {"hardwareAutoconnect", !nativeIngressOnly},
                              {"processId", QCoreApplication::applicationPid()}};
+          for (auto item = hardwareCatalog.cbegin();
+               item != hardwareCatalog.cend(); ++item)
+            status.insert(item.key(), item.value());
           if (!nativeIngressOnly) {
             status.insert("remoteStation", service.health());
             status.insert("radio", radio.health());
