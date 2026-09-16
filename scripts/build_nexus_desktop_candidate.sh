@@ -569,6 +569,11 @@ if [ "$platform" = windows-x64 ]; then
     test -s "$agent_build/$openssl_dll"
     cp "$agent_build/$openssl_dll" "$windows_runtime_dir/$openssl_dll"
   done
+  # windeployqt stages every SQL backend available in the build host. The
+  # desktop uses SQLite only; retaining unrelated MySQL/Postgres/Firebird
+  # plugins would introduce undeclared client-library dependencies.
+  find "$windows_runtime_dir/sqldrivers" -maxdepth 1 -type f \
+    ! -iname 'qsqlite.dll' -delete
   test -s "$windows_runtime_dir/Qt6Core.dll"
   test -s "$windows_runtime_dir/sqldrivers/qsqlite.dll"
   find "$windows_runtime_dir/tls" -type f -iname 'q*backend.dll' -print -quit | grep -q .
