@@ -85,7 +85,7 @@ grep -F "trap 'exit 143' TERM" "$macos" >/dev/null
 grep -F 'git -C "$repo" diff --ignore-cr-at-eol --exit-code --' "$candidate" >/dev/null
 grep -F '7z l "${packages[0]}" | tr -d '\''\r'\'' | sed '\''s#\\#/#g'\'' >"$nsis_listing"' "$candidate" >/dev/null
 grep -F '    "$payload_root"|"$payload_root"/*) ;;' "$candidate" >/dev/null
-grep -F 'for mingw_runtime in libgfortran-5.dll libquadmath-0.dll; do' "$candidate" >/dev/null
+grep -F 'for mingw_runtime in libwinpthread-1.dll libgfortran-5.dll libquadmath-0.dll; do' "$candidate" >/dev/null
 grep -F 'mingw_runtime_bin=${SHACKCQ_MINGW_RUNTIME_BIN:-/mingw64/bin}' "$candidate" >/dev/null
 grep -F '    cp "$mingw_source" "$windows_runtime_dir/$mingw_runtime"' "$candidate" >/dev/null
 grep -F '  find "$windows_runtime_dir/sqldrivers" -maxdepth 1 -type f \' "$candidate" >/dev/null
@@ -156,6 +156,7 @@ windows_acceptance=$(sed -n '/^accept_windows_payload()/,/^}/p' "$candidate")
 printf '%s\n' "$windows_acceptance" | grep -F 'app_root=$(dirname "$agent_path")' >/dev/null
 printf '%s\n' "$windows_acceptance" | grep -F 'packaged_windows_path="$app_root:$windows_system32:$windows_root"' >/dev/null
 printf '%s\n' "$windows_acceptance" | grep -F 'runtime_probe=$(run_packaged_windows_binary "$agent_path" --package-runtime-probe)' >/dev/null
+printf '%s\n' "$windows_acceptance" | grep -F 'p["tlsBackend"] in {"schannel", "openssl"}' >/dev/null
 printf '%s\n' "$windows_acceptance" | grep -F 'run_packaged_windows_binary "$helper_path"' >/dev/null
 printf '%s\n' "$windows_acceptance" | grep -F 'PATH="$packaged_windows_path"' >/dev/null
 ! printf '%s\n' "$windows_acceptance" | grep -F 'PATH="$qt_runtime_bin:$PATH"' >/dev/null

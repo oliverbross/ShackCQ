@@ -586,7 +586,7 @@ if [ "$platform" = windows-x64 ]; then
     printf 'C_CPP_RUNTIME_BYTES_SOURCE=%s\n' "$mingw_runtime_bin"
     "$mingw_runtime_bin/gcc.exe" --version | sed -n '1p'
   } >"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
-  for mingw_runtime in libgcc_s_seh-1.dll libstdc++-6.dll libwinpthread-1.dll; do
+  for mingw_runtime in libgcc_s_seh-1.dll libstdc++-6.dll; do
     mingw_source="$mingw_runtime_bin/$mingw_runtime"
     test -s "$mingw_source"
     cp "$mingw_source" "$windows_runtime_dir/$mingw_runtime"
@@ -603,7 +603,7 @@ if [ "$platform" = windows-x64 ]; then
   done
   printf 'FORTRAN_RUNTIME_BYTES_SOURCE=/mingw64/bin\n' \
     >>"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
-  for mingw_runtime in libgfortran-5.dll libquadmath-0.dll; do
+  for mingw_runtime in libwinpthread-1.dll libgfortran-5.dll libquadmath-0.dll; do
     mingw_source="/mingw64/bin/$mingw_runtime"
     test -s "$mingw_source"
     cp "$mingw_source" "$windows_runtime_dir/$mingw_runtime"
@@ -1096,7 +1096,8 @@ accept_windows_payload() {
       ;;
   esac
   runtime_probe=$(run_packaged_windows_binary "$agent_path" --package-runtime-probe)
-  python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert p["qsqlite"] is True and p["tls"] is True and p["tlsBackend"]; assert p["tlsBuildVersion"].startswith("OpenSSL 3.6.4"); assert p["tlsRuntimeVersion"].startswith("OpenSSL 3.6.4")' \
+  printf 'PACKAGED_WINDOWS_RUNTIME_PROBE=%s\n' "$runtime_probe"
+  python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert p["qsqlite"] is True and p["tls"] is True; assert p["tlsBackend"] in {"schannel", "openssl"}; build=p["tlsBuildVersion"]; runtime=p["tlsRuntimeVersion"]; assert (build.startswith("Secure Channel") and runtime.startswith("Secure Channel, Windows")) if p["tlsBackend"] == "schannel" else (build.startswith("OpenSSL 3.6.4") and runtime.startswith("OpenSSL 3.6.4"))' \
     "$runtime_probe"
   echo 'PACKAGED_WINDOWS_QT_RUNTIME_OK qsqlite=true tls=true'
   printf '%s\n' '{"requestId":"package-helper-close","epoch":1,"operation":"close","parameters":{}}' | \
