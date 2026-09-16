@@ -132,7 +132,6 @@ def main() -> int:
     if failures:
         raise SystemExit("\n".join(failures))
     if args.manifest:
-        repo = Path(__file__).resolve().parent.parent
         info = plistlib.loads((app / "Contents" / "Info.plist").read_bytes())
         components = {}
         for path in required:
@@ -140,21 +139,23 @@ def main() -> int:
                 "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
                 "architecture": "arm64",
             }
-        shared = json.loads((repo / "desktop" / "shared-digi-ui-manifest.json").read_text())
+        package_metadata = json.loads(
+            (app / "Contents" / "Resources" / "PACKAGE_MANIFEST.json").read_text()
+        )
         manifest = {
             "schemaVersion": 1,
             "product": info.get("CFBundleName", "ShackCQ Desktop"),
             "bundleIdentifier": info["CFBundleIdentifier"],
             "bundleVersion": info["CFBundleShortVersionString"],
             "minimumMacOS": "13.0",
-            "sourceCommit": output("git", "-C", str(repo), "rev-parse", "HEAD").strip(),
-            "nexusCommit": output("git", "-C", str(repo / "third_party" / "nexus"), "rev-parse", "HEAD").strip(),
-            "sharedDigiWebCommit": shared["webCommit"],
+            "sourceCommit": package_metadata["sourceCommit"],
+            "nexusCommit": package_metadata["nexusCommit"],
+            "sharedDigiWebCommit": package_metadata["sharedDigiWebCommit"],
             "components": components,
             "machOCount": len(machos),
             "loaderClosure": "VERIFIED",
-            "signing": "AD_HOC_ONLY",
-            "notarization": "NOT_PERFORMED",
+            "signing": package_metadata["signing"],
+            "notarization": package_metadata["notarization"],
         }
         args.manifest.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     print(f"MACOS_BUNDLE_CLOSURE_OK machos={len(machos)} required_roots={len(required)}")
