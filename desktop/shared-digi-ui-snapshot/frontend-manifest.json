@@ -6,7 +6,7 @@
     "major": 1,
     "minor": 0
   },
-  "sourceRevision": "WORKTREE_UNPINNED",
+  "sourceRevision": "f66a39416ec99c02c011c21382ffb9d931a76c48",
   "entrypoint": "index.html",
   "tauriBinding": "fixed-invoke-v1",
   "tauriCommands": [
@@ -33,19 +33,19 @@
   ],
   "assets": [
     {
-      "path": "assets/index-CTSUoWxB.js",
+      "path": "assets/index-BhRUL3-0.css",
+      "bytes": 18876,
+      "sha256": "23b3f85a4b5092f6a4807ac01d019338564fdd5ebecf8d24561aeaa6e6d27dca"
+    },
+    {
+      "path": "assets/index-Btd3704I.js",
       "bytes": 260485,
       "sha256": "d08936975dddcb42f109db19048d8ea979b5c436d6f799a93ec1ea7252e2f1a2"
     },
     {
-      "path": "assets/index-CnSyXW27.css",
-      "bytes": 18847,
-      "sha256": "a07b12df943555d22c21f7494101fcff94d2d75416175d0ebb45003b0932b599"
-    },
-    {
       "path": "index.html",
       "bytes": 442,
-      "sha256": "a234f5932de12947e43f92a92e8a709bd371eb32e4d34bbaffea3ab57a3270e0"
+      "sha256": "af59dd9bf70cf214d2e194c987124767deb0316a3262498976b84a09e79738ab"
     }
   ]
 }
