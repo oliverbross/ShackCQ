@@ -82,6 +82,7 @@ test "$(grep -c '^trap cleanup EXIT$' "$macos")" = 1
 grep -F "trap 'exit 129' HUP" "$macos" >/dev/null
 grep -F "trap 'exit 130' INT" "$macos" >/dev/null
 grep -F "trap 'exit 143' TERM" "$macos" >/dev/null
+grep -F 'git -C "$repo" diff --ignore-cr-at-eol --exit-code --' "$candidate" >/dev/null
 ! grep -F 'rm -rf "$repo/desktop/shackcq-tauri/binaries"' "$candidate" "$macos"
 grep -F 'rm -f -- "$generated_sidecar"' "$candidate" "$macos" >/dev/null
 grep -F 'rmdir "$generated_sidecar_dir"' "$candidate" "$macos" >/dev/null

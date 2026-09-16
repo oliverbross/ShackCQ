@@ -625,7 +625,7 @@ tauri_args+=(-- --locked)
   cd "$repo/desktop/shackcq-tauri"
   "$npx_command" --yes "@tauri-apps/cli@${tauri_cli_version}" "${tauri_args[@]}"
 )
-git -C "$repo" diff --exit-code -- \
+git -C "$repo" diff --ignore-cr-at-eol --exit-code -- \
   desktop/nexus-runtime/Cargo.lock desktop/shackcq-tauri/Cargo.lock
 
 bundle_root="$repo/desktop/shackcq-tauri/target/$target/release/bundle"
