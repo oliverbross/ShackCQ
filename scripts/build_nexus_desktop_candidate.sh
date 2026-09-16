@@ -1145,7 +1145,7 @@ case "$platform" in
     cleanup_paths+=("$nsis_extract")
     7z x -y -o"$nsis_extract" "${packages[0]}" >/dev/null
     nsis_listing="$output/WINDOWS_NSIS_LISTING.txt"
-    7z l "${packages[0]}" >"$nsis_listing"
+    7z l "${packages[0]}" | tr -d '\r' | sed 's#\\#/#g' >"$nsis_listing"
     for packaged in shackcq-nexus-runtime.exe shackcq-stationd.exe shackcq-hamlib-helper.exe; do
       grep -Fq "$packaged" "$nsis_listing" || {
         echo "NSIS payload is missing required sidecar: $packaged" >&2
