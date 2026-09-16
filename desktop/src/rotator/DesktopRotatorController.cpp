@@ -1,5 +1,6 @@
 #include "shackcq/desktop/DesktopRotatorController.hpp"
 
+#include <QHash>
 #include <QRegularExpression>
 #include <QSet>
 #include <QUrl>
@@ -265,6 +266,41 @@ bool DesktopRotatorController::confirmMove() {
       rot_set_position(static_cast<ROT *>(m_rotator),
                        azimuth_t(m_preparedAzimuth),
                        elevation_t(m_preparedElevation));
+  if (code != RIG_OK) {
+    emit error(QString::fromLatin1(rigerror(code)));
+    return false;
+  }
+  return true;
+#else
+  return false;
+#endif
+}
+
+bool DesktopRotatorController::jog(const QString &direction, int speed) {
+  const QString requested = direction.trimmed().toUpper();
+  const QHash<QString, int> directions{{"UP", 2}, {"DOWN", 4},
+                                       {"LEFT", 8}, {"RIGHT", 16}};
+  if (!directions.contains(requested) || speed < 1 || speed > 100)
+    return false;
+  m_targetPrepared = false;
+  emit preparedChanged();
+  if (m_protocol == "GS232") {
+    const QHash<QString, QByteArray> frames{{"UP", "U\r"}, {"DOWN", "D\r"},
+                                            {"LEFT", "L\r"}, {"RIGHT", "R\r"}};
+    return writeFrame(frames.value(requested));
+  }
+  if (m_protocol == "ROTCTLD")
+    return writeFrame(QStringLiteral("M %1 %2\n")
+                          .arg(directions.value(requested))
+                          .arg(speed)
+                          .toLatin1());
+  if (m_protocol != "HAMLIB")
+    return false;
+#ifdef SHACKCQ_HAVE_HAMLIB
+  if (!m_rotator)
+    return false;
+  const int code = rot_move(static_cast<ROT *>(m_rotator),
+                            directions.value(requested), speed);
   if (code != RIG_OK) {
     emit error(QString::fromLatin1(rigerror(code)));
     return false;

@@ -38,6 +38,7 @@ public:
     Q_INVOKABLE void disconnectRotator();
     Q_INVOKABLE bool prepareTarget(double azimuth, double elevation);
     Q_INVOKABLE bool confirmMove();
+    Q_INVOKABLE bool jog(const QString &direction, int speed);
     Q_INVOKABLE void stop();
     Q_INVOKABLE bool park();
     QVariantMap configuration() const;

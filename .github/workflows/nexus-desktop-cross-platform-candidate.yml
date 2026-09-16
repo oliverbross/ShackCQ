@@ -79,14 +79,19 @@ jobs:
           $npx = (Get-Command npx.cmd -ErrorAction Stop).Source
           "SHACKCQ_NODE_BIN_WINDOWS=$(Split-Path -Parent $npx)" >> $env:GITHUB_ENV
       - name: Install pinned NSIS packager
-        shell: pwsh
+        shell: msys2 {0}
         run: |
-          choco install nsis --version=3.11 --yes --no-progress
-          $makensis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
-          if (-not (Test-Path -LiteralPath $makensis)) {
-            throw "pinned NSIS installed without expected makensis.exe: $makensis"
-          }
-          "SHACKCQ_NSIS_BIN_WINDOWS=$(Split-Path -Parent $makensis)" >> $env:GITHUB_ENV
+          package="$RUNNER_TEMP/mingw-w64-x86_64-nsis-3.12-1-any.pkg.tar.zst"
+          curl --fail --location --retry 4 --retry-all-errors \
+            --output "$package" \
+            https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-nsis-3.12-1-any.pkg.tar.zst
+          printf '%s  %s\n' \
+            1a855c36715ec0a2eb7774161bb5f1a6bee804a009a8359ea0320d86d519c0bb \
+            "$package" | sha256sum --check --strict
+          pacman --noconfirm -U "$package"
+          test -x /mingw64/bin/makensis.exe
+          /mingw64/bin/makensis.exe -VERSION | grep -F 'v3.12'
+          printf 'SHACKCQ_NSIS_BIN_WINDOWS=%s\n' "$(cygpath -w /mingw64/bin)" >> "$GITHUB_ENV"
       - name: Install pinned Windows GNU Rust host toolchain
         shell: pwsh
         run: |

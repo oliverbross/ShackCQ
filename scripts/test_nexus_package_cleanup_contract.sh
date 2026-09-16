@@ -281,6 +281,7 @@ def job_end(start: int) -> int:
 
 windows_job = unique_line("  windows-x64-gnu-cross:")
 windows_gate = unique_line("      - name: Verify Windows-safe package cleanup contract")
+windows_nsis_install = unique_line("      - name: Install pinned NSIS packager")
 windows_rust_install = unique_line("      - name: Install pinned Windows GNU Rust host toolchain")
 windows_build = unique_line("      - name: Build unsigned Windows x64 candidate")
 linux_job = unique_line("  linux-x86-64:")
@@ -290,7 +291,7 @@ static_env = unique_line("          SHACKCQ_PACKAGE_CONTRACT_STATIC_ONLY: '1'")
 windows_job_end = job_end(windows_job)
 linux_job_end = job_end(linux_job)
 
-assert windows_job < windows_gate < windows_rust_install < windows_build < windows_job_end
+assert windows_job < windows_gate < windows_nsis_install < windows_rust_install < windows_build < windows_job_end
 assert linux_job < linux_gate < linux_build < linux_job_end
 assert static_env in range(windows_gate, windows_build)
 assert step_block(windows_gate) == [
@@ -305,6 +306,22 @@ assert step_block(linux_gate) == [
     "        run: scripts/test_nexus_package_cleanup_contract.sh",
 ]
 assert unique_line("  WINDOWS_GNU_RUST_TOOLCHAIN: '1.91.0-x86_64-pc-windows-gnu'") < windows_job
+assert step_block(windows_nsis_install) == [
+    "      - name: Install pinned NSIS packager",
+    "        shell: msys2 {0}",
+    "        run: |",
+    '          package="$RUNNER_TEMP/mingw-w64-x86_64-nsis-3.12-1-any.pkg.tar.zst"',
+    '          curl --fail --location --retry 4 --retry-all-errors \\',
+    '            --output "$package" \\',
+    "            https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-nsis-3.12-1-any.pkg.tar.zst",
+    "          printf '%s  %s\\n' \\",
+    "            1a855c36715ec0a2eb7774161bb5f1a6bee804a009a8359ea0320d86d519c0bb \\",
+    '            "$package" | sha256sum --check --strict',
+    '          pacman --noconfirm -U "$package"',
+    "          test -x /mingw64/bin/makensis.exe",
+    "          /mingw64/bin/makensis.exe -VERSION | grep -F 'v3.12'",
+    '          printf \'SHACKCQ_NSIS_BIN_WINDOWS=%s\\n\' "$(cygpath -w /mingw64/bin)" >> "$GITHUB_ENV"',
+]
 assert step_block(windows_rust_install) == [
     "      - name: Install pinned Windows GNU Rust host toolchain",
     "        shell: pwsh",
