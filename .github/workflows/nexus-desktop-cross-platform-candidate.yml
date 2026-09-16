@@ -216,13 +216,16 @@ jobs:
           test -x "$mingw_bin/gfortran.exe"
           test -e "$mingw_bin/x86_64-w64-mingw32-gfortran.exe" || \
             cp "$mingw_bin/gfortran.exe" "$mingw_bin/x86_64-w64-mingw32-gfortran.exe"
+          hash -r
+          export CC="$qt_toolchain_bin/x86_64-w64-mingw32-gcc.exe"
+          export CXX="$qt_toolchain_bin/x86_64-w64-mingw32-g++.exe"
           command -v npx.cmd
           command -v makensis.exe
           command -v cargo.exe
           command -v rustc.exe
-          gcc_path=$(command -v x86_64-w64-mingw32-gcc.exe)
-          windres_path=$(command -v x86_64-w64-mingw32-windres.exe)
-          ar_path=$(command -v x86_64-w64-mingw32-ar.exe)
+          gcc_path="$qt_toolchain_bin/x86_64-w64-mingw32-gcc.exe"
+          windres_path="$qt_toolchain_bin/x86_64-w64-mingw32-windres.exe"
+          ar_path="$qt_toolchain_bin/x86_64-w64-mingw32-ar.exe"
           printf 'Windows GNU tools: gcc=%s windres=%s ar=%s\n' "$gcc_path" "$windres_path" "$ar_path"
           test "$(rustc -vV | sed -n 's/^host: //p')" = x86_64-pc-windows-gnu
           test "$(rustc -vV | sed -n 's/^release: //p')" = 1.91.0

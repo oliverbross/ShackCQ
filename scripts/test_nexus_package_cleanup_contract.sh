@@ -365,8 +365,10 @@ for required in [
     '            prefixed_tool="$qt_toolchain_bin/x86_64-w64-mingw32-$tool.exe"',
     '            test -e "$prefixed_tool" || cp "$source_tool" "$prefixed_tool"',
     '          test -e "$mingw_bin/x86_64-w64-mingw32-gfortran.exe" || \\',
-    "          windres_path=$(command -v x86_64-w64-mingw32-windres.exe)",
-    "          ar_path=$(command -v x86_64-w64-mingw32-ar.exe)",
+    '          export CC="$qt_toolchain_bin/x86_64-w64-mingw32-gcc.exe"',
+    '          export CXX="$qt_toolchain_bin/x86_64-w64-mingw32-g++.exe"',
+    '          windres_path="$qt_toolchain_bin/x86_64-w64-mingw32-windres.exe"',
+    '          ar_path="$qt_toolchain_bin/x86_64-w64-mingw32-ar.exe"',
     '          "$windres_path" -O coff -i "$RUNNER_TEMP/shackcq-preflight.rc" -o "$RUNNER_TEMP/shackcq-preflight.o"',
     '          file "$RUNNER_TEMP/shackcq-preflight.o" | grep -E \'Intel amd64 COFF|x86-64.*COFF\'',
     '          grep -F \'set(CMAKE_RC_COMPILER      ${TOOLCHAIN_PREFIX}-windres)\' third_party/nexus/libtempo/mingw-w64.cmake',
@@ -376,7 +378,7 @@ for required in [
 assert windows_build_lines.index(
     '          export PATH="$node_bin:$nsis_bin:$cargo_bin:$qt_toolchain_bin:$mingw_bin:$PATH"'
 ) < windows_build_lines.index(
-    "          windres_path=$(command -v x86_64-w64-mingw32-windres.exe)"
+    '          windres_path="$qt_toolchain_bin/x86_64-w64-mingw32-windres.exe"'
 )
 assert step_block(linux_build) == [
     "      - name: Build unsigned Linux x86_64 candidates",
