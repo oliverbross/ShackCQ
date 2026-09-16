@@ -19,10 +19,10 @@ app_name="ShackCQ Desktop"
 package_state="UNSIGNED-UNNOTARIZED"
 [ -z "$signing_identity" ] || package_state="SIGNED-NOT-NOTARIZED"
 [ -z "$notary_profile" ] || package_state="RC1-NOTARIZED"
-dmg_name="ShackCQ-Desktop-macOS-arm64-0.2.0-$package_state.dmg"
+dmg_name="ShackCQ-Desktop-macOS-arm64-0.2.1-$package_state.dmg"
 if [ "$review_build" = 1 ]; then
   app_name="ShackCQ Desktop Isolated Review"
-  dmg_name="ShackCQ-Desktop-Isolated-Review-macOS-arm64-0.2.0-$package_state.dmg"
+  dmg_name="ShackCQ-Desktop-Isolated-Review-macOS-arm64-0.2.1-$package_state.dmg"
 fi
 compiled_app="$repo/desktop/shackcq-tauri/target/release/bundle/macos/$app_name.app"
 app="$compiled_app"
