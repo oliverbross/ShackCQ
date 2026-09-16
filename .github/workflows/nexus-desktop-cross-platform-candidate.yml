@@ -10,7 +10,12 @@ on:
         type: choice
         options:
           - windows-x64
+          - windows-x64-existing-artifact-diagnostics
           - linux-x86-64
+      diagnostic-run-id:
+        description: Existing failed Windows run to inspect without rebuilding
+        required: false
+        type: string
   push:
     branches:
       - feature/nexus-native-desktop-cross-platform-ci-v1
@@ -25,6 +30,65 @@ env:
   TAURI_CLI_VERSION: '2.11.4'
 
 jobs:
+  windows-x64-existing-artifact-diagnostics:
+    name: Windows x64 existing artifact diagnostics
+    if: github.event_name == 'workflow_dispatch' && inputs.platform == 'windows-x64-existing-artifact-diagnostics'
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-7zip mingw-w64-x86_64-python-pip
+      - name: Download and extract the preserved failed package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DIAGNOSTIC_RUN_ID: ${{ inputs['diagnostic-run-id'] }}
+        run: |
+          if ($env:DIAGNOSTIC_RUN_ID -notmatch '^[0-9]+$') {
+            throw 'diagnostic-run-id must be numeric'
+          }
+          $artifact = gh api "repos/$env:GITHUB_REPOSITORY/actions/runs/$env:DIAGNOSTIC_RUN_ID/artifacts" |
+            ConvertFrom-Json | Select-Object -ExpandProperty artifacts |
+            Where-Object name -Like 'ShackCQ-Windows-x64-FAILED-DIAGNOSTICS-*' |
+            Select-Object -First 1
+          if (-not $artifact) { throw 'failed Windows diagnostics artifact was not found' }
+          gh api "repos/$env:GITHUB_REPOSITORY/actions/artifacts/$($artifact.id)/zip" > "$env:RUNNER_TEMP\diagnostics.zip"
+          Expand-Archive -LiteralPath "$env:RUNNER_TEMP\diagnostics.zip" -DestinationPath "$env:RUNNER_TEMP\diagnostics"
+          $installer = Get-ChildItem "$env:RUNNER_TEMP\diagnostics" -Filter '*setup-UNSIGNED-UNNOTARIZED.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'preserved NSIS installer was not found' }
+          & C:\msys64\mingw64\bin\7z.exe x -y "-o$env:RUNNER_TEMP\payload" $installer.FullName | Out-Null
+          "SHACKCQ_DIAGNOSTIC_PAYLOAD=$env:RUNNER_TEMP\payload" >> $env:GITHUB_ENV
+      - name: Audit packaged PE imports and exports
+        shell: msys2 {0}
+        run: |
+          python -m pip install --disable-pip-version-check --no-input pefile==2024.8.26
+          python scripts/audit_windows_pe_symbols.py "$(cygpath -u "$SHACKCQ_DIAGNOSTIC_PAYLOAD")"
+      - name: Probe each packaged executable independently
+        shell: pwsh
+        run: |
+          $payload = $env:SHACKCQ_DIAGNOSTIC_PAYLOAD
+          $agent = Get-ChildItem $payload -Recurse -Filter shackcq-stationd.exe | Select-Object -First 1
+          $nexus = Get-ChildItem $payload -Recurse -Filter shackcq-nexus-runtime.exe | Select-Object -First 1
+          $helper = Get-ChildItem $payload -Recurse -Filter shackcq-hamlib-helper.exe | Select-Object -First 1
+          foreach ($probe in @(
+            @{Name='Agent'; Path=$agent.FullName; Args=@('--package-runtime-probe')},
+            @{Name='Nexus'; Path=$nexus.FullName; Args=@()},
+            @{Name='Hamlib'; Path=$helper.FullName; Args=@()}
+          )) {
+            $stdout = "$env:RUNNER_TEMP\$($probe.Name).stdout"
+            $stderr = "$env:RUNNER_TEMP\$($probe.Name).stderr"
+            $process = Start-Process -FilePath $probe.Path -ArgumentList $probe.Args -Wait -PassThru -NoNewWindow `
+              -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+            Write-Host "PACKAGED_$($probe.Name.ToUpper())_EXIT=$($process.ExitCode)"
+            if (Test-Path $stdout) { Get-Content $stdout | Out-Host }
+            if (Test-Path $stderr) { Get-Content $stderr | Out-Host }
+          }
+
   windows-x64-gnu-cross:
     name: Windows x64 complete Nexus + Agent candidate
     if: github.event_name != 'workflow_dispatch' || inputs.platform == 'windows-x64'
