@@ -19,7 +19,8 @@ rm -rf "$source"
 tar -C "$build_root" -xzf "$archive"
 (
   cd "$source"
-  MACOSX_DEPLOYMENT_TARGET=13.0 ./Configure darwin64-arm64-cc \
+  export MACOSX_DEPLOYMENT_TARGET=13.0
+  ./Configure darwin64-arm64-cc \
     no-shared no-tests no-docs --prefix="$install_root" --openssldir="$install_root/ssl"
   make -j4 build_libs
   make install_dev
