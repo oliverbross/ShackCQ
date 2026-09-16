@@ -1,0 +1,54 @@
+name: Windows Package Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Source Actions run containing the preserved package artifact
+        required: true
+        type: string
+      artifact_name:
+        description: Exact artifact name to diagnose
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  packaged-agent-probe:
+    runs-on: windows-2025
+    timeout-minutes: 10
+    steps:
+      - name: Download exact preserved package
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: diagnostics
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.run_id }}
+      - name: Extract installer and probe packaged Agent
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = Get-ChildItem diagnostics -Recurse -File -Filter '*setup*.exe' | Select-Object -First 1
+          if (-not $installer) { throw 'preserved NSIS installer was not found' }
+          $payload = Join-Path $env:RUNNER_TEMP 'shackcq-package-diagnostic'
+          New-Item -ItemType Directory -Path $payload -Force | Out-Null
+          & "$env:ProgramFiles\7-Zip\7z.exe" x -y "-o$payload" $installer.FullName | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "7-Zip extraction failed: $LASTEXITCODE" }
+          $agent = Get-ChildItem $payload -Recurse -File -Filter 'shackcq-stationd.exe' | Select-Object -First 1
+          if (-not $agent) { throw 'packaged Agent was not found' }
+          $appRoot = $agent.Directory.FullName
+          $env:PATH = "$appRoot;$env:SystemRoot\System32;$env:SystemRoot"
+          $env:QT_DEBUG_PLUGINS = '1'
+          $stdout = Join-Path $env:RUNNER_TEMP 'stationd-runtime-probe.stdout'
+          $stderr = Join-Path $env:RUNNER_TEMP 'stationd-runtime-probe.stderr'
+          $process = Start-Process -FilePath $agent.FullName `
+            -ArgumentList '--package-runtime-probe' -Wait -PassThru -NoNewWindow `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          Write-Host "PACKAGED_AGENT_EXIT=$($process.ExitCode)"
+          if (Test-Path $stdout) { Get-Content $stdout | Out-Host }
+          if (Test-Path $stderr) { Get-Content $stderr | Out-Host }
+          if ($process.ExitCode -ne 0) { throw "packaged Agent probe failed: $($process.ExitCode)" }
