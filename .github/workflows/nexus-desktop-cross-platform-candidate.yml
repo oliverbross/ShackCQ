@@ -89,8 +89,18 @@ jobs:
             1a855c36715ec0a2eb7774161bb5f1a6bee804a009a8359ea0320d86d519c0bb \
             "$package" | sha256sum --check --strict
           pacman --noconfirm -U "$package"
+          archive_package="$RUNNER_TEMP/mingw-w64-x86_64-7zip-26.03-1-any.pkg.tar.zst"
+          curl --fail --location --retry 4 --retry-all-errors \
+            --output "$archive_package" \
+            https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-7zip-26.03-1-any.pkg.tar.zst
+          printf '%s  %s\n' \
+            5f14fbd3cba448e0573b16019d65897eb13a4f8abd80ee315701c4edcaf4ff26 \
+            "$archive_package" | sha256sum --check --strict
+          pacman --noconfirm -U "$archive_package"
           test -x /mingw64/bin/makensis.exe
+          test -x /mingw64/bin/7z.exe
           /mingw64/bin/makensis.exe -VERSION | grep -F 'v3.12'
+          /mingw64/bin/7z.exe | grep -F '7-Zip 26.03'
           printf 'SHACKCQ_NSIS_BIN_WINDOWS=%s\n' "$(cygpath -w /mingw64/bin)" >> "$GITHUB_ENV"
       - name: Install pinned Windows GNU Rust host toolchain
         shell: pwsh
