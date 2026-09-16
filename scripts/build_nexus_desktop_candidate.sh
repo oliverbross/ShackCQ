@@ -1002,7 +1002,7 @@ PY
 audit_windows_payload() {
   local payload_root=$1 app_root=$2 report=$3 object object_dir dependency packaged_dependency
   case "$app_root" in
-    "$payload_root"/*) ;;
+    "$payload_root"|"$payload_root"/*) ;;
     *) echo "Windows application root escapes extracted payload: $app_root" >&2; return 1 ;;
   esac
   : >"$report"
