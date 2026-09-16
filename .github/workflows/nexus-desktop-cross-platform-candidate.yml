@@ -61,8 +61,15 @@ jobs:
           Expand-Archive -LiteralPath "$env:RUNNER_TEMP\diagnostics.zip" -DestinationPath "$env:RUNNER_TEMP\diagnostics"
           $installer = Get-ChildItem "$env:RUNNER_TEMP\diagnostics" -Filter '*setup-UNSIGNED-UNNOTARIZED.exe' | Select-Object -First 1
           if (-not $installer) { throw 'preserved NSIS installer was not found' }
-          & C:\msys64\mingw64\bin\7z.exe x -y "-o$env:RUNNER_TEMP\payload" $installer.FullName | Out-Null
+          "SHACKCQ_DIAGNOSTIC_INSTALLER=$($installer.FullName)" >> $env:GITHUB_ENV
           "SHACKCQ_DIAGNOSTIC_PAYLOAD=$env:RUNNER_TEMP\payload" >> $env:GITHUB_ENV
+      - name: Extract the preserved NSIS payload
+        shell: msys2 {0}
+        run: |
+          installer=$(cygpath -u "$SHACKCQ_DIAGNOSTIC_INSTALLER")
+          payload=$(cygpath -u "$SHACKCQ_DIAGNOSTIC_PAYLOAD")
+          7z x -y -o"$payload" "$installer" >/dev/null
+          find "$payload" -type f -iname shackcq-stationd.exe -print -quit | grep -q .
       - name: Audit packaged PE imports and exports
         shell: msys2 {0}
         run: |
