@@ -1144,20 +1144,34 @@ case "$platform" in
     nsis_extract=$(mktemp -d)
     cleanup_paths+=("$nsis_extract")
     7z x -y -o"$nsis_extract" "${packages[0]}" >/dev/null
+    nsis_listing="$output/WINDOWS_NSIS_LISTING.txt"
+    7z l "${packages[0]}" >"$nsis_listing"
     for packaged in shackcq-nexus-runtime.exe shackcq-stationd.exe shackcq-hamlib-helper.exe; do
-      7z l "${packages[0]}" | grep -Fq "$packaged"
+      grep -Fq "$packaged" "$nsis_listing" || {
+        echo "NSIS payload is missing required sidecar: $packaged" >&2
+        exit 1
+      }
     done
     for metadata in legal/COPYING legal/NOTICE legal/THIRD_PARTY_NOTICES.txt \
         legal/Qt-LGPL-3.0-only.txt legal/Qt-GPL-3.0-only.txt legal/ICU-73-LICENSE.txt legal/ICU-74-LICENSE.txt legal/OPENSSL-LICENSE.txt legal/LEGAL_PROVENANCE.txt legal/NEXUS-COPYING \
         legal/NEXUS-NOTICE legal/HAMLIB-COPYING legal/HAMLIB-COPYING.LIB \
         legal/HAMLIB-LICENSE legal/OPUS-COPYING legal/FFTW-COPYING legal/PACKAGE_MANIFEST.json; do
-      7z l "${packages[0]}" | grep -Fq "$metadata"
+      grep -Fq "$metadata" "$nsis_listing" || {
+        echo "NSIS payload is missing required metadata: $metadata" >&2
+        exit 1
+      }
     done
     for runtime_file in Qt6Core.dll sqldrivers/qsqlite.dll \
         libcrypto-3-x64.dll libssl-3-x64.dll; do
-      7z l "${packages[0]}" | grep -Fq "$runtime_file"
+      grep -Fq "$runtime_file" "$nsis_listing" || {
+        echo "NSIS payload is missing required runtime: $runtime_file" >&2
+        exit 1
+      }
     done
-    7z l "${packages[0]}" | grep -Eq 'tls[/\\]q[^/\\]*backend\.dll'
+    grep -Eq 'tls[/\\]q[^/\\]*backend\.dll' "$nsis_listing" || {
+      echo 'NSIS payload is missing a Qt TLS backend' >&2
+      exit 1
+    }
     windows_agent=$(find "$nsis_extract" -type f -iname shackcq-stationd.exe -print -quit)
     test -n "$windows_agent"
     windows_app_root=$(dirname "$windows_agent")
@@ -1166,8 +1180,8 @@ case "$platform" in
     rm -rf "$nsis_extract"
     x86_64-w64-mingw32-objdump -f "$main_executable" | grep -q 'pei-x86-64'
     x86_64-w64-mingw32-objdump -f "$staged_sidecar" | grep -q 'pei-x86-64'
-    7z l "${packages[0]}" | grep -Fq 'legal/MINGW_RUNTIME_PROVENANCE.txt'
-    7z l "${packages[0]}" | grep -Fq 'legal/MINGW-'
+    grep -Fq 'legal/MINGW_RUNTIME_PROVENANCE.txt' "$nsis_listing"
+    grep -Fq 'legal/MINGW-' "$nsis_listing"
     ;;
   linux-x86_64)
     mapfile -d '' debs < <(find "$bundle_root/deb" -maxdepth 1 -type f -name '*.deb' -print0)
