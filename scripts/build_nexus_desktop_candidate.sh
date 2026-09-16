@@ -582,8 +582,7 @@ if [ "$platform" = windows-x64 ]; then
       libgfortran-5.dll libquadmath-0.dll; do
     mingw_source="/mingw64/bin/$mingw_runtime"
     test -s "$mingw_source"
-    test -s "$windows_runtime_dir/$mingw_runtime" || \
-      cp "$mingw_source" "$windows_runtime_dir/$mingw_runtime"
+    cp "$mingw_source" "$windows_runtime_dir/$mingw_runtime"
     mingw_package=$(pacman -Qqo "$mingw_source")
     pacman -Q "$mingw_package" >>"$package_metadata_dir/MINGW_RUNTIME_PROVENANCE.txt"
     while IFS= read -r mingw_license; do
