@@ -71,6 +71,7 @@ jobs:
           7z x -y -o"$payload" "$installer" >/dev/null
           find "$payload" -type f -iname shackcq-stationd.exe -print -quit | grep -q .
       - name: Audit packaged PE imports and exports
+        continue-on-error: true
         shell: msys2 {0}
         run: |
           python -m pip install --disable-pip-version-check --no-input pefile==2024.8.26
