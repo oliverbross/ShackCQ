@@ -110,6 +110,17 @@ jobs:
           mingw_bin=/mingw64/bin
           test -d "$mingw_bin"
           export PATH="$node_bin:$nsis_bin:$cargo_bin:$mingw_bin:$PATH"
+          # Native MSYS2 names these tools without the Linux cross-prefix, while
+          # the retained Nexus/FFTW toolchain deliberately consumes the
+          # x86_64-w64-mingw32-* contract. Keep the compiler in its original
+          # directory and add only the missing aliases so GCC's relative search
+          # paths and the existing package audit remain valid.
+          for tool in gcc g++ gfortran windres ar objdump ranlib strip dlltool nm ld as; do
+            source_tool="$mingw_bin/$tool.exe"
+            prefixed_tool="$mingw_bin/x86_64-w64-mingw32-$tool.exe"
+            test -x "$source_tool"
+            test -e "$prefixed_tool" || cp "$source_tool" "$prefixed_tool"
+          done
           command -v npx.cmd
           command -v makensis.exe
           command -v cargo.exe
