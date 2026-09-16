@@ -145,6 +145,8 @@ grep -F 'fn shutdown(&mut self)' "$repo/desktop/shackcq-tauri/src/main.rs" >/dev
 grep -F 'matches!(event, tauri::RunEvent::Exit)' "$repo/desktop/shackcq-tauri/src/main.rs" >/dev/null
 grep -F 'agent.shutdown();' "$repo/desktop/shackcq-tauri/src/main.rs" >/dev/null
 grep -F '"processId", QCoreApplication::applicationPid()' "$repo/desktop/src/app/stationd_main.cpp" >/dev/null
+grep -F 'socket.bytesToWrite() > 0 && !socket.waitForBytesWritten' "$repo/desktop/src/app/stationd_main.cpp" >/dev/null
+grep -F '!socket.waitForReadyRead(5'"'"'000) && !socket.canReadLine()' "$repo/desktop/src/app/stationd_main.cpp" >/dev/null
 grep -F 'windeployqt.exe" --release --no-translations' "$candidate" >/dev/null
 ! grep -F 'export PATH="$qt_runtime_bin:$PATH"' "$candidate" >/dev/null
 ! grep -F 'stationd_dependencies=' "$candidate" >/dev/null

@@ -45,10 +45,14 @@ int sendAdminRequest(const QString &adminSocket, const QJsonObject &request) {
   QLocalSocket socket;
   socket.connectToServer(adminSocket, QIODevice::ReadWrite);
   if (!socket.waitForConnected(10'000)) return 5;
-  socket.write(QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n');
-  if (!socket.waitForBytesWritten(2'000)) return 6;
+  const QByteArray payload =
+      QJsonDocument(request).toJson(QJsonDocument::Compact) + '\n';
+  if (socket.write(payload) != payload.size()) return 6;
+  if (socket.bytesToWrite() > 0 && !socket.waitForBytesWritten(2'000) &&
+      socket.bytesToWrite() > 0)
+    return 6;
   while (!socket.canReadLine()) {
-    if (!socket.waitForReadyRead(5'000)) return 6;
+    if (!socket.waitForReadyRead(5'000) && !socket.canReadLine()) return 6;
   }
   const QByteArray response = socket.readLine(256 * 1024);
   QTextStream(stdout) << response;
