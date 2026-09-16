@@ -15,7 +15,9 @@ const ALIAS: &str = "shackcq-native-ingress-v1";
 const ACTION: &str = "nexus-contact.submit";
 const PREFIX: &[u8] = b"shackcq-native-ingress-v1\0";
 const MAX_REQUEST: usize = 16 * 1024;
-const MAX_RESPONSE: usize = 16 * 1024;
+// Setup status includes the runtime-backed radio, rotator, serial, and audio
+// catalogues. Keep the local IPC reply bounded while allowing that inventory.
+const MAX_RESPONSE: usize = 512 * 1024;
 pub(crate) const MAX_PAYLOAD: usize = 10 * 1024;
 static REVIEW_SOCKET: OnceLock<String> = OnceLock::new();
 static REVIEW_SECRET: OnceLock<Vec<u8>> = OnceLock::new();
