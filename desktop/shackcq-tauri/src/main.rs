@@ -135,7 +135,12 @@ impl RuntimeSupervisor {
                 .map_err(|_| "application data directory unavailable")?
                 .join("nexus-reviewed-contacts.bin"),
         };
-        let queue_key = if package_acceptance_exit_ms().is_some() || review.is_some() {
+        let ephemeral_credentials =
+            std::env::var("SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS").as_deref() == Ok("1");
+        let queue_key = if package_acceptance_exit_ms().is_some()
+            || review.is_some()
+            || ephemeral_credentials
+        {
             let mut key = [0u8; 32];
             getrandom::fill(&mut key).map_err(|_| "queue key unavailable")?;
             hex::encode(key)
