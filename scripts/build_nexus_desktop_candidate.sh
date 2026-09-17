@@ -6,6 +6,7 @@ repo=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 platform=${1:-}
 output=${2:-}
 tauri_cli_version=${TAURI_CLI_VERSION:-2.11.4}
+version=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$repo/desktop/shackcq-tauri/tauri.conf.json")
 nexus_windows_path_patch="$repo/patches/nexus-tempo-fast-windows-path.patch"
 nexus_windows_path_overlay_tool="$repo/scripts/apply_nexus_windows_path_overlay.py"
 nexus_windows_path_target="$repo/third_party/nexus/crates/tempo-fast-sys/build.rs"
@@ -1312,7 +1313,7 @@ nexus_overlay_sha=$(sha256sum "$nexus_windows_path_patch" | awk '{print $1}')
 nexus_overlay_tool_sha=$(sha256sum "$nexus_windows_path_overlay_tool" | awk '{print $1}')
 cat > "$output/CANDIDATE_STATUS.txt" <<EOF
 PRODUCT=ShackCQ Nexus Desktop
-VERSION=0.2.0
+VERSION=$version
 PLATFORM=$platform
 TARGET=$target
 SOURCE_SHA=$(git -C "$repo" rev-parse HEAD)
