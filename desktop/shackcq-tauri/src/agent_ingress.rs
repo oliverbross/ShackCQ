@@ -202,9 +202,14 @@ fn classify_response(bytes: &[u8]) -> Value {
 
 #[cfg(unix)]
 fn plain_request(request: &[u8]) -> Option<Value> {
+    plain_request_with_timeout(request, Duration::from_millis(750))
+}
+
+#[cfg(unix)]
+fn plain_request_with_timeout(request: &[u8], timeout: Duration) -> Option<Value> {
     use std::os::unix::net::UnixStream;
     let mut stream = UnixStream::connect(std::env::temp_dir().join(admin_socket_name())).ok()?;
-    let timeout = Some(Duration::from_millis(750));
+    let timeout = Some(timeout);
     stream.set_read_timeout(timeout).ok()?;
     stream.set_write_timeout(timeout).ok()?;
     stream.write_all(request).ok()?;
@@ -220,6 +225,11 @@ fn plain_request(request: &[u8]) -> Option<Value> {
 
 #[cfg(windows)]
 fn plain_request(request: &[u8]) -> Option<Value> {
+    plain_request_with_timeout(request, Duration::from_millis(750))
+}
+
+#[cfg(windows)]
+fn plain_request_with_timeout(request: &[u8], timeout: Duration) -> Option<Value> {
     use std::ffi::OsStr;
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::{
@@ -269,7 +279,7 @@ fn plain_request(request: &[u8]) -> Option<Value> {
                 written_total += written as usize;
             }
             let mut response = Vec::with_capacity(1024);
-            let deadline = Instant::now() + Duration::from_secs(3);
+            let deadline = Instant::now() + timeout;
             loop {
                 let mut available = 0u32;
                 if PeekNamedPipe(
@@ -333,7 +343,12 @@ pub fn setup_request(action: &str, owner_token: &str, fields: Value) -> Value {
         _ => return json!({"ok":false,"code":"AGENT_SETUP_INVALID"}),
     };
     encoded.push(b'\n');
-    plain_request(&encoded)
+    let timeout = if matches!(action, "radio.connect" | "radio.disconnect") {
+        Duration::from_secs(12)
+    } else {
+        Duration::from_secs(3)
+    };
+    plain_request_with_timeout(&encoded, timeout)
         .and_then(|value| value.get("result").cloned())
         .unwrap_or_else(|| json!({"ok":false,"code":"AGENT_NATIVE_INGRESS_UNAVAILABLE"}))
 }

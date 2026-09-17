@@ -6,6 +6,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QMessageAuthenticationCode>
+#include <QPointer>
 #include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QTimer>
@@ -207,17 +208,18 @@ void NativeAgentIngressServer::acceptConnections() {
     connect(socket, &QLocalSocket::readyRead, socket,
             [this, socket, deadline] {
               deadline->start(m_idleTimeoutMs);
-              readRequest(socket);
+              readRequest(socket, deadline);
             });
     connect(socket, &QObject::destroyed, this,
             [this, socket] { m_active.remove(socket); });
     connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
     if (socket->bytesAvailable())
-      readRequest(socket);
+      readRequest(socket, deadline);
   }
 }
 
-void NativeAgentIngressServer::readRequest(QLocalSocket *socket) {
+void NativeAgentIngressServer::readRequest(QLocalSocket *socket,
+                                           QTimer *deadline) {
   const auto tooLarge = [this, socket] {
     respond(socket, {{"ok", false},
                      {"result", QJsonObject{{"ok", false},
@@ -232,6 +234,11 @@ void NativeAgentIngressServer::readRequest(QLocalSocket *socket) {
     tooLarge();
     return;
   }
+  // The idle deadline protects incomplete clients only. Hardware-backed
+  // handlers can run a nested event loop for several seconds, during which a
+  // still-armed timer could disconnect and delete this socket.
+  deadline->stop();
+  const QPointer<QLocalSocket> guardedSocket(socket);
   const QByteArray line =
       socket->readLine(NativeAgentIngress::MaxRequestBytes + 1);
   QJsonParseError parse;
@@ -246,7 +253,9 @@ void NativeAgentIngressServer::readRequest(QLocalSocket *socket) {
     outcome = m_fallback(request);
   else
     outcome = {{"ok", false}, {"code", "AGENT_ADMIN_ACTION_UNKNOWN"}};
-  respond(socket, {{"ok", outcome.value("ok").toBool()}, {"result", outcome}});
+  if (guardedSocket)
+    respond(guardedSocket,
+            {{"ok", outcome.value("ok").toBool()}, {"result", outcome}});
 }
 
 } // namespace shackcq::desktop

@@ -285,6 +285,41 @@ private slots:
                  .value("code"),
              QJsonValue("AGENT_NATIVE_INGRESS_TIMEOUT"));
   }
+
+  void clientDisconnectDuringNestedHandlerDoesNotUseFreedSocket() {
+    QTemporaryDir dir;
+    FakeCredentialVault vault;
+    LoggerIngestion logger(&vault, dir.filePath("journal.json"));
+    NativeAgentIngress ingress(&vault, &logger, [] { return Now; },
+                               [] { return Secret; });
+    QVERIFY(ingress.initialize());
+    QLocalServer server;
+    QVERIFY(server.listen(dir.filePath("disconnect.sock")));
+    QLocalSocket *client = nullptr;
+    bool dropFirstClient = true;
+    NativeAgentIngressServer ingressServer(
+        &server, &ingress,
+        [&](const QJsonObject &) {
+          if (dropFirstClient) {
+            dropFirstClient = false;
+            client->abort();
+            delete client;
+            client = nullptr;
+            QCoreApplication::processEvents(QEventLoop::AllEvents);
+            QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+          }
+          return QJsonObject{{"ok", true}, {"code", "HANDLER_FINISHED"}};
+        });
+    client = new QLocalSocket;
+    client->connectToServer(server.serverName());
+    QVERIFY(client->waitForConnected(1000));
+    QCOMPARE(client->write("{\"action\":\"slow-handler\"}\n"), 26);
+    QTRY_VERIFY_WITH_TIMEOUT(client == nullptr, 1000);
+
+    const QJsonObject recovered =
+        roundTrip(server, "{\"action\":\"status\"}\n");
+    QCOMPARE(recovered.value("code"), QJsonValue("HANDLER_FINISHED"));
+  }
 };
 
 QTEST_MAIN(NativeAgentIngressTests)

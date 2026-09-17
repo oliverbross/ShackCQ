@@ -9,6 +9,7 @@
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QSet>
+#include <QTimer>
 #include <functional>
 #include <QObject>
 
@@ -52,7 +53,7 @@ public:
 
 private:
   void acceptConnections();
-  void readRequest(QLocalSocket *socket);
+  void readRequest(QLocalSocket *socket, QTimer *deadline);
   void respond(QLocalSocket *socket, const QJsonObject &response);
   QLocalServer *m_server{};
   NativeAgentIngress *m_ingress{};
