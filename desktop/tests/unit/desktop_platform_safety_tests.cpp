@@ -69,6 +69,27 @@ private slots:
     QCOMPARE(restored.section("digiAgent").value("hardwareAccepted").toBool(),
              false);
   }
+  void configurationPersistsDesktopRadioFleetProfiles() {
+    QTemporaryDir dir;
+    const QString path = dir.filePath("config.json");
+    DesktopConfigurationManager config(path);
+    QString error;
+    QVERIFY(config.load(&error));
+    const QVariantMap radioFleet{
+        {"schemaVersion", 1},
+        {"profiles",
+         QVariantList{QVariantMap{{"id", "primary-radio"},
+                                  {"name", "Primary radio"},
+                                  {"backend", "hamlib"},
+                                  {"modelId", 214},
+                                  {"route", "/dev/cu.usbmodem-test"},
+                                  {"baudRate", 38400}}}}};
+    config.setSection("radioFleetProfiles", radioFleet);
+
+    DesktopConfigurationManager restored(path);
+    QVERIFY(restored.load(&error));
+    QCOMPARE(restored.section("radioFleetProfiles"), radioFleet);
+  }
   void unknownConfigurationSectionsRequireExplicitReview() {
     QTemporaryDir dir;
     DesktopConfigurationManager config(dir.filePath("config.json"));

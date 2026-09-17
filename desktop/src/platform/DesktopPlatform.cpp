@@ -456,6 +456,7 @@ bool DesktopConfigurationManager::safeSection(const QString &name) {
                      "navigation",
                      "stations",
                      "radioProfiles",
+                     "radioFleetProfiles",
                      "cloudAgent",
                      "digiAgent",
                      "rotatorProfiles",
