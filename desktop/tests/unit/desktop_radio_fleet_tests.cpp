@@ -19,6 +19,8 @@ private slots:
     QVariantList profiles{profile("radio-a","127.0.0.1:4532"),profile("radio-b","127.0.0.1:4533")};
     QVERIFY2(fleet.restoreConfiguration({{"schemaVersion",1},{"profiles",profiles}},&error),qPrintable(error));
     QCOMPARE(fleet.count(),2);
+    QCOMPARE(fleet.descriptors().at(0).toMap().value("connected").toBool(),false);
+    QCOMPARE(fleet.descriptors().at(0).toMap().value("connection").toString(),QStringLiteral("offline"));
     const QJsonArray snapshots=fleet.snapshots("agent-1",3);
     QCOMPARE(snapshots.size(),2);
     QCOMPARE(snapshots.at(0).toObject().value("generation").toInt(),3);
