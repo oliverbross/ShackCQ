@@ -7,6 +7,7 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QObject>
+#include <QStringList>
 #include <QVariantList>
 
 namespace shackcq::desktop {
@@ -23,9 +24,12 @@ public:
   void disconnectProfile(const QString &id);
   void stopAll();
   bool contains(const QString &id) const;
+  bool radioOperationActive(const QString &id) const;
   QJsonArray snapshots(const QString &agentId, quint64 generation);
   QJsonObject processCommand(const QJsonObject &frame, const QString &agentId,
                              quint64 generation);
+  bool configureHamlibHelperForTest(const QString &id, const QString &program,
+                                    const QStringList &arguments = {});
   int count() const { return m_entries.size(); }
 
 signals:

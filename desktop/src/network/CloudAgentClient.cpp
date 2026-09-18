@@ -95,7 +95,13 @@ CloudAgentClient::CloudAgentClient(DesktopCredentialVault *vault,
   connect(&m_radioCommandRetry, &QTimer::timeout, this, [this] {
     if (m_pendingRadioCommands.isEmpty())
       return;
-    if (m_radio->radioOperationActive()) {
+    const QJsonObject &next = m_pendingRadioCommands.head();
+    const QString pendingDevice = next.value("deviceId").toString();
+    const bool operationActive =
+        m_radios && m_radios->contains(pendingDevice)
+            ? m_radios->radioOperationActive(pendingDevice)
+            : m_radio->radioOperationActive();
+    if (operationActive) {
       m_radioCommandRetry.start();
       return;
     }
@@ -508,18 +514,18 @@ void CloudAgentClient::receiveText(const QString &text) {
   }
   if (frame.value("type") != "radio.command")
     return;
-  if (m_radios && m_radios->contains(frame.value("deviceId").toString())) {
-    sendObject(m_radios->processCommand(frame, m_agentId, m_generation));
-    sendRadioFleetSnapshots();
-    return;
-  }
-  if (m_radio->radioOperationActive() || !m_pendingRadioCommands.isEmpty()) {
+  const QString targetDevice = frame.value("deviceId").toString();
+  const bool fleetTarget = m_radios && m_radios->contains(targetDevice);
+  const bool operationActive = fleetTarget
+                                   ? m_radios->radioOperationActive(targetDevice)
+                                   : m_radio->radioOperationActive();
+  if (operationActive || !m_pendingRadioCommands.isEmpty()) {
     if (m_pendingRadioCommands.size() >= 16) {
       sendObject({{"type", "radio.command.result"},
                   {"protocol", protocol()},
                   {"commandId", frame.value("commandId")},
                   {"agentId", m_agentId},
-                  {"deviceId", deviceId()},
+                  {"deviceId", targetDevice},
                   {"generation", QJsonValue::fromVariant(m_generation)},
                   {"ok", false},
                   {"code", "AGENT_QUEUE_FULL"}});
@@ -534,6 +540,11 @@ void CloudAgentClient::receiveText(const QString &text) {
 }
 
 void CloudAgentClient::completeRadioCommand(const QJsonObject &frame) {
+  if (m_radios && m_radios->contains(frame.value("deviceId").toString())) {
+    sendObject(m_radios->processCommand(frame, m_agentId, m_generation));
+    sendRadioFleetSnapshots();
+    return;
+  }
   const QJsonObject result = processControlFrame(frame);
   // Publish the fresh readback before the result. The hosted command path
   // resolves when it receives the result and must validate against this exact

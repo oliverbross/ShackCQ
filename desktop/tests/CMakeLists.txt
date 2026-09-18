@@ -64,6 +64,9 @@ add_test(NAME agent_digi_controller_tests COMMAND agent_digi_controller_tests)
 qt_add_executable(hamlib_helper_fixture fixtures/hamlib_helper_fixture.cpp)
 target_link_libraries(hamlib_helper_fixture PRIVATE Qt6::Core)
 shackcq_target_warnings(hamlib_helper_fixture)
+target_compile_definitions(desktop_radio_fleet_tests PRIVATE
+    SHACKCQ_HAMLIB_FIXTURE="$<TARGET_FILE:hamlib_helper_fixture>")
+add_dependencies(desktop_radio_fleet_tests hamlib_helper_fixture)
 
 if(ShackCQHamlib_FOUND)
     target_compile_definitions(agent_digi_controller_tests PRIVATE

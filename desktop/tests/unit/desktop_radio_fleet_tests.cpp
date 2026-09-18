@@ -40,6 +40,20 @@ private slots:
     command.insert("deviceId","radio-a");
     QCOMPARE(fleet.processCommand(command,"agent-1",1).value("code").toString(),QStringLiteral("RADIO_OFFLINE"));
   }
+  void confirmsFrequencyModeAndPresetMutations() {
+    DesktopRadioFleet fleet;QString error;
+    QVERIFY(fleet.restoreConfiguration({{"schemaVersion",1},{"profiles",QVariantList{profile("radio-a","/dev/fixture")}}},&error));
+    QVERIFY(fleet.configureHamlibHelperForTest("radio-a",QStringLiteral(SHACKCQ_HAMLIB_FIXTURE)));
+    QVERIFY2(fleet.connectProfile("radio-a",&error),qPrintable(error));
+    const auto command=[](const QString &id,const QString &action,const QJsonObject &parameters){return QJsonObject{{"commandId",id},{"agentId","agent-1"},{"deviceId","radio-a"},{"expectedGeneration",7},{"action",action},{"parameters",parameters}};};
+    QCOMPARE(fleet.processCommand(command("frequency","radio.set.frequency",{{"frequencyHz",14'271'199}}),"agent-1",7).value("code").toString(),QStringLiteral("READBACK_CONFIRMED"));
+    QCOMPARE(fleet.processCommand(command("mode","radio.set.mode",{{"mode","CW"}}),"agent-1",7).value("code").toString(),QStringLiteral("READBACK_CONFIRMED"));
+    QCOMPARE(fleet.processCommand(command("preset","preset.recall",{{"frequencyHz",7'074'000},{"mode","DATA"},{"filterHz",3'000}}),"agent-1",7).value("code").toString(),QStringLiteral("READBACK_CONFIRMED"));
+    const QJsonObject snapshot=fleet.snapshots("agent-1",7).first().toObject();
+    QCOMPARE(snapshot.value("frequencyHz").toDouble(),7'074'000.0);
+    QCOMPARE(snapshot.value("mode").toString(),QStringLiteral("DATA"));
+    QCOMPARE(snapshot.value("filterHz").toInt(),3'000);
+  }
 };
 } // namespace
 

@@ -5,6 +5,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <algorithm>
+#include <initializer_list>
 #include <utility>
 
 namespace shackcq::desktop {
@@ -25,6 +26,17 @@ DesktopRadioFleet::DesktopRadioFleet(QObject *parent) : QObject(parent) {}
 DesktopRadioFleet::~DesktopRadioFleet() { stopAll(); qDeleteAll(m_entries); }
 DesktopRadioFleet::Entry *DesktopRadioFleet::entry(const QString &id) const { return m_entries.value(id, nullptr); }
 bool DesktopRadioFleet::contains(const QString &id) const { return m_entries.contains(id); }
+bool DesktopRadioFleet::radioOperationActive(const QString &id) const {
+  const Entry *item = entry(id);
+  return item && item->controller->radioOperationActive();
+}
+bool DesktopRadioFleet::configureHamlibHelperForTest(
+    const QString &id, const QString &program, const QStringList &arguments) {
+  Entry *item = entry(id);
+  if (!item) return false;
+  item->controller->hamlibHelperForTest()->setProgramForTest(program, arguments);
+  return true;
+}
 
 bool DesktopRadioFleet::restoreConfiguration(const QVariantMap &section, QString *error) {
   if (section.value("schemaVersion", 1).toInt() > 1) { if(error)*error="radioProfiles schema is newer than supported schema 1"; return false; }
@@ -53,6 +65,99 @@ void DesktopRadioFleet::stopAll(){for(Entry *item:std::as_const(m_entries)){item
 
 QJsonArray DesktopRadioFleet::snapshots(const QString &agentId,quint64 generation){QJsonArray rows;QStringList ids=m_entries.keys();std::sort(ids.begin(),ids.end());for(const QString &id:ids){Entry *item=entry(id);DesktopRadioController *radio=item->controller;QJsonObject row{{"type","radio.snapshot"},{"protocol",QJsonObject{{"major",1},{"minor",3}}},{"agentId",agentId},{"deviceId",item->id},{"generation",QJsonValue::fromVariant(generation)},{"sequence",QJsonValue::fromVariant(++item->sequence)},{"observedUtc",QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs)},{"connection",radio->state().startsWith("Connected")?"live":"offline"},{"frequencyHz",radio->frequencyHz()?QJsonValue::fromVariant(radio->frequencyHz()):QJsonValue::Null},{"mode",radio->mode().isEmpty()?QJsonValue::Null:QJsonValue(radio->mode())},{"filterHz",radio->filterHz()>0?QJsonValue(radio->filterHz()):QJsonValue::Null},{"meters",QJsonObject::fromVariantMap(radio->meters())},{"transmitting",radio->transmitting()?QJsonValue(*radio->transmitting()):QJsonValue::Null},{"capabilities",capabilities(item)}};const QVariantMap controls=radio->receiveControls();for(auto it=controls.cbegin();it!=controls.cend();++it)row.insert(it.key(),QJsonValue::fromVariant(it.value()));rows.push_back(row);}return rows;}
 
-QJsonObject DesktopRadioFleet::processCommand(const QJsonObject &frame,const QString &agentId,quint64 generation){const QString commandId=frame.value("commandId").toString(),deviceId=frame.value("deviceId").toString();auto result=[&](bool ok,const QString &code){return QJsonObject{{"type","radio.command.result"},{"protocol",QJsonObject{{"major",1},{"minor",3}}},{"commandId",commandId},{"agentId",agentId},{"deviceId",deviceId},{"generation",QJsonValue::fromVariant(generation)},{"ok",ok},{"code",code}};};Entry *item=entry(deviceId);if(!item||frame.value("agentId").toString()!=agentId||frame.value("expectedGeneration").toVariant().toULongLong()!=generation)return result(false,"STALE_AGENT_GENERATION");DesktopRadioController *radio=item->controller;if(!radio->state().startsWith("Connected"))return result(false,"RADIO_OFFLINE");if(radio->radioOperationActive())return result(false,"RADIO_BUSY_RETRY_REQUIRED");const QString action=frame.value("action").toString();const QJsonObject p=frame.value("parameters").toObject();bool accepted=false;if(action=="radio.set.frequency"&&p.size()==1)accepted=radio->requestFrequency(p.value("frequencyHz").toVariant().toULongLong());else if(action=="radio.set.mode"&&p.size()==1)accepted=radio->requestMode(p.value("mode").toString());else if(action=="radio.set.filter"&&p.size()==1)accepted=radio->requestFilter(p.value("filterHz").toInt());else if(action=="radio.set.rfGain"||action=="radio.set.afGain"||action=="radio.set.squelch"||action=="radio.set.noiseBlanker"||action=="radio.set.notch"||action=="radio.set.noiseReduction"||action=="radio.set.agc"||action=="radio.set.rit")accepted=radio->requestReceiveControl(action,p.toVariantMap());else return result(false,"CAPABILITY_NOT_ADVERTISED");emit snapshotChanged();return result(accepted,accepted?"READBACK_PENDING":"READBACK_NOT_CONFIRMED");}
+QJsonObject DesktopRadioFleet::processCommand(const QJsonObject &frame,
+                                              const QString &agentId,
+                                              quint64 generation) {
+  const QString commandId = frame.value("commandId").toString();
+  const QString deviceId = frame.value("deviceId").toString();
+  const auto result = [&](bool ok, const QString &code) {
+    return QJsonObject{{"type", "radio.command.result"},
+                       {"protocol", QJsonObject{{"major", 1}, {"minor", 3}}},
+                       {"commandId", commandId}, {"agentId", agentId},
+                       {"deviceId", deviceId},
+                       {"generation", QJsonValue::fromVariant(generation)},
+                       {"ok", ok}, {"code", code}};
+  };
+  Entry *item = entry(deviceId);
+  if (!item || frame.value("agentId").toString() != agentId ||
+      frame.value("expectedGeneration").toVariant().toULongLong() != generation)
+    return result(false, "STALE_AGENT_GENERATION");
+  DesktopRadioController *radio = item->controller;
+  if (!radio->state().startsWith("Connected")) return result(false, "RADIO_OFFLINE");
+  if (radio->radioOperationActive()) return result(false, "RADIO_BUSY_RETRY_REQUIRED");
+  const QString action = frame.value("action").toString();
+  const QJsonObject parameters = frame.value("parameters").toObject();
+  const auto exactParameters = [&parameters](std::initializer_list<const char *> names) {
+    if (parameters.size() != static_cast<int>(names.size())) return false;
+    return std::all_of(names.begin(), names.end(), [&parameters](const char *name) {
+      return parameters.contains(QString::fromLatin1(name));
+    });
+  };
+  const QStringList advertisedSetters = radio->backendCapabilities().value("setters").toStringList();
+  if (!advertisedSetters.contains(action)) return result(false, "CAPABILITY_NOT_ADVERTISED");
+  bool accepted = false;
+  if (action == "radio.set.frequency") {
+    if (!exactParameters({"frequencyHz"}) || !parameters.value("frequencyHz").isDouble())
+      return result(false, "INVALID_PARAMETERS");
+    const quint64 frequency = parameters.value("frequencyHz").toVariant().toULongLong();
+    accepted = frequency >= 100'000 && frequency <= 10'500'000'000ULL &&
+               radio->requestFrequency(frequency) && radio->frequencyHz() == frequency;
+  } else if (action == "radio.set.mode") {
+    if (!exactParameters({"mode"}) || !parameters.value("mode").isString())
+      return result(false, "INVALID_PARAMETERS");
+    const QString mode = parameters.value("mode").toString().toUpper();
+    accepted = !mode.isEmpty() && mode.size() <= 12 && radio->requestMode(mode) &&
+               radio->mode().compare(mode, Qt::CaseInsensitive) == 0;
+  } else if (action == "radio.set.filter") {
+    if (!exactParameters({"filterHz"}) || !parameters.value("filterHz").isDouble())
+      return result(false, "INVALID_PARAMETERS");
+    const int filter = parameters.value("filterHz").toInt();
+    accepted = filter >= 50 && filter <= 20'000 && radio->requestFilter(filter) &&
+               radio->filterHz() == filter;
+  } else if (action == "preset.recall") {
+    if (!exactParameters({"frequencyHz", "mode", "filterHz"}) ||
+        !parameters.value("frequencyHz").isDouble() ||
+        !parameters.value("mode").isString() ||
+        !parameters.value("filterHz").isDouble())
+      return result(false, "INVALID_PARAMETERS");
+    const quint64 frequency = parameters.value("frequencyHz").toVariant().toULongLong();
+    const QString mode = parameters.value("mode").toString().toUpper();
+    const int filter = parameters.value("filterHz").toInt();
+    if (frequency < 100'000 || frequency > 10'500'000'000ULL || mode.isEmpty() ||
+        mode.size() > 12 || filter < 50 || filter > 20'000)
+      return result(false, "INVALID_PARAMETERS");
+    const quint64 previousFrequency = radio->frequencyHz();
+    const QString previousMode = radio->mode();
+    const int previousFilter = radio->filterHz();
+    const bool frequencyApplied = radio->requestFrequency(frequency) &&
+                                  radio->frequencyHz() == frequency;
+    const bool modeApplied = frequencyApplied && radio->requestMode(mode) &&
+                             radio->mode().compare(mode, Qt::CaseInsensitive) == 0;
+    accepted = modeApplied && radio->requestFilter(filter) && radio->filterHz() == filter;
+    if (!accepted) {
+      if (radio->mode().compare(previousMode, Qt::CaseInsensitive) != 0 &&
+          !previousMode.isEmpty()) (void)radio->requestMode(previousMode);
+      if (radio->filterHz() != previousFilter && previousFilter > 0)
+        (void)radio->requestFilter(previousFilter);
+      if (radio->frequencyHz() != previousFrequency && previousFrequency > 0)
+        (void)radio->requestFrequency(previousFrequency);
+      const bool completeRollback = radio->frequencyHz() == previousFrequency &&
+          radio->mode().compare(previousMode, Qt::CaseInsensitive) == 0 &&
+          radio->filterHz() == previousFilter;
+      emit snapshotChanged();
+      return result(false, completeRollback ? "PRESET_RECALL_ROLLED_BACK"
+                                            : "PRESET_RECALL_PARTIAL");
+    }
+  } else if (action == "radio.set.rfGain" || action == "radio.set.afGain" ||
+             action == "radio.set.squelch" || action == "radio.set.noiseBlanker" ||
+             action == "radio.set.notch" || action == "radio.set.noiseReduction" ||
+             action == "radio.set.agc" || action == "radio.set.rit") {
+    accepted = radio->requestReceiveControl(action, parameters.toVariantMap());
+  } else {
+    return result(false, "ACTION_PROHIBITED");
+  }
+  emit snapshotChanged();
+  return result(accepted, accepted ? "READBACK_CONFIRMED" : "READBACK_NOT_CONFIRMED");
+}
 
 } // namespace shackcq::desktop

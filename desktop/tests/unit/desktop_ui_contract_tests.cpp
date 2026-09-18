@@ -186,6 +186,8 @@ void DesktopUiContractTests::macosAgentUsesUnambiguousRuntimeAndRadioStates() {
   QVERIFY(cloudSource.contains("local-uncommitted-build"));
   QCOMPARE(cloudSource.count("{\"build\", buildIdentity()}"), 2);
   QVERIFY(cloudSource.contains("m_radio->radioOperationActive()"));
+  QVERIFY(cloudSource.contains("m_radios->radioOperationActive(pendingDevice)"));
+  QVERIFY(cloudSource.contains("m_radios->radioOperationActive(targetDevice)"));
   QVERIFY(cloudSource.contains("m_pendingRadioCommands.enqueue(frame)"));
   QVERIFY(cloudSource.contains("m_pendingRadioCommands.dequeue()"));
   QVERIFY(cloudSource.contains("AGENT_QUEUE_FULL"));
@@ -193,6 +195,8 @@ void DesktopUiContractTests::macosAgentUsesUnambiguousRuntimeAndRadioStates() {
   QVERIFY(cloudSource.contains("m_pendingRadioCommands.clear()"));
   QVERIFY(cloudSource.contains("m_radioCommandRetry.start()"));
   QVERIFY(cloudSource.contains("completeRadioCommand(pending)"));
+  QVERIFY(cloudSource.contains("m_radios->processCommand(frame, m_agentId, m_generation)"));
+  QVERIFY(cloudSource.contains("sendRadioFleetSnapshots();"));
   QVERIFY(cloudSource.contains(
       "QJsonArray{\"WSJTX\", \"N1MM\", \"NEXUS_NATIVE\"}"));
 
