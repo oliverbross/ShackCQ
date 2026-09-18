@@ -18,7 +18,7 @@ Navigation is Home, Radio, Digi, Panadapter, EQ, Logbook, Log Intelligence, Sync
 
 Contest local mutation remains `QsoMutationCoordinator` → canonical local success → Contest link/revision → serial commit → derived state/N1MM receipt. Wavelog delivery remains the single canonical outbox. DX Chaser cannot enable Digi TX and completes only from canonical QSO success. Global Stop remains the sole idempotent stop/RX-request path.
 
-Configuration includes Keyer, Contest/N1MM safe preferences, DX Chaser, Band Maps and destination visibility; unsafe arms, queues, sessions, peers, claims, live observations and radio commands are excluded/reset. Health/support output is bounded metadata only. The protected-tablet acceptance exposed an installed QSO schema 16 database; the final branch therefore preserves the already-reviewed monotonic schema 14–16 / projection 3–5 migrations instead of attempting a destructive downgrade. Current schemas are QSO 16, projection 5, Neural 5, Digi 2, Groups.io 2, Contest 1 and DX Chaser 1; Band Maps adds no database.
+Configuration includes Keyer, Contest/N1MM safe preferences, DX Chaser, Band Maps and destination visibility; unsafe arms, queues, sessions, peers, claims, live observations and radio commands are excluded/reset. Health/support output is bounded metadata only. The protected-tablet acceptance exposed an installed QSO schema 16 database; current main preserves the already-reviewed monotonic schema 14–17 / projection 3–6 migrations instead of attempting a destructive downgrade. Current schemas are QSO 17, projection 6, Neural 5, Digi 2, Groups.io 2, Contest 1 and DX Chaser 1; Band Maps adds no database.
 
 ## Evidence ledger
 
