@@ -7,6 +7,7 @@ output=${1:?usage: build_nexus_desktop_macos.sh OUTPUT_DIRECTORY}
 tauri_cli_version=${TAURI_CLI_VERSION:-2.11.4}
 sidecar_lock_tool="$repo/scripts/claim_package_sidecar_lock.py"
 review_build=${SHACKCQ_ISOLATED_REVIEW_BUILD:-0}
+review_tls_certificate=${SHACKCQ_ISOLATED_REVIEW_TLS_CERT:-}
 package_only=${SHACKCQ_MACOS_PACKAGE_ONLY:-0}
 assembly_only=${SHACKCQ_MACOS_ASSEMBLY_ONLY:-0}
 signing_identity=${SHACKCQ_MACOS_SIGNING_IDENTITY:-}
@@ -28,7 +29,7 @@ compiled_app="$repo/desktop/shackcq-tauri/target/release/bundle/macos/$app_name.
 app="$compiled_app"
 packaging_revision=$(git -C "$repo" rev-parse HEAD)
 compiled_source_revision=${SHACKCQ_COMPILED_SOURCE_REVISION:-$packaging_revision}
-qt_prefix=${QT_PREFIX:?QT_PREFIX must name an official Qt 6.11.2 macOS installation}
+qt_prefix=${QT_PREFIX:-}
 qtwebengine_prefix=${QTWEBENGINE_PREFIX:-}
 brotli_prefix=${BROTLI_PREFIX:-}
 build_dir="$repo/build/desktop/nexus-macos-13-portable"
@@ -56,6 +57,35 @@ generated_sidecar_lock=
 generated_nexus=
 generated_stationd=
 generated_hamlib_helper=
+validate_review_tls_certificate() {
+  certificate=$1
+  [ -n "$certificate" ] || {
+    echo "SHACKCQ_ISOLATED_REVIEW_TLS_CERT must name the public CA certificate emitted by the existing desktop-review-serve fixture" >&2
+    return 2
+  }
+  [ -f "$certificate" ] && [ -r "$certificate" ] || {
+    echo "Isolated review TLS certificate is unavailable or unreadable: $certificate" >&2
+    return 2
+  }
+  if grep -Eq 'BEGIN (EC |RSA )?PRIVATE KEY' "$certificate"; then
+    echo "Isolated review TLS input must contain only the public CA certificate, never a private key" >&2
+    return 2
+  fi
+  certificate_count=$(grep -c 'BEGIN CERTIFICATE' "$certificate" || true)
+  [ "$certificate_count" = 1 ] || {
+    echo "Isolated review TLS input must contain exactly one PEM certificate: $certificate" >&2
+    return 2
+  }
+  openssl x509 -in "$certificate" -noout -checkend 0 >/dev/null 2>&1 || {
+    echo "Isolated review TLS certificate is invalid or expired: $certificate" >&2
+    return 2
+  }
+  openssl x509 -in "$certificate" -noout -text 2>/dev/null | grep -q 'CA:TRUE' || {
+    echo "Isolated review TLS certificate must be the fixture CA certificate: $certificate" >&2
+    return 2
+  }
+  review_tls_certificate=$(CDPATH= cd -- "$(dirname -- "$certificate")" && pwd -P)/$(basename -- "$certificate")
+}
 cleanup() {
   cleanup_status=$?
   trap - EXIT HUP INT TERM
@@ -204,8 +234,18 @@ fi
 
 case "$package_only" in 0|1) ;; *) echo "SHACKCQ_MACOS_PACKAGE_ONLY must be 0 or 1" >&2; exit 2;; esac
 case "$assembly_only" in 0|1) ;; *) echo "SHACKCQ_MACOS_ASSEMBLY_ONLY must be 0 or 1" >&2; exit 2;; esac
+case "$review_build" in 0|1) ;; *) echo "SHACKCQ_ISOLATED_REVIEW_BUILD must be 0 or 1" >&2; exit 2;; esac
+if [ "$review_build" = 1 ]; then
+  validate_review_tls_certificate "$review_tls_certificate"
+fi
+if [ "${SHACKCQ_TEST_REVIEW_TLS_PREFLIGHT_ONLY:-0}" = 1 ]; then
+  test "$review_build" = 1 || { echo "Review TLS preflight requires SHACKCQ_ISOLATED_REVIEW_BUILD=1" >&2; exit 2; }
+  echo "ISOLATED_REVIEW_TLS_PREFLIGHT_OK certificate=$review_tls_certificate"
+  exit 0
+fi
 test "$assembly_only" = 0 || test "$package_only" = 1 || { echo "Assembly-only requires package-only mode" >&2; exit 2; }
 test -z "$notary_profile" || test -n "$signing_identity" || { echo "Notarization requires a Developer ID signing identity" >&2; exit 2; }
+[ -n "$qt_prefix" ] || { echo "QT_PREFIX must name an official Qt 6.11.2 macOS installation" >&2; exit 2; }
 test -d "$qt_prefix" || { echo "Requested Qt prefix is unavailable: $qt_prefix" >&2; exit 2; }
 qt_prefix=$(CDPATH= cd -- "$qt_prefix" && pwd -P)
 qtpaths="$qt_prefix/bin/qtpaths"
@@ -541,6 +581,7 @@ for launch in 1; do
   SHACKCQ_AGENT_EPHEMERAL_ROOT="$mounted_acceptance/main-agent-$launch" \
   SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS=1 \
   SHACKCQ_PACKAGE_ACCEPTANCE_EXIT_AFTER_MS=1500 \
+  SHACKCQ_ISOLATED_REVIEW_TLS_CERT="$review_tls_certificate" \
   HOME="$mounted_acceptance/home-$launch" \
   XDG_CONFIG_HOME="$mounted_acceptance/config-$launch" \
   XDG_DATA_HOME="$mounted_acceptance/data-$launch" \
