@@ -28,6 +28,8 @@ const ISOLATED_REVIEW_ORIGIN: &str = "https://localhost:18443";
 const REVIEW_FIXTURE_ADIF_KEY: &str = "APP_SHACKCQ_REVIEW_FIXTURE";
 const REVIEW_FIXTURE_ADIF_VALUE: &str = "1";
 const MAX_FROZEN_REVIEWED_OPERATIONS: usize = 5_000;
+const AGENT_STARTUP_ATTEMPTS: usize = 400;
+const AGENT_STARTUP_POLL_MS: u64 = 50;
 
 #[derive(Clone)]
 struct ReviewProfile {
@@ -434,7 +436,10 @@ impl AgentSupervisor {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|_| "AGENT_NATIVE_INGRESS_UNAVAILABLE")?;
-        for _ in 0..100 {
+        // A cold macOS Keychain access can take longer than five seconds on
+        // the first launch. Keep the wait bounded, but do not kill a healthy
+        // Agent while it is establishing its credential and local IPC socket.
+        for _ in 0..AGENT_STARTUP_ATTEMPTS {
             if agent_ingress::probe() == agent_ingress::AgentProbe::NativeIngress {
                 return Ok((
                     Self {
@@ -448,7 +453,7 @@ impl AgentSupervisor {
             if child.try_wait().ok().flatten().is_some() {
                 return Err("AGENT_NATIVE_INGRESS_UNAVAILABLE".into());
             }
-            std::thread::sleep(Duration::from_millis(50));
+            std::thread::sleep(Duration::from_millis(AGENT_STARTUP_POLL_MS));
         }
         let _ = child.kill();
         let _ = child.wait();
