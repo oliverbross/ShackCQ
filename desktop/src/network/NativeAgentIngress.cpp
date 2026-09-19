@@ -207,12 +207,20 @@ void NativeAgentIngressServer::acceptConnections() {
     });
     connect(socket, &QLocalSocket::readyRead, socket,
             [this, socket, deadline] {
+              if (m_requestsInFlight.contains(socket))
+                return;
               deadline->start(m_idleTimeoutMs);
               readRequest(socket, deadline);
             });
     connect(socket, &QObject::destroyed, this,
-            [this, socket] { m_active.remove(socket); });
-    connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
+            [this, socket] {
+              m_requestsInFlight.remove(socket);
+              m_active.remove(socket);
+            });
+    connect(socket, &QLocalSocket::disconnected, this, [this, socket] {
+      if (!m_requestsInFlight.contains(socket))
+        socket->deleteLater();
+    });
     if (socket->bytesAvailable())
       readRequest(socket, deadline);
   }
@@ -239,6 +247,7 @@ void NativeAgentIngressServer::readRequest(QLocalSocket *socket,
   // still-armed timer could disconnect and delete this socket.
   deadline->stop();
   const QPointer<QLocalSocket> guardedSocket(socket);
+  m_requestsInFlight.insert(socket);
   const QByteArray line =
       socket->readLine(NativeAgentIngress::MaxRequestBytes + 1);
   QJsonParseError parse;
@@ -253,9 +262,15 @@ void NativeAgentIngressServer::readRequest(QLocalSocket *socket,
     outcome = m_fallback(request);
   else
     outcome = {{"ok", false}, {"code", "AGENT_ADMIN_ACTION_UNKNOWN"}};
-  if (guardedSocket)
-    respond(guardedSocket,
-            {{"ok", outcome.value("ok").toBool()}, {"result", outcome}});
+  m_requestsInFlight.remove(socket);
+  if (!guardedSocket)
+    return;
+  if (guardedSocket->state() == QLocalSocket::UnconnectedState) {
+    guardedSocket->deleteLater();
+    return;
+  }
+  respond(guardedSocket,
+          {{"ok", outcome.value("ok").toBool()}, {"result", outcome}});
 }
 
 } // namespace shackcq::desktop

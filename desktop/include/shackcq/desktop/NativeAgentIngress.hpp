@@ -59,6 +59,7 @@ private:
   NativeAgentIngress *m_ingress{};
   Fallback m_fallback;
   QSet<QLocalSocket *> m_active;
+  QSet<QLocalSocket *> m_requestsInFlight;
   int m_idleTimeoutMs{};
 };
 
