@@ -156,6 +156,9 @@ bool DesktopApplication::initialize(QString *error) {
   m_wavelog->setCredentialResolver([this](const QString &alias) {
     return m_credentials.read(alias).value_or(QString{});
   });
+  m_wavelogRadio.setCredentialResolver([this](const QString &alias) {
+    return m_credentials.read(alias).value_or(QString{});
+  });
   m_parity.setCredentialResolver([this](const QString &alias) {
     return m_credentials.read(alias).value_or(QString{});
   });
@@ -210,6 +213,7 @@ void DesktopApplication::expose(QQmlApplicationEngine &engine) {
   context->setContextProperty("Wavelog", m_wavelog);
   context->setContextProperty("RadioModels", &m_radioModels);
   context->setContextProperty("Radio", &m_radio);
+  context->setContextProperty("WavelogRadio", &m_wavelogRadio);
   context->setContextProperty("Rotator", &m_rotator);
   context->setContextProperty("Panadapter", &m_panadapter);
   context->setContextProperty("RemoteStation", &m_remote);
@@ -631,6 +635,7 @@ void DesktopApplication::shutdown() {
     m_adif->cancel();
   if (m_wavelog)
     m_wavelog->close();
+  m_wavelogRadio.stop();
   m_cluster.disconnectProfile();
   m_parity.close();
   m_keyer.stop();

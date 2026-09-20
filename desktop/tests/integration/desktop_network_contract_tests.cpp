@@ -1,6 +1,7 @@
 #include "shackcq/desktop/ClusterController.hpp"
 #include "shackcq/desktop/DesktopPlatform.hpp"
 #include "shackcq/desktop/WavelogSync.hpp"
+#include "shackcq/desktop/WavelogRadioBridge.hpp"
 
 #include <QTemporaryDir>
 #include <QJsonDocument>
@@ -37,6 +38,16 @@ private slots:
     }
     void emptyWavelogPowerRemainsUnset() {
         QTemporaryDir dir;QsoDatabase database(dir.filePath("empty-power.sqlite"));QString error;QVERIFY(database.open(&error));FakeWavelogEndpoint endpoint;endpoint.rowsOverride={QVariantMap{{"id","empty-power"},{"CALL","VK9XX"},{"FREQ","14.074"},{"BAND","20m"},{"MODE","FT8"},{"TX_PWR",""}}};FakeCredentialVault vault;QVERIFY(vault.write("alias","test","wl2_fixture"));WavelogSyncEngine engine(&database);engine.setEndpoint(&endpoint);engine.setCredentialResolver([&](const QString&a){return vault.read(a).value_or(QString{});});QVERIFY(engine.saveBinding({"binding",QUrl("https://example.test"),"alias","local","7",true,true},&error));engine.synchronize("INITIAL");QCOMPARE(engine.state(),QString("Synchronized"));QCOMPARE(database.count(),1);QVERIFY(std::isnan(database.page({}).first().txPower));
+    }
+    void stockWavelogProfilePersistsLegacyModeAndUsesVaultCredential() {
+        QTemporaryDir dir;QsoDatabase database(dir.filePath("legacy.sqlite"));QString error;QVERIFY(database.open(&error));FakeWavelogEndpoint endpoint;FakeCredentialVault vault;QVERIFY(vault.write("stock-key","stock","legacy_fixture_key"));WavelogSyncEngine engine(&database);engine.setEndpoint(&endpoint);engine.setCredentialResolver([&](const QString&a){return vault.read(a).value_or(QString{});});QVERIFY(engine.saveBinding({"binding",QUrl("https://log.example/index.php"),"stock-key","local","7",true,true,"LEGACY"},&error));const auto binding=engine.binding();QVERIFY(binding.has_value());QCOMPARE(binding->serverUrl,QUrl("https://log.example/index.php/"));QCOMPARE(binding->apiMode,QString("LEGACY"));engine.synchronize("QUICK");QCOMPARE(endpoint.pageCalls,1);QCOMPARE(engine.state(),QString("Synchronized"));
+    }
+    void wavelogRadioCallbackIsCapabilityBoundAndStrictlyParsed() {
+        const auto state=WavelogRadioBridge::radioState("ShackCQ Desktop",14074000,"USB",QUrl("http://127.0.0.1:54321/nonce"));QCOMPARE(state.value("frequency").toVariant().toULongLong(),14074000ULL);QCOMPARE(state.value("cat_url").toString(),QString("http://127.0.0.1:54321/nonce"));QVERIFY(!state.contains("ptt"));QVERIFY(!state.contains("rotator"));
+        quint64 frequency=0;QString mode;QVERIFY(WavelogRadioBridge::parseTunePath("/nonce/7074000/usb","nonce",&frequency,&mode));QCOMPARE(frequency,7074000ULL);QCOMPARE(mode,QString("USB"));QVERIFY(!WavelogRadioBridge::parseTunePath("/wrong/7074000/usb","nonce",&frequency,&mode));QVERIFY(!WavelogRadioBridge::parseTunePath("/nonce/7074000/ptt","nonce",&frequency,&mode));QVERIFY(!WavelogRadioBridge::parseTunePath("/nonce/99999999999/usb","nonce",&frequency,&mode));
+        QVERIFY(WavelogRadioBridge::acceptsLoopbackHost("GET / HTTP/1.1\r\nHost: 127.0.0.1:54321\r\n\r\n"));
+        QVERIFY(WavelogRadioBridge::acceptsLoopbackHost("GET / HTTP/1.1\r\nhost: [::1]:54321\r\n\r\n"));
+        QVERIFY(!WavelogRadioBridge::acceptsLoopbackHost("GET / HTTP/1.1\r\nHost: 127.0.0.1.evil.example\r\n\r\n"));
     }
     void createPatchBodiesAndRetainedFieldsAreTruthful() {
         CanonicalQso canonical{{{"CALL","OM0RX"},{"FREQ","14.074000"},{"QSO_DATE","20260913"},{"TIME_ON","010203"},{"PROP_MODE","SAT"},{"SOTA_REF","W1/AA-001,W2/BB-002"},{"WWFF_REF","VKFF-0001,VKFF-0002"},{"IOTA","OC-001,OC-002"},{"ANT_PATH","G"},{"MY_ANTENNA","Yagi"},{"QSLMSG","Thanks"},{"QSL_SENT","Y"},{"QSL_RCVD","Y"},{"QSLSDATE","20260912"},{"QSLRDATE","20260913"},{"QSL_SENT_VIA","E"},{"QSL_RCVD_VIA","D"}}};const WavelogBinding binding{"binding",QUrl("https://example.test"),"alias","local","7",true,true};const auto create=QtWavelogEndpoint::requestBody(binding,canonical,"CREATE");const auto patch=QtWavelogEndpoint::requestBody(binding,canonical,"UPDATE");QVERIFY(create.contains("ant_path"));QVERIFY(create.contains("qsl_sent_via"));QCOMPARE(create.value("sota_ref").toString(),QString("W1/AA-001,W2/BB-002"));QCOMPARE(patch.value("wwff_ref").toString(),QString("VKFF-0001,VKFF-0002"));QCOMPARE(patch.value("iota").toString(),QString("OC-001,OC-002"));QVERIFY(patch.contains("prop_mode"));QVERIFY(!patch.contains("ant_path"));QVERIFY(!patch.contains("qsl_sent_via"));

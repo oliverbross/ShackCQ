@@ -55,6 +55,7 @@ set(SHACKCQ_DESKTOP_SERVICE_SOURCES
     src/data/QsoDatabase.cpp
     src/data/AdifService.cpp
     src/network/WavelogSync.cpp
+    src/network/WavelogRadioBridge.cpp
     src/network/ClusterController.cpp
     src/network/CloudAgentClient.cpp
     src/network/LoggerIngestion.cpp

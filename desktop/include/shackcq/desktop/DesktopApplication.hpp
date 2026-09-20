@@ -12,6 +12,7 @@
 #include "shackcq/desktop/RemoteStationService.hpp"
 #include "shackcq/desktop/RemoteStationClient.hpp"
 #include "shackcq/desktop/WavelogSync.hpp"
+#include "shackcq/desktop/WavelogRadioBridge.hpp"
 
 #include <QQmlApplicationEngine>
 #include <QTemporaryDir>
@@ -90,6 +91,7 @@ private:
   WavelogSyncEngine *m_wavelog{};
   HamlibModelRegistry m_radioModels;
   DesktopRadioController m_radio;
+  WavelogRadioBridge m_wavelogRadio{&m_radio};
   DesktopRotatorController m_rotator;
   DesktopPanadapter m_panadapter;
   RemoteStationService m_remote;

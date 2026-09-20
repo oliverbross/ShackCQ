@@ -23,6 +23,7 @@ struct WavelogBinding {
     QString remoteStationId;
     bool canRead{};
     bool canWrite{};
+    QString apiMode{"AUTO"};
 };
 
 struct CanonicalQso {
@@ -69,6 +70,7 @@ private:
                         const QJsonObject &body = {});
     QNetworkAccessManager m_network;
     QSet<QNetworkReply *> m_replies;
+    QMap<QString, qint64> m_legacyCursors;
     bool m_closed{};
 };
 
@@ -88,7 +90,7 @@ public:
     Q_INVOKABLE bool configureBinding(const QString &serverUrl, const QString &credentialAlias,
                                       const QString &localStationProfileId,
                                       const QString &remoteStationId,
-                                      bool canWrite);
+                                      bool canWrite, const QString &apiMode = QStringLiteral("AUTO"));
     std::optional<WavelogBinding> binding() const;
     bool enqueue(const QString &qsoId, const QString &operation, QString *error = nullptr);
     Q_INVOKABLE void synchronize(const QString &mode);
