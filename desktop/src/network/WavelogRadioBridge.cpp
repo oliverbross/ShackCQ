@@ -12,7 +12,7 @@
 
 namespace shackcq::desktop {
 namespace {
-QUrl baseUrl(const QString &value){QUrl url(value.trimmed());if(url.scheme()!="https"||url.host().isEmpty())return{};url.setQuery({});url.setFragment({});QString path=url.path();while(path.endsWith('/'))path.chop(1);if(!path.endsWith("/index.php"))path+="/index.php";url.setPath(path+QChar('/'));return url;}
+QUrl baseUrl(const QString &value){QUrl url(value.trimmed());if(url.scheme()!="https"||url.host().isEmpty())return{};url.setQuery(QString{});url.setFragment(QString{});QString path=url.path();while(path.endsWith('/'))path.chop(1);if(!path.endsWith("/index.php"))path+="/index.php";url.setPath(path+QChar('/'));return url;}
 const QSet<QString>& modes(){static const QSet<QString> value{"lsb","usb","cw","fm","am","rtty","pkt","dig","pktlsb","pktusb","pktfm"};return value;}
 }
 

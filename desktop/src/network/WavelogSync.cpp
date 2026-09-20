@@ -28,8 +28,10 @@ QUrl normalizedBase(const QUrl &input) {
     QUrl url=input;if(url.scheme().isEmpty())url=QUrl(QStringLiteral("https://%1").arg(input.toString()));
     if(url.scheme()!=QStringLiteral("https")||url.host().isEmpty())return{};
     url.setQuery(QString{});url.setFragment(QString{});QString path=url.path();while(path.endsWith('/'))path.chop(1);
-    if(path.endsWith("/api/v2"))path.chop(7);while(path.endsWith('/'))path.chop(1);
-    if(!path.endsWith("/index.php"))path+=QStringLiteral("/index.php");path+=QChar('/');url.setPath(path);return url;
+    if(path.endsWith("/api/v2"))path.chop(7);
+    while(path.endsWith('/'))path.chop(1);
+    if(!path.endsWith("/index.php"))path+=QStringLiteral("/index.php");
+    path+=QChar('/');url.setPath(path);return url;
 }
 
 QVariantList legacyAdifRows(const QByteArray &adif, QString *error) {
@@ -41,7 +43,8 @@ QVariantList legacyAdifRows(const QByteArray &adif, QString *error) {
             const qsizetype open=record.indexOf('<',pos),close=open<0?-1:record.indexOf('>',open+1);if(open<0)break;if(close<0){if(error)*error="Unterminated legacy ADIF field";return{};}
             const auto descriptor=record.mid(open+1,close-open-1).split(':');const QString name=QString::fromLatin1(descriptor.value(0)).trimmed().toUpper();if(name=="EOR"||name=="EOH"){pos=close+1;continue;}
             bool ok=false;const int length=descriptor.value(1).toInt(&ok);if(!ok||length<0||length>1048576||close+1+length>record.size()){if(error)*error="Invalid legacy ADIF field length";return{};}
-            if(mappedWavelogFields().contains(name)||safeExtraAdifName(name)||name=="QSO_ID")row.insert(name,QString::fromUtf8(record.mid(close+1,length)));pos=close+1+length;
+            if(mappedWavelogFields().contains(name)||safeExtraAdifName(name)||name=="QSO_ID")row.insert(name,QString::fromUtf8(record.mid(close+1,length)));
+            pos=close+1+length;
         }
         const QString id=row.value("QSO_ID",row.value("ID")).toString();if(!id.isEmpty())row.insert("id",id);if(!row.isEmpty())rows.push_back(row);
     }
