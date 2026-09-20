@@ -29,6 +29,7 @@ QVariantMap profile(const QString &id, const QString &route) {
           {"forbiddenSectors", QVariantList{}}};
 }
 
+#ifdef Q_OS_UNIX
 QJsonObject command(const QString &id, const QString &action,
                     const QJsonObject &parameters = {},
                     const QString &control = "browser-1") {
@@ -45,6 +46,7 @@ QJsonObject snapshot(DesktopRotatorFleet &fleet, const QString &id) {
       return value.toObject();
   return {};
 }
+#endif
 
 class DesktopRotatorFleetTests final : public QObject {
   Q_OBJECT
