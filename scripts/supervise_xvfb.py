@@ -70,6 +70,7 @@ def launch_child(arguments: argparse.Namespace, display_write: int) -> subproces
             "-screen",
             "0",
             "1280x720x24",
+            "-noreset",
             "-nolisten",
             "tcp",
         ],
