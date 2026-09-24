@@ -16,7 +16,9 @@ import time
 
 
 READY_TIMEOUT = 3.0
-CONTROL_TIMEOUT = 15.0
+# Candidate acceptance can legitimately spend well over 15 seconds launching
+# and probing the packaged GUI before it asks the owned display to stop.
+CONTROL_TIMEOUT = 120.0
 TERM_TIMEOUT = 1.0
 KILL_TIMEOUT = 2.0
 
