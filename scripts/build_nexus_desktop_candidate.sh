@@ -759,7 +759,7 @@ PY
 accept_linux_payload() {
   local payload_root=$1 label=$2
   local payload_tmp agent_path nexus_path main_path launch_path launch_cwd socket_name owner_token main_rc runtime_probe
-  local main_socket agent_status observed_pid display_number stationd_stderr
+  local main_socket agent_status observed_pid display_number stationd_stderr stationd_attempt readiness_rc
   local -a launch_env=()
   payload_tmp=$(mktemp -d)
   cleanup_paths+=("$payload_tmp")
@@ -775,43 +775,61 @@ accept_linux_payload() {
     launch_env+=("APPDIR=$payload_root")
     test -x "$launch_path"
   fi
-  # stationd resolves this bounded logical name beneath its private runtime
-  # directory; it intentionally rejects path separators supplied by callers.
-  socket_name="shackcq-package-${RANDOM}-${RANDOM}.sock"
-  case "$socket_name" in
-    [A-Za-z0-9]* ) ;;
-    * ) echo "invalid generated stationd socket name" >&2; return 1 ;;
-  esac
-  case "$socket_name" in
-    *[!A-Za-z0-9._-]* )
-      echo "invalid generated stationd socket name" >&2
-      return 1
-      ;;
-  esac
-  test "${#socket_name}" -le 96
   runtime_probe=$(env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
     SHACKCQ_PACKAGE_RUNTIME_HERMETIC=1 "$agent_path" --package-runtime-probe)
   python3 -c 'import json,sys; p=json.loads(sys.argv[1]); assert p["qsqlite"] is True and p["tls"] is True and p["tlsBackend"]' \
     "$runtime_probe"
   printf 'PACKAGED_%s_QT_RUNTIME_OK qsqlite=true tls=true\n' "$label"
   owner_token=$(printf 'b%.0s' {1..64})
-  stationd_stderr="$payload_tmp/stationd.stderr"
-  : >"$stationd_stderr"
-  chmod 0600 "$stationd_stderr"
-  env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
-    "$agent_path" --foreground --native-ingress-only \
-      --native-owner-token "$owner_token" --admin-socket "$socket_name" \
-      --ephemeral-root "$payload_tmp/agent" --ephemeral-credentials \
-      2>"$stationd_stderr" &
-  stationd_pid=$!
-  stationd_executable=$agent_path
-  owned_stationd_socket=$socket_name
-  owned_stationd_token=$owner_token
-  agent_status=$(env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
-    python3 "$stationd_readiness" --executable "$agent_path" \
-      --socket "$socket_name" --expected-pid "$stationd_pid" \
-      --stderr-log "$stationd_stderr" --overall-timeout 10 \
-      --probe-timeout 0.25)
+  readiness_rc=1
+  for stationd_attempt in 1 2 3; do
+    # stationd resolves this bounded logical name beneath its private runtime
+    # directory; it intentionally rejects path separators supplied by callers.
+    socket_name="shackcq-package-${RANDOM}-${RANDOM}.sock"
+    case "$socket_name" in
+      [A-Za-z0-9]* ) ;;
+      * ) echo "invalid generated stationd socket name" >&2; return 1 ;;
+    esac
+    case "$socket_name" in
+      *[!A-Za-z0-9._-]* )
+        echo "invalid generated stationd socket name" >&2
+        return 1
+        ;;
+    esac
+    test "${#socket_name}" -le 96
+    stationd_stderr="$payload_tmp/stationd-$stationd_attempt.stderr"
+    : >"$stationd_stderr"
+    chmod 0600 "$stationd_stderr"
+    env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
+      "$agent_path" --foreground --native-ingress-only \
+        --native-owner-token "$owner_token" --admin-socket "$socket_name" \
+        --ephemeral-root "$payload_tmp/agent-$stationd_attempt" --ephemeral-credentials \
+        2>"$stationd_stderr" &
+    stationd_pid=$!
+    stationd_executable=$agent_path
+    owned_stationd_socket=$socket_name
+    owned_stationd_token=$owner_token
+    set +e
+    agent_status=$(env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
+      python3 "$stationd_readiness" --executable "$agent_path" \
+        --socket "$socket_name" --expected-pid "$stationd_pid" \
+        --stderr-log "$stationd_stderr" --overall-timeout 10 \
+        --probe-timeout 0.25)
+    readiness_rc=$?
+    set -e
+    if [ "$readiness_rc" = 0 ]; then
+      break
+    fi
+    printf 'PACKAGED_%s_AGENT_START_RETRY attempt=%s\n' "$label" "$stationd_attempt" >&2
+    cat "$stationd_stderr" >&2
+    stop_owned_stationd
+    owned_stationd_socket=
+    owned_stationd_token=
+  done
+  if [ "$readiness_rc" != 0 ]; then
+    echo "packaged $label Agent did not become ready after bounded retries" >&2
+    return 1
+  fi
   ! env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
     "$agent_path" --admin-socket "$socket_name" --stop \
       --native-owner-token "$(printf 'c%.0s' {1..64})" >/dev/null 2>&1
