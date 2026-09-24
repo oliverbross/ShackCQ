@@ -446,7 +446,8 @@ QJsonObject LoggerIngestion::parseWsjt(Profile *profile,
       contact.insert("grid",
                      QString::fromStdString(logged->gridsquare).toUpper());
     QJsonObject adif;
-    for (const char *field : {"RST_SENT", "RST_RCVD", "TIME_OFF", "TX_PWR"}) {
+    for (const char *field : {"RST_SENT", "RST_RCVD", "TIME_OFF", "TX_PWR",
+                              "COMMENT"}) {
       const QString v = adifValue(raw, field);
       if (!v.isEmpty())
         adif.insert(field, v);

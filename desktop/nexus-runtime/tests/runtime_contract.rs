@@ -60,12 +60,26 @@ fn configuration_is_inert_and_stop_fails_closed() {
 }
 
 #[test]
-fn encoder_can_only_be_observed_through_null_digest() {
+fn every_compiled_encoder_can_only_be_observed_through_null_digest() {
     let (_dir, runtime) = runtime();
-    let digest = runtime
-        .encode_to_null(DigiMode::Ft8, "CQ KD9TAW EN52")
-        .unwrap();
-    assert_eq!(digest.len(), 64);
+    let cases = [
+        (DigiMode::Ft8, "CQ KD9TAW EN52"),
+        (DigiMode::Ft4, "CQ KD9TAW EN52"),
+        (DigiMode::Ft2, "CQ KD9TAW EN52"),
+        (DigiMode::Fst4, "K1ABC W9XYZ EN37"),
+        (DigiMode::Fst4w, "KD9TAW EN52 30"),
+        (DigiMode::Q65, "K1ABC W9XYZ EN37"),
+        (DigiMode::Msk144, "K1ABC W9XYZ EN37"),
+        (DigiMode::Jt65, "K1ABC W9XYZ EN37"),
+        (DigiMode::Wspr, "KD9TAW EN52 30"),
+    ];
+
+    for (mode, message) in cases {
+        let digest = runtime
+            .encode_to_null(mode, message)
+            .unwrap_or_else(|error| panic!("{mode:?} null encode failed: {error}"));
+        assert_eq!(digest.len(), 64, "{mode:?} digest must be SHA-256 hex");
+    }
     assert!(!runtime.snapshot().capabilities.audio_output);
 }
 

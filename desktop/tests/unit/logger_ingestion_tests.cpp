@@ -106,7 +106,7 @@ QByteArray wsjtLoggedAdif() {
   const QByteArray adif =
       "<CALL:6>VK8ABC<BAND:3>20M<MODE:3>FT8<SUBMODE:3>FT8<FREQ:6>14.074<"
       "GRIDSQUARE:6>PH57KP<QSO_DATE:8>20260101<TIME_ON:6>010203<STATION_"
-      "CALLSIGN:5>OM0RX<EOR>";
+      "CALLSIGN:5>OM0RX<COMMENT:36>SIMULATED SHACKCQ VALIDATION - NO RF<EOR>";
   QByteArray out = wsjtHeader(12);
   bytes(out, adif);
   return out;
@@ -240,6 +240,8 @@ private slots:
                                      .value("contact")
                                      .toObject();
       QCOMPARE(richer.value("ownCallsign").toString(), QString("OM0RX"));
+      QCOMPARE(richer.value("adif").toObject().value("COMMENT").toString(),
+               QString("SIMULATED SHACKCQ VALIDATION - NO RF"));
       const QVariantMap telemetry = logger.health()
                                         .value("profileStates")
                                         .toList()
