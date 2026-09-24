@@ -854,7 +854,7 @@ accept_linux_payload() {
     --stop "$xvfb_stop" --done "$xvfb_done" \
     >"$payload_tmp/xvfb.log" 2>&1 &
   xvfb_supervisor_pid=$!
-  for _ in {1..40}; do
+  for _ in {1..200}; do
     [ -s "$payload_tmp/xvfb-ready.json" ] && [ -s "$payload_tmp/xvfb-display" ] && break
     [ -s "$xvfb_done" ] && break
     sleep 0.05
