@@ -42,7 +42,7 @@ def main() -> int:
     payload = {
         "schemaVersion": 1,
         "product": "ShackCQ Desktop",
-        "bundleVersion": "0.2.1",
+        "bundleVersion": "0.2.2",
         "platform": args.platform,
         "sourceCommit": args.source,
         "sharedDigiWebCommit": args.web,

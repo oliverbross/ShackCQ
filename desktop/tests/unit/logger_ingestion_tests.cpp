@@ -240,6 +240,15 @@ private slots:
                                      .value("contact")
                                      .toObject();
       QCOMPARE(richer.value("ownCallsign").toString(), QString("OM0RX"));
+      const QVariantMap telemetry = logger.health()
+                                        .value("profileStates")
+                                        .toList()
+                                        .first()
+                                        .toMap();
+      QCOMPARE(telemetry.value("packetsReceived").toULongLong(), quint64(3));
+      QCOMPARE(telemetry.value("messagesParsed").toULongLong(), quint64(3));
+      QCOMPARE(telemetry.value("contactsQueued").toULongLong(), quint64(3));
+      QVERIFY(!telemetry.value("lastPacketUtc").toString().isEmpty());
     }
   }
 

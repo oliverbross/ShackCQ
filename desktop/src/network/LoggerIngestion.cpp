@@ -121,6 +121,9 @@ struct LoggerIngestion::Profile {
   QString state{"PAUSED"};
   QString error;
   QDateTime lastPacket;
+  quint64 packetsReceived{};
+  quint64 messagesParsed{};
+  quint64 contactsQueued{};
 };
 
 LoggerIngestion::LoggerIngestion(DesktopCredentialVault *vault,
@@ -370,11 +373,17 @@ void LoggerIngestion::receive(Profile *profile) {
       continue;
     }
     profile->lastPacket = QDateTime::currentDateTimeUtc();
+    ++profile->packetsReceived;
     const QJsonObject event = profile->source == "WSJTX"
                                   ? parseWsjt(profile, packet)
                                   : parseN1mm(profile, packet);
-    if (!event.isEmpty() && storeEvent(event))
-      emit eventsReady();
+    if (!event.isEmpty()) {
+      ++profile->messagesParsed;
+      if (storeEvent(event)) {
+        ++profile->contactsQueued;
+        emit eventsReady();
+      }
+    }
   }
 }
 
@@ -757,7 +766,7 @@ void LoggerIngestion::setError(Profile *profile, const QString &code) {
 QVariantMap LoggerIngestion::health() const {
   QVariantList profileStates;
   QStringList ids=m_profiles.keys();std::sort(ids.begin(),ids.end());
-  for(const QString &id:ids){const Profile *profile=m_profiles.value(id);profileStates.push_back(QVariantMap{{"id",profile->id},{"source",profile->source},{"instanceId",profile->instanceId},{"loopbackPort",profile->port},{"state",profile->state},{"error",profile->error},{"lastPacketUtc",profile->lastPacket.isValid()?profile->lastPacket.toString(Qt::ISODateWithMs):QString{}}});}
+  for(const QString &id:ids){const Profile *profile=m_profiles.value(id);profileStates.push_back(QVariantMap{{"id",profile->id},{"source",profile->source},{"instanceId",profile->instanceId},{"loopbackPort",profile->port},{"state",profile->state},{"error",profile->error},{"lastPacketUtc",profile->lastPacket.isValid()?profile->lastPacket.toString(Qt::ISODateWithMs):QString{}},{"packetsReceived",QVariant::fromValue(profile->packetsReceived)},{"messagesParsed",QVariant::fromValue(profile->messagesParsed)},{"contactsQueued",QVariant::fromValue(profile->contactsQueued)}});}
   return {{"profiles", m_profiles.size()},
           {"profileStates", profileStates},
           {"pendingEvents", m_journal.size()},

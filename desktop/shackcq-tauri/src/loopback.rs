@@ -220,6 +220,19 @@ fn body(req: &mut tiny_http::Request) -> Option<Vec<u8>> {
     }
 }
 fn front_gate(req: tiny_http::Request) -> Result<tiny_http::Request, ()> {
+    if req.method() == &Method::Get
+        && req.url().split('?').next() == Some("/")
+        && header(&req, "Host").as_deref() == Some("127.0.0.1:17654")
+        && header(&req, "Origin").is_none()
+    {
+        let page = "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width\"><title>ShackCQ Desktop bridge</title><style>html{color-scheme:dark;font:16px system-ui;background:#0b0f12;color:#f4f0e7}main{max-width:42rem;margin:12vh auto;padding:2rem;border:1px solid #4a555d;background:#111519}h1{color:#e9a72b}a{color:#61d3df}</style><main><h1>ShackCQ Desktop bridge is running</h1><p>This local address is a secure bridge, not the ShackCQ website. Keep ShackCQ Desktop open, return to <a href=\"https://shackcq.com/app/digi\">ShackCQ Digi</a>, choose <strong>Connect local desktop</strong>, and enter the one-use code shown in Desktop Settings.</p><p>No radio or account data is exposed on this page.</p></main>";
+        let mut response = Response::from_string(page).with_status_code(StatusCode(200));
+        response.add_header(Header::from_bytes("Content-Type", "text/html; charset=utf-8").unwrap());
+        response.add_header(Header::from_bytes("Cache-Control", "no-store").unwrap());
+        response.add_header(Header::from_bytes("X-Content-Type-Options", "nosniff").unwrap());
+        let _ = req.respond(response);
+        return Err(());
+    }
     if header(&req, "Host").as_deref() != Some("127.0.0.1:17654")
         || header(&req, "Origin").as_deref() != Some(ORIGIN)
     {
@@ -503,6 +516,25 @@ mod tests {
         client.read_to_string(&mut response).unwrap();
         worker.join().unwrap();
         response
+    }
+    #[test]
+    fn direct_root_explains_pairing_without_exposing_api_data() {
+        let response = socket_roundtrip(
+            "GET / HTTP/1.1\r\nHost: 127.0.0.1:17654\r\nConnection: close\r\n\r\n",
+        );
+        assert!(response.starts_with("HTTP/1.1 200"));
+        assert!(response.contains("ShackCQ Desktop bridge is running"));
+        assert!(response.contains("https://shackcq.com/app/digi"));
+        assert!(!response.contains("capability"));
+        assert!(!response.contains("stationId"));
+    }
+    #[test]
+    fn direct_api_navigation_remains_rejected() {
+        let response = socket_roundtrip(
+            "GET /v1/digi/targets HTTP/1.1\r\nHost: 127.0.0.1:17654\r\nConnection: close\r\n\r\n",
+        );
+        assert!(response.starts_with("HTTP/1.1 403"));
+        assert!(response.contains("ORIGIN_OR_HOST_REJECTED"));
     }
     fn contract_roundtrip(body: &str) -> String {
         let server = Server::http("127.0.0.1:0").unwrap();

@@ -53,6 +53,10 @@ private slots:
     QCOMPARE(snapshot.value("frequencyHz").toDouble(),7'074'000.0);
     QCOMPARE(snapshot.value("mode").toString(),QStringLiteral("DATA"));
     QCOMPARE(snapshot.value("filterHz").toInt(),3'000);
+    const QVariantMap descriptor=fleet.descriptors().first().toMap();
+    QCOMPARE(descriptor.value("frequencyHz").toDouble(),7'074'000.0);
+    QCOMPARE(descriptor.value("mode").toString(),QStringLiteral("DATA"));
+    QCOMPARE(descriptor.value("filterHz").toInt(),3'000);
   }
 };
 } // namespace

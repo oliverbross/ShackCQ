@@ -1656,6 +1656,7 @@ mod tests {
         let mut agent = AgentSupervisor {
             child: None,
             owner_token: String::new(),
+            executable: std::path::PathBuf::new(),
         };
         agent.shutdown();
         agent.shutdown();
