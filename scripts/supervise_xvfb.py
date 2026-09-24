@@ -15,7 +15,7 @@ import sys
 import time
 
 
-READY_TIMEOUT = 3.0
+READY_TIMEOUT = 10.0
 # Candidate acceptance can legitimately spend well over 15 seconds launching
 # and probing the packaged GUI before it asks the owned display to stop.
 CONTROL_TIMEOUT = 120.0
