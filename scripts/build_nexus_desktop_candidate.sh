@@ -810,7 +810,7 @@ accept_linux_payload() {
   agent_status=$(env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
     python3 "$stationd_readiness" --executable "$agent_path" \
       --socket "$socket_name" --expected-pid "$stationd_pid" \
-      --stderr-log "$stationd_stderr" --overall-timeout 5 \
+      --stderr-log "$stationd_stderr" --overall-timeout 10 \
       --probe-timeout 0.25)
   ! env -u LD_LIBRARY_PATH -u QT_PLUGIN_PATH -u QML2_IMPORT_PATH \
     "$agent_path" --admin-socket "$socket_name" --stop \

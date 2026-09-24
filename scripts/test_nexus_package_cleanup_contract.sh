@@ -122,7 +122,7 @@ printf '%s\n' "$linux_acceptance" | grep -F 'env -u LD_LIBRARY_PATH -u QT_PLUGIN
 printf '%s\n' "$linux_acceptance" | grep -F 'SHACKCQ_PACKAGE_RUNTIME_HERMETIC=1 "$agent_path" --package-runtime-probe' >/dev/null
 test "$(printf '%s\n' "$linux_acceptance" | grep -Fc -- '--admin-socket "$socket_name" --status')" = 0
 printf '%s\n' "$linux_acceptance" | grep -F 'python3 "$stationd_readiness" --executable "$agent_path"' >/dev/null
-printf '%s\n' "$linux_acceptance" | grep -F -- '--overall-timeout 5' >/dev/null
+printf '%s\n' "$linux_acceptance" | grep -F -- '--overall-timeout 10' >/dev/null
 printf '%s\n' "$linux_acceptance" | grep -F -- '--probe-timeout 0.25' >/dev/null
 printf '%s\n' "$linux_acceptance" | grep -F 'chmod 0600 "$stationd_stderr"' >/dev/null
 printf '%s\n' "$linux_acceptance" | grep -F 'python3 "$repo/scripts/supervise_xvfb.py"' >/dev/null
