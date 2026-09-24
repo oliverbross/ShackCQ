@@ -67,8 +67,10 @@ def main() -> int:
     parser.add_argument("app", type=Path)
     parser.add_argument("--repair-install-ids", action="store_true")
     parser.add_argument("--manifest", type=Path)
+    parser.add_argument("--maximum-minimum", default="13.0")
     args = parser.parse_args()
     app = args.app.resolve()
+    maximum_minimum = tuple(map(int, args.maximum_minimum.split(".")))
     required = [
         app / "Contents" / "MacOS" / "shackcq-desktop",
         app / "Contents" / "MacOS" / "shackcq-nexus-runtime",
@@ -109,9 +111,9 @@ def main() -> int:
             )
         load_commands = output("otool", "-l", str(path))
         minimums = re.findall(r"\bminos\s+([0-9.]+)", load_commands)
-        if not minimums or any(tuple(map(int, value.split("."))) > (13, 0) for value in minimums):
+        if not minimums or any(tuple(map(int, value.split("."))) > maximum_minimum for value in minimums):
             failures.append(
-                f"minimum macOS exceeds 13.0 or is absent: {path.relative_to(app)} -> {minimums}"
+                f"minimum macOS exceeds {args.maximum_minimum} or is absent: {path.relative_to(app)} -> {minimums}"
             )
         current_id = install_id(path)
         if current_id and absolute_local.match(current_id):
@@ -147,7 +149,7 @@ def main() -> int:
             "product": info.get("CFBundleName", "ShackCQ Desktop"),
             "bundleIdentifier": info["CFBundleIdentifier"],
             "bundleVersion": info["CFBundleShortVersionString"],
-            "minimumMacOS": "13.0",
+            "minimumMacOS": args.maximum_minimum,
             "sourceCommit": package_metadata["sourceCommit"],
             "nexusCommit": package_metadata["nexusCommit"],
             "sharedDigiWebCommit": package_metadata["sharedDigiWebCommit"],

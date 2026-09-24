@@ -14,6 +14,7 @@ signing_identity=${SHACKCQ_MACOS_SIGNING_IDENTITY:-}
 notary_profile=${SHACKCQ_MACOS_NOTARY_PROFILE:-}
 metadata_signing_state=AD_HOC_ONLY
 metadata_notarization_state=NOT_PERFORMED
+minimum_macos=${SHACKCQ_MACOS_MINIMUM:-13.0}
 [ -z "$signing_identity" ] || metadata_signing_state=DEVELOPER_ID_VERIFIED
 [ -z "$notary_profile" ] || metadata_notarization_state=ACCEPTED_STAPLED
 app_name="ShackCQ Desktop"
@@ -413,7 +414,7 @@ python3 "$repo/scripts/write_nexus_package_metadata.py" \
   --notarization-state "$metadata_notarization_state"
 printf '%s\n' "$compiled_source_revision" > "$app/Contents/Resources/COMPILED_SOURCE_REVISION.txt"
 printf '%s\n' "$packaging_revision" > "$app/Contents/Resources/PACKAGING_REVISION.txt"
-python3 "$repo/scripts/audit_macos_nexus_desktop.py" --repair-install-ids "$app"
+python3 "$repo/scripts/audit_macos_nexus_desktop.py" --maximum-minimum "$minimum_macos" --repair-install-ids "$app"
 manifest="$output/COMPONENT_MANIFEST.json"
 mkdir -p "$output"
 if [ -n "$signing_identity" ]; then
@@ -453,7 +454,7 @@ if [ -n "$notary_profile" ]; then
   xcrun stapler staple "$app"
   xcrun stapler validate "$app"
 fi
-python3 "$repo/scripts/audit_macos_nexus_desktop.py" --manifest "$manifest" "$app"
+python3 "$repo/scripts/audit_macos_nexus_desktop.py" --maximum-minimum "$minimum_macos" --manifest "$manifest" "$app"
 
 # Launch only the newly assembled headless sidecar, with a unique socket,
 # disposable paths, an in-memory credential vault, and hardware autoconnect off.
