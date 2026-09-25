@@ -531,7 +531,7 @@ fi
 hdiutil verify "$dmg"
 
 attach_output=$(hdiutil attach -readonly -nobrowse "$dmg")
-mount_point=$(printf '%s\n' "$attach_output" | awk -F '\t' '$3 ~ /^\/Volumes\// {print $3; exit}')
+mount_point=$(printf '%s\n' "$attach_output" | awk -F '\t' '{for (field = 1; field <= NF; field++) if ($field ~ /^\/Volumes\//) {print $field; exit}}')
 test -n "$mount_point"
 mounted_app="$mount_point/$app_name.app"
 mounted_stationd="$mounted_app/Contents/MacOS/shackcq-stationd"
