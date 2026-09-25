@@ -29,6 +29,7 @@ ft2 = { path = "../../third_party/nexus/crates/ft2" }
 fst4 = { path = "../../third_party/nexus/crates/fst4" }
 jt65 = { path = "../../third_party/nexus/crates/jt65" }
 msk144 = { path = "../../third_party/nexus/crates/msk144" }
+modes = { path = "../../third_party/nexus/crates/modes" }
 q65 = { path = "../../third_party/nexus/crates/q65" }
 wspr = { path = "../../third_party/nexus/crates/wspr" }
 getrandom = "0.3"
@@ -39,6 +40,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 tempo-audio = { path = "../../third_party/nexus/crates/tempo-audio", default-features = false }
+tempo-core = { path = "../../third_party/nexus/crates/tempo-core" }
 thiserror = "2"
 
 [dev-dependencies]

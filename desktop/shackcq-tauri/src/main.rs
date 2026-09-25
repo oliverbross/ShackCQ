@@ -4,8 +4,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use shackcq_nexus_runtime::{
-    CommandEnvelope, CommandResult, DigiMode, ReviewedContact, RuntimeCommand, RuntimePresence,
-    RuntimeState, RxProfile, CONTRACT_VERSION, MAX_RECORDING_BYTES,
+    CommandEnvelope, CommandResult, DigiMode, EmulatedSequenceRequest, ReviewedContact,
+    RuntimeCommand, RuntimePresence, RuntimeState, RxProfile, CONTRACT_VERSION,
+    MAX_RECORDING_BYTES,
 };
 use std::collections::VecDeque;
 use std::fs::OpenOptions;
@@ -768,8 +769,8 @@ fn parse_presence(result: CommandResult) -> Result<RuntimePresence, String> {
 fn runtime_presence(p: &RuntimePresence) -> Value {
     let s = &p.snapshot;
     let profile = s.rx_profile.as_ref();
-    let mode = profile
-        .map(|x| match x.mode {
+    let active_mode = profile.map(|x| x.mode).or_else(|| s.emulation.as_ref().map(|x| x.mode)).unwrap_or(DigiMode::Ft8);
+    let mode = match active_mode {
             DigiMode::Ft8 => "FT8",
             DigiMode::Ft4 => "FT4",
             DigiMode::Ft2 => "FT2",
@@ -779,8 +780,7 @@ fn runtime_presence(p: &RuntimePresence) -> Value {
             DigiMode::Msk144 => "MSK144",
             DigiMode::Jt65 => "JT65",
             DigiMode::Wspr => "WSPR",
-        })
-        .unwrap_or("FT8");
+        };
     let submode = profile.and_then(|value| value.submode.clone());
     let state = match s.state {
         RuntimeState::Receiving => "RX",
@@ -805,13 +805,36 @@ fn runtime_presence(p: &RuntimePresence) -> Value {
         RuntimeState::Configured => "READY",
         _ => "UNCONFIGURED",
     };
+    let emulated_sequence = s.emulation.as_ref().map(|sequence| json!({
+        "state":sequence.state,
+        "role":"CQ_RUNNER",
+        "stationCallsign":sequence.local_callsign,
+        "remoteCallsign":sequence.remote_callsign,
+        "remoteGrid":sequence.remote_grid,
+        "sentReport":null,
+        "receivedReport":null,
+        "pendingMessage":null,
+        "pendingKind":null,
+        "expectedIncoming":[],
+        "retryCount":0,
+        "retryLimit":0,
+        "autoCq":false,
+        "autoCqLimit":1,
+        "cqTransmissions":sequence.steps.iter().filter(|step|step.direction=="LOCAL_TO_EMULATED_REMOTE"||step.direction=="LOCAL_TO_NULL_SINK").count(),
+        "completionReason":sequence.completion_reason,
+        "holdReason":null,
+        "transport":sequence.transport,
+        "qsoComplete":sequence.qso_complete,
+        "beaconComplete":sequence.beacon_complete,
+        "transcript":sequence.steps,
+    }));
     json!({"state":"online","generation":s.generation,"serverDigiTxEnabled":false,"path":"LOCAL",
  "snapshot":{"type":"digi.snapshot","protocol":{"major":1,"minor":2},"agentId":AGENT_ID,"deviceId":DEVICE_ID,"generation":s.generation,"sequence":s.event_sequence.max(1),"observedUtc":now(),"sessionId":session,"contextGeneration":s.generation,"state":state,"mode":mode,"submode":submode,"dialFrequencyHz":null,"rxAudioHz":1500,"txAudioHz":1500,
  "audio":{"state":audio_state,"inputDeviceId":profile.map(|x|x.device_id.clone()),"outputDeviceId":profile.and_then(|x|x.output_device_id.clone()),"sampleRate":profile.map(|x|x.input_rate_hz).unwrap_or(12000),"channels":1,"rms":0,"peak":0,"clipped":false,"detail":"Receive-only Nexus capture; levels update is pending"},
  "clock":{"state":"UNKNOWN","utcUncertaintyMs":null,"sampleUncertaintyMs":null,"nextSlotUtc":null},"lease":{"state":"NONE","controlInstanceId":null,"expiresUtc":null},
  "tx":{"implemented":false,"serverPermitted":false,"locallyPermitted":false,"hardwareAccepted":false,"armed":false,"transmitting":false,"rxVerified":matches!(s.state,RuntimeState::Stopped),"detail":s.capabilities.tx_lock_reason},
- "capabilities":{"modes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"autoSequenceModes":[],"spectrumBins":1024,"waterfallRowsPerSecond":0,"recordingLocalOnly":RECORDING_LOCAL_ONLY,"companionAuthoritative":false},"decodes":decodes,"waterfall":waterfall,"sstv":{}},
- "runtime":{"contract":{"major":1,"minor":0},"engine":{"name":s.identity.engine,"upstreamRevision":s.identity.upstream_commit,"patchSet":"shackcq-rx-only-v1","componentVersion":s.identity.adapter_version,"compiledModes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"execution":"VERIFIED_NATIVE"},"audioDevices":devices,
+ "capabilities":{"modes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"autoSequenceModes":[],"emulatedAutoSequenceModes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"spectrumBins":1024,"waterfallRowsPerSecond":0,"recordingLocalOnly":RECORDING_LOCAL_ONLY,"companionAuthoritative":false},"decodes":decodes,"waterfall":waterfall,"ftSequence":emulated_sequence,"sstv":{}},
+ "runtime":{"contract":{"major":1,"minor":0},"engine":{"name":s.identity.engine,"upstreamRevision":s.identity.upstream_commit,"patchSet":"shackcq-rx-plus-emulation-v1","componentVersion":s.identity.adapter_version,"compiledModes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"execution":"VERIFIED_NATIVE"},"audioDevices":devices,
  "audio":{"state":audio_state,"inputDeviceId":profile.map(|x|x.device_id.clone()),"inputLabel":null,"inputChannel":profile.map(|x|x.channel),"outputDeviceId":profile.and_then(|x|x.output_device_id.clone()),"outputLabel":null,"openedSampleRate":if matches!(s.state,RuntimeState::Receiving){profile.map(|x|x.input_rate_hz)}else{None},"channels":if matches!(s.state,RuntimeState::Receiving){Some(1)}else{None},"rmsDbfs":null,"peakDbfs":null,"clipped":false,"detail":"No device is opened until Start RX"},
  "clock":{"state":"UNKNOWN","utcUncertaintyMs":null,"sampleUncertaintyMs":null,"nextSlotUtc":null,"evidence":"No bounded clock measurement yet"},"safety":{"state":state,"serverPermitted":false,"locallyPermitted":false,"hardwareAccepted":false,"armed":false,"transmitting":false,"reason":s.capabilities.tx_lock_reason},"session":{"sessionId":session,"generation":s.generation,"sequence":s.event_sequence,"state":if matches!(s.state,RuntimeState::Receiving){"RECEIVING"}else{"IDLE"},"mode":mode,"startedUtc":null,"endedUtc":null,"detail":"Exact slot timing unavailable"},"queue":{"pendingContacts":s.pending_contacts,"maximumContacts":5000,"pendingBytes":0,"maximumBytes":33554432,"oldestUtc":null,"saturated":s.pending_contacts>=5000}}})
 }
@@ -847,7 +870,7 @@ fn targets_from_agent(status: &Value, binding: &Value) -> Value {
     } else {
         Vec::new()
     };
-    json!({"agents":[{"id":AGENT_ID,"name":if paired {station_label} else {"ShackCQ Desktop local runtime"},"stationProfileId":station_profile_id,"protocolMinor":3,"presence":"online","canonicalBindingReady":binding_ready}],"radios":[{"id":DEVICE_ID,"agentId":AGENT_ID,"deviceId":DEVICE_ID,"name":"Nexus native receive runtime","manufacturer":"ShackCQ","model":"Nexus v1.10.3 RX-only"}],"stations":stations})
+    json!({"agents":[{"id":AGENT_ID,"name":if paired {station_label} else {"ShackCQ Desktop local runtime"},"stationProfileId":station_profile_id,"protocolMinor":3,"presence":"online","canonicalBindingReady":binding_ready}],"radios":[{"id":DEVICE_ID,"agentId":AGENT_ID,"deviceId":DEVICE_ID,"name":"Nexus native receive + emulation runtime","manufacturer":"ShackCQ","model":"Nexus v1.10.3 RX + null-sink emulation"}],"stations":stations})
 }
 
 #[tauri::command]
@@ -1291,6 +1314,46 @@ fn submit_backend(state: &Backend, frame: CommandFrame) -> Result<CommandReply, 
                 .map(str::to_owned);
             RuntimeCommand::ConfigureRx(profile)
         }
+        "digi.sequence.start"
+            if frame.parameters.get("transport").and_then(Value::as_str)
+                == Some("EMULATED_LOOPBACK") =>
+        {
+            let mode = match frame.parameters.get("mode").and_then(Value::as_str) {
+                Some("FT8") => DigiMode::Ft8,
+                Some("FT4") => DigiMode::Ft4,
+                Some("FT2") => DigiMode::Ft2,
+                Some("FST4") => DigiMode::Fst4,
+                Some("FST4W") => DigiMode::Fst4w,
+                Some("Q65") => DigiMode::Q65,
+                Some("MSK144") => DigiMode::Msk144,
+                Some("JT65") => DigiMode::Jt65,
+                Some("WSPR") => DigiMode::Wspr,
+                _ => {
+                    return Ok(CommandReply {
+                        ok: false,
+                        code: "MODE_NOT_COMPILED".into(),
+                    })
+                }
+            };
+            let get = |key: &str| {
+                frame
+                    .parameters
+                    .get(key)
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned()
+            };
+            RuntimeCommand::RunEmulatedSequence(EmulatedSequenceRequest {
+                mode,
+                local_callsign: get("stationCallsign"),
+                local_grid: get("stationGrid"),
+                remote_callsign: get("remoteCallsign"),
+                remote_grid: get("remoteGrid"),
+                snr_db: frame.parameters.get("snrDb").and_then(Value::as_i64).unwrap_or(-10) as i32,
+                max_slots: frame.parameters.get("maxSlots").and_then(Value::as_u64).unwrap_or(20) as u8,
+            })
+        }
+        "digi.sequence.stop" => RuntimeCommand::StopEmulatedSequence,
         action
             if matches!(
                 action,

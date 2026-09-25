@@ -84,6 +84,117 @@ fn every_compiled_encoder_can_only_be_observed_through_null_digest() {
 }
 
 #[test]
+fn every_qso_mode_completes_the_nexus_auto_sequence_on_the_null_sink() {
+    let (_dir, mut runtime) = runtime();
+    for mode in [
+        DigiMode::Ft8,
+        DigiMode::Ft4,
+        DigiMode::Ft2,
+        DigiMode::Fst4,
+        DigiMode::Q65,
+        DigiMode::Msk144,
+        DigiMode::Jt65,
+    ] {
+        let result = runtime
+            .run_emulated_sequence(EmulatedSequenceRequest {
+                mode,
+                local_callsign: "OM0RX".into(),
+                local_grid: "JN88TQ".into(),
+                remote_callsign: "K1ABC".into(),
+                remote_grid: "FN31PR".into(),
+                snr_db: -10,
+                max_slots: 20,
+            })
+            .unwrap_or_else(|error| panic!("{mode:?} sequence failed: {error}"));
+        assert!(result.qso_complete, "{mode:?}: {result:?}");
+        assert!(!result.beacon_complete);
+        assert_eq!(result.transport, "IN_MEMORY_NULL_SINK");
+        assert!(result.steps.len() >= 6, "{mode:?}: {result:?}");
+        assert!(result
+            .steps
+            .iter()
+            .all(|step| step.waveform_sha256.len() == 64));
+        let messages = result
+            .steps
+            .iter()
+            .map(|step| step.message.as_str())
+            .collect::<Vec<_>>();
+        assert!(messages
+            .first()
+            .is_some_and(|message| message.starts_with("CQ OM0RX JN88")));
+        assert!(messages.iter().any(|message| message.contains(" R-10")));
+        assert!(messages.iter().any(|message| message.ends_with(" RR73")));
+        assert!(messages
+            .last()
+            .is_some_and(|message| message.ends_with(" 73")));
+    }
+    let snapshot = runtime.snapshot();
+    assert!(!snapshot.capabilities.tx_enabled);
+    assert!(!snapshot.capabilities.audio_output);
+}
+
+#[test]
+fn beacon_modes_encode_one_bounded_frame_and_never_claim_a_qso() {
+    let (_dir, mut runtime) = runtime();
+    for mode in [DigiMode::Fst4w, DigiMode::Wspr] {
+        let result = runtime
+            .run_emulated_sequence(EmulatedSequenceRequest {
+                mode,
+                local_callsign: "OM0RX".into(),
+                local_grid: "JN88TQ".into(),
+                remote_callsign: "K1ABC".into(),
+                remote_grid: "FN31PR".into(),
+                snr_db: -10,
+                max_slots: 20,
+            })
+            .unwrap_or_else(|error| panic!("{mode:?} beacon failed: {error}"));
+        assert!(result.beacon_complete);
+        assert!(!result.qso_complete);
+        assert_eq!(result.steps.len(), 1);
+        assert_eq!(result.steps[0].direction, "LOCAL_TO_NULL_SINK");
+        assert_eq!(result.steps[0].waveform_sha256.len(), 64);
+    }
+}
+
+#[test]
+fn emulated_sequence_round_trips_through_the_supervised_runtime_contract() {
+    let (_dir, mut runtime) = runtime();
+    let result = runtime.process(
+        CommandEnvelope {
+            version: CONTRACT_VERSION,
+            command_id: "emulation-1".into(),
+            generation: 1,
+            launch_nonce: "nonce".into(),
+            command: RuntimeCommand::RunEmulatedSequence(EmulatedSequenceRequest {
+                mode: DigiMode::Ft2,
+                local_callsign: "OM0RX".into(),
+                local_grid: "JN88TQ".into(),
+                remote_callsign: "K1ABC".into(),
+                remote_grid: "FN31PR".into(),
+                snr_db: -10,
+                max_slots: 20,
+            }),
+        },
+        "nonce",
+    );
+    assert!(result.ok, "{result:?}");
+    assert_eq!(result.code, "EMULATED_SEQUENCE_COMPLETE");
+    let presence = runtime.process(
+        CommandEnvelope {
+            version: CONTRACT_VERSION,
+            command_id: "presence-1".into(),
+            generation: 1,
+            launch_nonce: "nonce".into(),
+            command: RuntimeCommand::Presence,
+        },
+        "nonce",
+    );
+    let presence: RuntimePresence = serde_json::from_value(presence.payload).unwrap();
+    assert!(presence.snapshot.emulation.unwrap().qso_complete);
+    assert!(!presence.snapshot.capabilities.tx_enabled);
+}
+
+#[test]
 fn encrypted_review_queue_is_partitioned_deduplicated_and_receipt_gated() {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("queue.bin");

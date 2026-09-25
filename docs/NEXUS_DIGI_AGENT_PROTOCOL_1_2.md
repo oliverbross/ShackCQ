@@ -24,3 +24,12 @@ disabled until separately authorized physical-radio acceptance.
 The history commands are `digi.history.redecode`, `digi.history.replay`,
 `digi.history.export` and confirmed `digi.history.delete`. The sequence commands
 are `digi.sequence.start` and `digi.sequence.stop`.
+
+The desktop-native runtime also accepts `digi.sequence.start` with
+`transport=EMULATED_LOOPBACK`. This path runs the pinned Nexus QSO state table
+and the selected mode encoder against an in-memory null sink. FT8, FT4, FT2,
+FST4, Q65, MSK144 and JT65 must complete the canonical CQ, grid, report,
+R-report, RR73 and 73 exchange. FST4W and WSPR emit one bounded beacon frame
+and explicitly report `qsoComplete=false`. Emulation never opens an output
+device, invokes CAT/PTT, changes the production TX gates, or submits a contact
+to a logger; its transcript and waveform digests are review evidence only.

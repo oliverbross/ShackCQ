@@ -3247,6 +3247,7 @@ dependencies = [
  "hex",
  "hound",
  "jt65",
+ "modes",
  "msk144",
  "q65",
  "rustfft",
@@ -3254,6 +3255,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "tempo-audio",
+ "tempo-core",
  "thiserror 2.0.20",
  "wspr",
 ]

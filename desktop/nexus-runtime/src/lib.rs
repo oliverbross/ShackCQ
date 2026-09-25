@@ -27,6 +27,7 @@ pub const CONTRACT_VERSION: u16 = 1;
 pub const NEXUS_COMMIT: &str = "7618390658f8f92431dec0ac65979b84f2c0fb76";
 pub const NEXUS_RELEASE: &str = "v1.10.3";
 pub const TX_ENABLED: bool = false;
+pub const EMULATED_TX_ENABLED: bool = true;
 pub const MAX_COMMAND_BYTES: usize = 64 * 1024;
 pub const MAX_EVENT_HISTORY: usize = 512;
 pub const MAX_DECODE_ROWS: usize = 200;
@@ -547,6 +548,43 @@ pub struct RuntimeSnapshot {
     pub stop_latched: bool,
     pub pending_contacts: usize,
     pub event_sequence: u64,
+    pub emulation: Option<EmulatedSequenceResult>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EmulatedSequenceRequest {
+    pub mode: DigiMode,
+    pub local_callsign: String,
+    pub local_grid: String,
+    pub remote_callsign: String,
+    pub remote_grid: String,
+    pub snr_db: i32,
+    pub max_slots: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EmulatedSequenceStep {
+    pub slot: u8,
+    pub direction: String,
+    pub message: String,
+    pub waveform_sha256: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EmulatedSequenceResult {
+    pub mode: DigiMode,
+    pub transport: String,
+    pub state: String,
+    pub qso_complete: bool,
+    pub beacon_complete: bool,
+    pub local_callsign: String,
+    pub remote_callsign: Option<String>,
+    pub remote_grid: Option<String>,
+    pub steps: Vec<EmulatedSequenceStep>,
+    pub completion_reason: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -596,6 +634,8 @@ pub enum RuntimeCommand {
         event_id: String,
         durable_receipt: bool,
     },
+    RunEmulatedSequence(EmulatedSequenceRequest),
+    StopEmulatedSequence,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -640,6 +680,7 @@ pub struct StationRuntime {
     events: VecDeque<DecodeEvent>,
     waterfall: VecDeque<WaterfallFrame>,
     queue: ContactQueue,
+    emulation: Option<EmulatedSequenceResult>,
     #[cfg(feature = "live-audio")]
     audio_input: Option<live_audio::LiveReceiver>,
 }
@@ -655,6 +696,7 @@ impl StationRuntime {
             events: VecDeque::with_capacity(MAX_EVENT_HISTORY),
             waterfall: VecDeque::with_capacity(8),
             queue: ContactQueue::open(queue_path, queue_key)?,
+            emulation: None,
             #[cfg(feature = "live-audio")]
             audio_input: None,
         })
@@ -670,6 +712,7 @@ impl StationRuntime {
             stop_latched: self.stop_latched,
             pending_contacts: self.queue.len(),
             event_sequence: self.sequence,
+            emulation: self.emulation.clone(),
         }
     }
 
@@ -938,6 +981,104 @@ impl StationRuntime {
         Ok(hex::encode(digest.finalize()))
     }
 
+    pub fn run_emulated_sequence(
+        &mut self,
+        request: EmulatedSequenceRequest,
+    ) -> Result<EmulatedSequenceResult, RuntimeError> {
+        validate_emulation_request(&request)?;
+        let mut steps = Vec::new();
+        if matches!(request.mode, DigiMode::Wspr | DigiMode::Fst4w) {
+            let message = format!("{} {} 30", request.local_callsign, &request.local_grid[..4]);
+            let waveform_sha256 = self.encode_to_null(request.mode, &message)?;
+            steps.push(EmulatedSequenceStep {
+                slot: 0,
+                direction: "LOCAL_TO_NULL_SINK".into(),
+                message,
+                waveform_sha256,
+            });
+            let result = EmulatedSequenceResult {
+                mode: request.mode,
+                transport: "IN_MEMORY_NULL_SINK".into(),
+                state: "COMPLETE".into(),
+                qso_complete: false,
+                beacon_complete: true,
+                local_callsign: request.local_callsign,
+                remote_callsign: None,
+                remote_grid: None,
+                steps,
+                completion_reason: "BEACON_FRAME_ENCODED_WITHOUT_AUDIO_OUTPUT_OR_PTT".into(),
+            };
+            self.emulation = Some(result.clone());
+            self.sequence = self.sequence.saturating_add(1);
+            return Ok(result);
+        }
+
+        let mut local =
+            tempo_core::qso::Station::calling_cq(&request.local_callsign, &request.local_grid);
+        let mut remote = tempo_core::qso::Station::answering(
+            &request.remote_callsign,
+            &request.remote_grid,
+            &request.local_callsign,
+        );
+        for slot in 0..request.max_slots {
+            let (sender, receiver, direction) = if slot % 2 == 0 {
+                (&mut local, &mut remote, "LOCAL_TO_EMULATED_REMOTE")
+            } else {
+                (&mut remote, &mut local, "EMULATED_REMOTE_TO_LOCAL")
+            };
+            let Some(message) = sender.outgoing().map(|value| value.to_text()) else {
+                if local.done() && remote.done() {
+                    break;
+                }
+                continue;
+            };
+            let waveform_sha256 = self.encode_to_null(request.mode, &message)?;
+            let decode = modes::Decode {
+                message: message.clone(),
+                sync: 1.0,
+                snr: request.snr_db,
+                dt: 0.0,
+                freq: 1500.0,
+                nap: 0,
+                qual: 1.0,
+                rv: None,
+                mode: None,
+            };
+            receiver.observe(&[decode]);
+            sender.after_tx();
+            steps.push(EmulatedSequenceStep {
+                slot,
+                direction: direction.into(),
+                message,
+                waveform_sha256,
+            });
+            if local.done() && remote.done() {
+                break;
+            }
+        }
+        let complete = local.done() && remote.done();
+        let result = EmulatedSequenceResult {
+            mode: request.mode,
+            transport: "IN_MEMORY_NULL_SINK".into(),
+            state: if complete { "COMPLETE" } else { "FAILED" }.into(),
+            qso_complete: complete,
+            beacon_complete: false,
+            local_callsign: request.local_callsign,
+            remote_callsign: Some(request.remote_callsign),
+            remote_grid: Some(request.remote_grid),
+            steps,
+            completion_reason: if complete {
+                "NEXUS_AUTO_SEQUENCE_COMPLETE_NO_RF"
+            } else {
+                "EMULATION_SLOT_LIMIT_REACHED"
+            }
+            .into(),
+        };
+        self.emulation = Some(result.clone());
+        self.sequence = self.sequence.saturating_add(1);
+        Ok(result)
+    }
+
     pub fn process(&mut self, envelope: CommandEnvelope, launch_nonce: &str) -> CommandResult {
         #[cfg(feature = "live-audio")]
         self.poll_live_events();
@@ -1048,6 +1189,19 @@ impl StationRuntime {
                 .acknowledge(&event_id, durable_receipt)
                 .map(|_| ("CONTACT_RECEIPT_APPLIED".into(), Value::Null))
                 .map_err(RuntimeError::from),
+            RuntimeCommand::RunEmulatedSequence(request) => {
+                self.run_emulated_sequence(request).map(|result| {
+                    (
+                        "EMULATED_SEQUENCE_COMPLETE".into(),
+                        serde_json::to_value(result).unwrap(),
+                    )
+                })
+            }
+            RuntimeCommand::StopEmulatedSequence => {
+                self.emulation = None;
+                self.sequence = self.sequence.saturating_add(1);
+                Ok(("EMULATED_SEQUENCE_STOPPED".into(), Value::Null))
+            }
         };
         match outcome {
             Ok((code, payload)) => CommandResult {
@@ -1064,6 +1218,38 @@ impl StationRuntime {
             ),
         }
     }
+}
+
+fn validate_emulation_request(request: &EmulatedSequenceRequest) -> Result<(), RuntimeError> {
+    let valid_call = |value: &str| {
+        (3..=16).contains(&value.len())
+            && value
+                .bytes()
+                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'/')
+    };
+    let valid_grid = |value: &str| {
+        matches!(value.len(), 4 | 6)
+            && value.is_ascii()
+            && value.as_bytes()[0..2]
+                .iter()
+                .all(|byte| (b'A'..=b'R').contains(byte))
+            && value.as_bytes()[2..4].iter().all(u8::is_ascii_digit)
+            && (value.len() == 4
+                || value.as_bytes()[4..6]
+                    .iter()
+                    .all(|byte| (b'A'..=b'X').contains(byte)))
+    };
+    mode_shape(request.mode, None)?;
+    if !valid_call(&request.local_callsign)
+        || !valid_call(&request.remote_callsign)
+        || !valid_grid(&request.local_grid)
+        || !valid_grid(&request.remote_grid)
+        || !(-30..=49).contains(&request.snr_db)
+        || !(6..=32).contains(&request.max_slots)
+    {
+        return Err(RuntimeError::InvalidProfile);
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

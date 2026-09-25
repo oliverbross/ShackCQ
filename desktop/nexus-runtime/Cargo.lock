@@ -1165,6 +1165,7 @@ dependencies = [
  "hex",
  "hound",
  "jt65",
+ "modes",
  "msk144",
  "q65",
  "rustfft",
@@ -1173,6 +1174,7 @@ dependencies = [
  "sha2",
  "tempfile",
  "tempo-audio",
+ "tempo-core",
  "thiserror 2.0.20",
  "wspr",
 ]
