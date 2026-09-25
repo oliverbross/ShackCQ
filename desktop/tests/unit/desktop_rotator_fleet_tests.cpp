@@ -29,7 +29,7 @@ QVariantMap profile(const QString &id, const QString &route) {
           {"forbiddenSectors", QVariantList{}}};
 }
 
-QJsonObject command(const QString &id, const QString &action,
+[[maybe_unused]] QJsonObject command(const QString &id, const QString &action,
                     const QJsonObject &parameters = {},
                     const QString &control = "browser-1") {
   return {{"commandId", QUuid::createUuid().toString(QUuid::WithoutBraces)},
@@ -39,7 +39,8 @@ QJsonObject command(const QString &id, const QString &action,
           {"parameters", parameters}, {"action", action}};
 }
 
-QJsonObject snapshot(DesktopRotatorFleet &fleet, const QString &id) {
+[[maybe_unused]] QJsonObject snapshot(DesktopRotatorFleet &fleet,
+                                      const QString &id) {
   for (const QJsonValue &value : fleet.snapshots("agent-1", 5))
     if (value.toObject().value("deviceId").toString() == id)
       return value.toObject();
