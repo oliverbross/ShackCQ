@@ -26,7 +26,8 @@ if [ "$review_build" = 1 ]; then
   app_name="ShackCQ Desktop Isolated Review"
   dmg_name="ShackCQ-Desktop-Isolated-Review-macOS-arm64-0.2.2-$package_state.dmg"
 fi
-compiled_app="$repo/desktop/shackcq-tauri/target/release/bundle/macos/$app_name.app"
+cargo_target_dir=${CARGO_TARGET_DIR:-$repo/desktop/shackcq-tauri/target}
+compiled_app="$cargo_target_dir/release/bundle/macos/$app_name.app"
 app="$compiled_app"
 packaging_revision=$(git -C "$repo" rev-parse HEAD)
 compiled_source_revision=${SHACKCQ_COMPILED_SOURCE_REVISION:-$packaging_revision}
@@ -350,10 +351,10 @@ if [ "$package_only" = 1 ]; then
   ditto "$compiled_app" "$assembly_root/$app_name.app"
   app="$assembly_root/$app_name.app"
   rm -rf -- "$app/Contents/Frameworks" "$app/Contents/PlugIns" "$app/Contents/lib" "$app/Contents/_CodeSignature"
-  cp "$repo/desktop/shackcq-tauri/target/release/shackcq-desktop" "$app/Contents/MacOS/shackcq-desktop"
-  cp "$repo/desktop/shackcq-tauri/target/release/shackcq-stationd" "$app/Contents/MacOS/shackcq-stationd"
-  cp "$repo/desktop/shackcq-tauri/target/release/shackcq-hamlib-helper" "$app/Contents/MacOS/shackcq-hamlib-helper"
-  cp "$repo/desktop/shackcq-tauri/target/release/shackcq-nexus-runtime" "$app/Contents/MacOS/shackcq-nexus-runtime"
+  cp "$cargo_target_dir/release/shackcq-desktop" "$app/Contents/MacOS/shackcq-desktop"
+  cp "$cargo_target_dir/release/shackcq-stationd" "$app/Contents/MacOS/shackcq-stationd"
+  cp "$cargo_target_dir/release/shackcq-hamlib-helper" "$app/Contents/MacOS/shackcq-hamlib-helper"
+  cp "$cargo_target_dir/release/shackcq-nexus-runtime" "$app/Contents/MacOS/shackcq-nexus-runtime"
   chmod 755 "$app/Contents/MacOS/shackcq-desktop" "$app/Contents/MacOS/shackcq-stationd" \
     "$app/Contents/MacOS/shackcq-hamlib-helper" "$app/Contents/MacOS/shackcq-nexus-runtime"
 else
