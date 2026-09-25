@@ -118,7 +118,7 @@ fn request<T: Serialize>(action: &str, request_id: &str, payload: &T) -> Value {
         Ok(v) if v.len() <= MAX_PAYLOAD => v,
         _ => return json!({"ok":false,"code":"AGENT_NATIVE_INGRESS_INVALID"}),
     };
-    let secret = match REVIEW_SECRET.get().cloned().or_else(|| {
+    let secret = match REVIEW_SECRET.get().cloned().or_else(ephemeral_secret).or_else(|| {
         keyring::Entry::new(SERVICE, ALIAS)
             .ok()
             .and_then(|entry| entry.get_password().ok())
@@ -153,6 +153,27 @@ fn request<T: Serialize>(action: &str, request_id: &str, payload: &T) -> Value {
     };
     request.push(b'\n');
     transport(request)
+}
+
+fn decode_ephemeral_secret(
+    credentials: Option<&str>,
+    root: Option<&str>,
+    secret_hex: Option<&str>,
+) -> Option<Vec<u8>> {
+    if credentials != Some("1") || root.is_none_or(|value| value.is_empty() || value.len() > 1024) {
+        return None;
+    }
+    secret_hex
+        .and_then(|value| hex::decode(value).ok())
+        .filter(|value| value.len() == 32)
+}
+
+fn ephemeral_secret() -> Option<Vec<u8>> {
+    decode_ephemeral_secret(
+        std::env::var("SHACKCQ_AGENT_EPHEMERAL_CREDENTIALS").ok().as_deref(),
+        std::env::var("SHACKCQ_AGENT_EPHEMERAL_ROOT").ok().as_deref(),
+        std::env::var("SHACKCQ_NATIVE_INGRESS_SECRET_HEX").ok().as_deref(),
+    )
 }
 
 #[cfg(unix)]
@@ -426,6 +447,15 @@ fn classify_result(result: Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn ephemeral_secret_requires_the_complete_isolation_gate() {
+        let secret = "11".repeat(32);
+        assert!(decode_ephemeral_secret(Some("1"), Some("/tmp/review"), Some(&secret)).is_some());
+        assert!(decode_ephemeral_secret(None, Some("/tmp/review"), Some(&secret)).is_none());
+        assert!(decode_ephemeral_secret(Some("1"), None, Some(&secret)).is_none());
+        assert!(decode_ephemeral_secret(Some("1"), Some("/tmp/review"), Some("11")).is_none());
+    }
+
     #[test]
     fn receipts_distinguish_retryable_terminal_and_ambiguous() {
         assert_eq!(
