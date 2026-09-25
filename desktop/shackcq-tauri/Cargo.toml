@@ -6,6 +6,12 @@ rust-version = "1.91"
 license = "GPL-3.0-only"
 publish = false
 
+[profile.release]
+# Xcode 27 rejects proc-macro dylibs after Rust/Cargo strips their debug info
+# because the resulting LINKEDIT string pool is misaligned (rust-lang/rust#157750).
+# Final application binaries are packaged and signed separately.
+strip = false
+
 [features]
 default = []
 isolated-review = []
