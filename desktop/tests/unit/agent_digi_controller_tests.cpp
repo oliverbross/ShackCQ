@@ -65,6 +65,37 @@ private slots:
     QCOMPARE(digi.m_ftSequence["pendingMessage"].toString(),QString("K1ABC OM0RX R-12"));
   }
 
+  void ft8AndFt4AutoSequencesAdvanceThroughCompleteStandardExchanges() {
+    for (const QString &mode : {QStringLiteral("FT8"), QStringLiteral("FT4")}) {
+      DesktopRadioController radio;AgentDigiController digi(&radio);QString error;
+      QVERIFY(run(digi,"digi.control.acquire")["ok"].toBool());
+      QVERIFY(run(digi,"digi.configure",{{"mode",mode},{"submode",QJsonValue::Null},{"rxAudioHz",1500},{"txAudioHz",1500}})["ok"].toBool());
+      digi.setAudioReadyForTest();digi.m_sessionId="live-session";
+      digi.m_decodes.prepend(QJsonObject{{"id","live-cq"},{"slotStartMillis",15'000},{"source","LIVE_CAPTURE"},{"exactSlotTiming",true},{"snr",-12},{"dt",0.1},{"audioHz",1500},{"text","CQ K1ABC FN31"}});
+      QVERIFY2(digi.startFtSequence({{"role","SEARCH_AND_POUNCE"},{"stationCallsign","OM0RX"},{"stationGrid","JN88TQ"},{"decodeId","live-cq"},{"autoCq",false},{"autoCqLimit",3},{"retryLimit",3}},&error),qPrintable(error));
+      digi.resetPrepared();digi.m_state=AgentDigiController::State::RxVerified;digi.noteFtTransmitComplete();
+      QCOMPARE(digi.m_ftSequence["state"].toString(),QString("WAIT_REPORT"));
+      digi.advanceFtSequence({{"id","report"},{"slotStartMillis",45'000},{"source","LIVE_CAPTURE"},{"exactSlotTiming",true},{"snr",-7},{"text","OM0RX K1ABC -07"}});
+      QCOMPARE(digi.m_ftSequence["state"].toString(),QString("R_REPORT_TX_PENDING"));
+      digi.resetPrepared();digi.m_state=AgentDigiController::State::RxVerified;digi.noteFtTransmitComplete();
+      QCOMPARE(digi.m_ftSequence["state"].toString(),QString("WAIT_RR73"));
+      digi.advanceFtSequence({{"id","rr73"},{"slotStartMillis",75'000},{"source","LIVE_CAPTURE"},{"exactSlotTiming",true},{"snr",-8},{"text","OM0RX K1ABC RR73"}});
+      QCOMPARE(digi.m_ftSequence["state"].toString(),QString("FINAL_73_TX_PENDING"));
+      digi.resetPrepared();digi.m_state=AgentDigiController::State::RxVerified;digi.noteFtTransmitComplete();
+      QCOMPARE(digi.m_ftSequence["state"].toString(),QString("COMPLETE"));
+    }
+  }
+
+  void completedSlotsQueueBehindAnInFlightDecodeInsteadOfBeingDiscarded() {
+    DesktopRadioController radio;AgentDigiController digi(&radio);
+    digi.m_slotDecodeInFlight=true;
+    for (int slot=0;slot<5;++slot)
+      digi.enqueueSlotDecode(slot*15'000,QVector<float>(180'000,float(slot+1)));
+    QCOMPARE(digi.m_pendingSlotDecodes.size(),4);
+    QCOMPARE(digi.m_droppedSlotDecodes,quint64(1));
+    QCOMPARE(digi.m_pendingSlotDecodes.head().slotStart,qint64(15'000));
+  }
+
   void defaultsAreInertAndRuntimeStateCannotRestore() {
     DesktopRadioController radio;AgentDigiController digi(&radio);QString error;
     QVERIFY(!digi.restoreConfiguration({{"schemaVersion",1},{"armed",true}},&error));

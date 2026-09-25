@@ -474,37 +474,63 @@ void AgentDigiController::consumeInput() {
 #endif
     m_captureSlotStart = slot;
 #ifdef SHACKCQ_HAVE_NATIVE_DIGI
-    if(m_slotDecodeInFlight)return;
-    const int mode = m_modeIndex;
-    const quint64 contextGeneration=m_contextGeneration;
-    QPointer<AgentDigiController> self(this);
-    m_slotDecodeInFlight=true;
-    (void)QtConcurrent::run([self, completed = std::move(completed), completedSlot, mode, contextGeneration] {
-      std::array<char, 64 * 1024> output{};
-      const int size = shackcq_digi_decode_slot(mode, completed.constData(),
-          size_t(completed.size()), 12'000, output.data(), output.size());
-      if(!self)return;
-      QJsonParseError parse;
-      const QJsonObject decoded=size>0?QJsonDocument::fromJson(QByteArray(output.data(), size), &parse).object():QJsonObject{};
-      QMetaObject::invokeMethod(self, [self, decoded, completedSlot, contextGeneration, valid=size>0&&parse.error==QJsonParseError::NoError] {
-        if (!self) return;
-        self->m_slotDecodeInFlight=false;
-        if(!valid||self->m_contextGeneration!=contextGeneration)return;
-        for (const auto &value : decoded.value("decodes").toArray()) {
-          const QJsonObject row = value.toObject();
-          const QJsonObject retained{{"id", QUuid::createUuid().toString(QUuid::WithoutBraces)},
-            {"slotStartMillis", completedSlot}, {"source", "LIVE_CAPTURE"}, {"exactSlotTiming", self->clockGood()},
-            {"snr", row.value("snr")}, {"dt", row.value("dt")},
-            {"audioHz", row.value("frequencyHz")}, {"text", row.value("text").toString().left(512)}};
-          self->m_decodes.prepend(retained);self->appendRetainedDecode(retained);self->advanceFtSequence(retained);
-        }
-        while (self->m_decodes.size() > 256) self->m_decodes.removeLast();
-        emit self->snapshotChanged();
-      }, Qt::QueuedConnection);
-    });
+    enqueueSlotDecode(completedSlot, std::move(completed));
 #endif
   }
   emit snapshotChanged();
+}
+
+void AgentDigiController::enqueueSlotDecode(qint64 slotStart, QVector<float> samples) {
+#ifdef SHACKCQ_HAVE_NATIVE_DIGI
+  if (samples.isEmpty()) return;
+  constexpr qsizetype MaximumPendingSlots = 4;
+  if (m_pendingSlotDecodes.size() >= MaximumPendingSlots) {
+    m_pendingSlotDecodes.dequeue();
+    ++m_droppedSlotDecodes;
+  }
+  m_pendingSlotDecodes.enqueue({slotStart, m_modeIndex, m_contextGeneration, std::move(samples)});
+  startNextSlotDecode();
+#else
+  Q_UNUSED(slotStart);Q_UNUSED(samples);
+#endif
+}
+
+void AgentDigiController::startNextSlotDecode() {
+#ifdef SHACKCQ_HAVE_NATIVE_DIGI
+  if (m_slotDecodeInFlight) return;
+  while (!m_pendingSlotDecodes.isEmpty()) {
+    PendingSlotDecode work = m_pendingSlotDecodes.dequeue();
+    if (work.contextGeneration != m_contextGeneration) continue;
+    QPointer<AgentDigiController> self(this);
+    m_slotDecodeInFlight = true;
+    (void)QtConcurrent::run([self, work = std::move(work)] {
+      std::array<char, 64 * 1024> output{};
+      const int size = shackcq_digi_decode_slot(work.mode, work.samples.constData(),
+          size_t(work.samples.size()), 12'000, output.data(), output.size());
+      if(!self)return;
+      QJsonParseError parse;
+      const QJsonObject decoded=size>0?QJsonDocument::fromJson(QByteArray(output.data(), size), &parse).object():QJsonObject{};
+      QMetaObject::invokeMethod(self, [self, decoded, work = std::move(work), valid=size>0&&parse.error==QJsonParseError::NoError] {
+        if (!self) return;
+        self->m_slotDecodeInFlight=false;
+        if(valid&&self->m_contextGeneration==work.contextGeneration){
+          for (const auto &value : decoded.value("decodes").toArray()) {
+            const QJsonObject row = value.toObject();
+            const QJsonObject retained{{"id", QUuid::createUuid().toString(QUuid::WithoutBraces)},
+              {"slotStartMillis", work.slotStart}, {"source", "LIVE_CAPTURE"}, {"exactSlotTiming", self->clockGood()},
+              {"snr", row.value("snr")}, {"dt", row.value("dt")},
+              {"audioHz", row.value("frequencyHz")}, {"text", row.value("text").toString().left(512)}};
+            self->m_decodes.prepend(retained);self->appendRetainedDecode(retained);self->advanceFtSequence(retained);
+          }
+          while (self->m_decodes.size() > 256) self->m_decodes.removeLast();
+        }
+        self->startNextSlotDecode();
+        emit self->snapshotChanged();
+      }, Qt::QueuedConnection);
+    });
+    return;
+  }
+#endif
 }
 
 bool AgentDigiController::prepare(const QJsonObject &p,QString *error){if(m_state!=State::Safe&&m_state!=State::Rx&&m_state!=State::RxVerified){if(error)*error="DIGI_BUSY_REQUIRES_DISARM";return false;}const QString text=p.value("message").toString();if(text.isEmpty()||text.size()>128){if(error)*error="MESSAGE_INVALID";return false;}m_maxRepeats=std::clamp(p.value("maxRepeats").toInt(),1,10);m_state=State::Preparing;QVector<float> samples;

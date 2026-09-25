@@ -13,6 +13,7 @@
 #include <QJsonArray>
 #include <QList>
 #include <QObject>
+#include <QQueue>
 #include <QSet>
 #include <QTimer>
 #include <QVariantMap>
@@ -86,6 +87,8 @@ private:
   bool replayRetainedSession(const QString &sessionId, QString *error);
   bool deleteRetainedSession(const QString &sessionId, QString *error);
   void processDisplayAndContinuous();
+  void enqueueSlotDecode(qint64 slotStart, QVector<float> samples);
+  void startNextSlotDecode();
   bool applyReceiveEntry(const QJsonObject &entry, QString *error);
   void scannerStep();
   StopOutcome performStop(bool autonomousRetry, bool requireRadioStop = true);
@@ -173,6 +176,14 @@ private:
   bool m_stopInProgress{};
   bool m_dspInFlight{};
   bool m_slotDecodeInFlight{};
+  struct PendingSlotDecode {
+    qint64 slotStart{};
+    int mode{};
+    quint64 contextGeneration{};
+    QVector<float> samples;
+  };
+  QQueue<PendingSlotDecode> m_pendingSlotDecodes;
+  quint64 m_droppedSlotDecodes{};
   QHash<QString, QJsonObject> m_commandResults;
   QList<QString> m_commandOrder;
   QJsonArray m_scannerEntries;

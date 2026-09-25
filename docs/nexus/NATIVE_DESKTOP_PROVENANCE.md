@@ -15,6 +15,16 @@ decode and encode APIs; it contains no modem implementation and no legacy
 fallback. Upstream FT8 and FT4 off-air WAV fixtures remain under upstream's
 licence/notice and are referenced in place rather than copied.
 
+The ShackCQ Digi cockpit and sequence review also use the pinned source as a
+behavioural reference: `ui/src/components/OperateCockpit.tsx`,
+`ui/src/components/OperateDecodes.tsx`, `ui/src/components/OperateQsoStrip.tsx`,
+`crates/tempo-core/src/qso.rs`, and `crates/tempo-audio/src/slot.rs`. ShackCQ's
+React/C++ implementation is independently written for its typed Agent contract;
+it adapts the visible Band Activity/RX Frequency split, slot countdown, explicit
+six-stage exchange progress, bounded retries, and decode-driven advancement.
+No Nexus UI source is copied, and the existing ShackCQ safety, radio ownership,
+canonical QSO mutation, and provider-delivery boundaries remain authoritative.
+
 The `tempo-audio/device` feature is enabled only by the candidate package's
 `live-audio` feature. The owned input path uses Nexus's device inventory,
 wait-free sample ring and stateful anti-aliased capture resampler. It opens one
