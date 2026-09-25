@@ -766,6 +766,15 @@ fn parse_presence(result: CommandResult) -> Result<RuntimePresence, String> {
     }
     serde_json::from_value(result.payload).map_err(|_| "runtime presence invalid".into())
 }
+fn omit_absent_ft_sequence(value: &mut Value, has_emulated_sequence: bool) {
+    if !has_emulated_sequence {
+        value
+            .get_mut("snapshot")
+            .and_then(Value::as_object_mut)
+            .expect("runtime presence snapshot is an object")
+            .remove("ftSequence");
+    }
+}
 fn runtime_presence(p: &RuntimePresence) -> Value {
     let s = &p.snapshot;
     let profile = s.rx_profile.as_ref();
@@ -828,7 +837,8 @@ fn runtime_presence(p: &RuntimePresence) -> Value {
         "beaconComplete":sequence.beacon_complete,
         "transcript":sequence.steps,
     }));
-    json!({"state":"online","generation":s.generation,"serverDigiTxEnabled":false,"path":"LOCAL",
+    let has_emulated_sequence = emulated_sequence.is_some();
+    let mut value = json!({"state":"online","generation":s.generation,"serverDigiTxEnabled":false,"path":"LOCAL",
  "snapshot":{"type":"digi.snapshot","protocol":{"major":1,"minor":2},"agentId":AGENT_ID,"deviceId":DEVICE_ID,"generation":s.generation,"sequence":s.event_sequence.max(1),"observedUtc":now(),"sessionId":session,"contextGeneration":s.generation,"state":state,"mode":mode,"submode":submode,"dialFrequencyHz":null,"rxAudioHz":1500,"txAudioHz":1500,
  "audio":{"state":audio_state,"inputDeviceId":profile.map(|x|x.device_id.clone()),"outputDeviceId":profile.and_then(|x|x.output_device_id.clone()),"sampleRate":profile.map(|x|x.input_rate_hz).unwrap_or(12000),"channels":1,"rms":0,"peak":0,"clipped":false,"detail":"Receive-only Nexus capture; levels update is pending"},
  "clock":{"state":"UNKNOWN","utcUncertaintyMs":null,"sampleUncertaintyMs":null,"nextSlotUtc":null},"lease":{"state":"NONE","controlInstanceId":null,"expiresUtc":null},
@@ -836,7 +846,9 @@ fn runtime_presence(p: &RuntimePresence) -> Value {
  "capabilities":{"modes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"autoSequenceModes":[],"emulatedAutoSequenceModes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"spectrumBins":1024,"waterfallRowsPerSecond":0,"recordingLocalOnly":RECORDING_LOCAL_ONLY,"companionAuthoritative":false},"decodes":decodes,"waterfall":waterfall,"ftSequence":emulated_sequence,"sstv":{}},
  "runtime":{"contract":{"major":1,"minor":0},"engine":{"name":s.identity.engine,"upstreamRevision":s.identity.upstream_commit,"patchSet":"shackcq-rx-plus-emulation-v1","componentVersion":s.identity.adapter_version,"compiledModes":["FT8","FT4","FT2","FST4","FST4W","Q65","MSK144","JT65","WSPR"],"execution":"VERIFIED_NATIVE"},"audioDevices":devices,
  "audio":{"state":audio_state,"inputDeviceId":profile.map(|x|x.device_id.clone()),"inputLabel":null,"inputChannel":profile.map(|x|x.channel),"outputDeviceId":profile.and_then(|x|x.output_device_id.clone()),"outputLabel":null,"openedSampleRate":if matches!(s.state,RuntimeState::Receiving){profile.map(|x|x.input_rate_hz)}else{None},"channels":if matches!(s.state,RuntimeState::Receiving){Some(1)}else{None},"rmsDbfs":null,"peakDbfs":null,"clipped":false,"detail":"No device is opened until Start RX"},
- "clock":{"state":"UNKNOWN","utcUncertaintyMs":null,"sampleUncertaintyMs":null,"nextSlotUtc":null,"evidence":"No bounded clock measurement yet"},"safety":{"state":state,"serverPermitted":false,"locallyPermitted":false,"hardwareAccepted":false,"armed":false,"transmitting":false,"reason":s.capabilities.tx_lock_reason},"session":{"sessionId":session,"generation":s.generation,"sequence":s.event_sequence,"state":if matches!(s.state,RuntimeState::Receiving){"RECEIVING"}else{"IDLE"},"mode":mode,"startedUtc":null,"endedUtc":null,"detail":"Exact slot timing unavailable"},"queue":{"pendingContacts":s.pending_contacts,"maximumContacts":5000,"pendingBytes":0,"maximumBytes":33554432,"oldestUtc":null,"saturated":s.pending_contacts>=5000}}})
+ "clock":{"state":"UNKNOWN","utcUncertaintyMs":null,"sampleUncertaintyMs":null,"nextSlotUtc":null,"evidence":"No bounded clock measurement yet"},"safety":{"state":state,"serverPermitted":false,"locallyPermitted":false,"hardwareAccepted":false,"armed":false,"transmitting":false,"reason":s.capabilities.tx_lock_reason},"session":{"sessionId":session,"generation":s.generation,"sequence":s.event_sequence,"state":if matches!(s.state,RuntimeState::Receiving){"RECEIVING"}else{"IDLE"},"mode":mode,"startedUtc":null,"endedUtc":null,"detail":"Exact slot timing unavailable"},"queue":{"pendingContacts":s.pending_contacts,"maximumContacts":5000,"pendingBytes":0,"maximumBytes":33554432,"oldestUtc":null,"saturated":s.pending_contacts>=5000}}});
+    omit_absent_ft_sequence(&mut value, has_emulated_sequence);
+    value
 }
 
 fn targets_from_agent(status: &Value, binding: &Value) -> Value {
@@ -1757,6 +1769,17 @@ mod tests {
     fn stale_non_stop_fails_but_stop_is_generation_exempt() {
         assert!(!generation_matches(9, 8, false));
         assert!(generation_matches(9, 8, true));
+    }
+
+    #[test]
+    fn idle_presence_omits_the_optional_ft_sequence_instead_of_serializing_null() {
+        let mut presence = json!({"snapshot":{"ftSequence":null}});
+        omit_absent_ft_sequence(&mut presence, false);
+        assert!(presence["snapshot"].get("ftSequence").is_none());
+
+        let mut emulated = json!({"snapshot":{"ftSequence":{"state":"COMPLETE"}}});
+        omit_absent_ft_sequence(&mut emulated, true);
+        assert_eq!(emulated["snapshot"]["ftSequence"]["state"], "COMPLETE");
     }
 
     #[test]
