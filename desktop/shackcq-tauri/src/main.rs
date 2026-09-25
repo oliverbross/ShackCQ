@@ -31,6 +31,7 @@ const REVIEW_FIXTURE_ADIF_VALUE: &str = "1";
 const MAX_FROZEN_REVIEWED_OPERATIONS: usize = 5_000;
 const AGENT_STARTUP_ATTEMPTS: usize = 400;
 const AGENT_STARTUP_POLL_MS: u64 = 50;
+const CONTROL_LEASE_SECONDS: i64 = 15;
 
 #[derive(Clone)]
 struct ReviewProfile {
@@ -112,12 +113,17 @@ fn persisted_queue_key(
 ) -> Result<Option<String>, String> {
     match result {
         Ok(value) if value.len() == 64 && hex::decode(&value).is_ok() => Ok(Some(value)),
-        Ok(_) => Err("stored queue encryption key is invalid; retained data was not replaced".into()),
-        Err(keyring::Error::NoEntry) if queue_exists => {
-            Err("queue encryption key is missing for retained data; the queue was not replaced".into())
+        Ok(_) => {
+            Err("stored queue encryption key is invalid; retained data was not replaced".into())
         }
+        Err(keyring::Error::NoEntry) if queue_exists => Err(
+            "queue encryption key is missing for retained data; the queue was not replaced".into(),
+        ),
         Err(keyring::Error::NoEntry) => Ok(None),
-        Err(_) => Err("credential vault is locked, denied, or unavailable; retained data was not replaced".into()),
+        Err(_) => Err(
+            "credential vault is locked, denied, or unavailable; retained data was not replaced"
+                .into(),
+        ),
     }
 }
 
@@ -304,8 +310,99 @@ struct Backend {
     emergency: Arc<EmergencyStop>,
     browser_local_available: Arc<AtomicBool>,
     agent_state: Mutex<String>,
+    control_lease: Mutex<ControlLeaseState>,
     review: Option<ReviewContext>,
     reviewed_operations: Mutex<FrozenReviewedOperations>,
+}
+
+#[derive(Clone)]
+struct ControlLease {
+    control_instance_id: String,
+    expires_utc: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(Default)]
+struct ControlLeaseState {
+    current: Option<ControlLease>,
+}
+
+impl ControlLeaseState {
+    fn active(&mut self) -> Option<ControlLease> {
+        if self
+            .current
+            .as_ref()
+            .is_some_and(|lease| lease.expires_utc <= chrono::Utc::now())
+        {
+            self.current = None;
+        }
+        self.current.clone()
+    }
+
+    fn command(&mut self, action: &str, control_instance_id: &str) -> CommandReply {
+        let current = self.active();
+        match action {
+            "digi.control.acquire" => {
+                if current
+                    .as_ref()
+                    .is_some_and(|lease| lease.control_instance_id != control_instance_id)
+                {
+                    return CommandReply {
+                        ok: false,
+                        code: "CONTROL_LEASE_HELD".into(),
+                    };
+                }
+                self.current = Some(ControlLease {
+                    control_instance_id: control_instance_id.into(),
+                    expires_utc: chrono::Utc::now()
+                        + chrono::Duration::seconds(CONTROL_LEASE_SECONDS),
+                });
+                CommandReply {
+                    ok: true,
+                    code: "CONTROL_LEASE_ACQUIRED".into(),
+                }
+            }
+            "digi.control.renew" => {
+                if current
+                    .as_ref()
+                    .is_none_or(|lease| lease.control_instance_id != control_instance_id)
+                {
+                    return CommandReply {
+                        ok: false,
+                        code: "CONTROL_LEASE_REQUIRED".into(),
+                    };
+                }
+                self.current = Some(ControlLease {
+                    control_instance_id: control_instance_id.into(),
+                    expires_utc: chrono::Utc::now()
+                        + chrono::Duration::seconds(CONTROL_LEASE_SECONDS),
+                });
+                CommandReply {
+                    ok: true,
+                    code: "CONTROL_LEASE_RENEWED".into(),
+                }
+            }
+            "digi.control.release" => {
+                if current
+                    .as_ref()
+                    .is_none_or(|lease| lease.control_instance_id != control_instance_id)
+                {
+                    return CommandReply {
+                        ok: false,
+                        code: "CONTROL_LEASE_REQUIRED".into(),
+                    };
+                }
+                self.current = None;
+                CommandReply {
+                    ok: true,
+                    code: "CONTROL_LEASE_RELEASED".into(),
+                }
+            }
+            _ => CommandReply {
+                ok: false,
+                code: "UNSUPPORTED_NATIVE_COMMAND".into(),
+            },
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -486,14 +583,21 @@ impl AgentSupervisor {
                 .ok()
                 .filter(|output| output.status.success() && output.stdout.len() <= 512 * 1024)
                 .and_then(|output| serde_json::from_slice::<Value>(&output.stdout).ok());
-            if let (Some(target), Some(source)) = (status.as_object_mut(), inventory.and_then(|value| value.as_object().cloned())) {
+            if let (Some(target), Some(source)) = (
+                status.as_object_mut(),
+                inventory.and_then(|value| value.as_object().cloned()),
+            ) {
                 target.extend(source);
             }
         }
         if let Some(target) = status.as_object_mut() {
             target.insert(
                 "desktopOwnership".into(),
-                json!(if self.owns_child() { "OWNED" } else { "EXTERNAL" }),
+                json!(if self.owns_child() {
+                    "OWNED"
+                } else {
+                    "EXTERNAL"
+                }),
             );
             target.insert("canConfigure".into(), json!(self.owns_child()));
         }
@@ -778,18 +882,21 @@ fn omit_absent_ft_sequence(value: &mut Value, has_emulated_sequence: bool) {
 fn runtime_presence(p: &RuntimePresence) -> Value {
     let s = &p.snapshot;
     let profile = s.rx_profile.as_ref();
-    let active_mode = profile.map(|x| x.mode).or_else(|| s.emulation.as_ref().map(|x| x.mode)).unwrap_or(DigiMode::Ft8);
+    let active_mode = profile
+        .map(|x| x.mode)
+        .or_else(|| s.emulation.as_ref().map(|x| x.mode))
+        .unwrap_or(DigiMode::Ft8);
     let mode = match active_mode {
-            DigiMode::Ft8 => "FT8",
-            DigiMode::Ft4 => "FT4",
-            DigiMode::Ft2 => "FT2",
-            DigiMode::Fst4 => "FST4",
-            DigiMode::Fst4w => "FST4W",
-            DigiMode::Q65 => "Q65",
-            DigiMode::Msk144 => "MSK144",
-            DigiMode::Jt65 => "JT65",
-            DigiMode::Wspr => "WSPR",
-        };
+        DigiMode::Ft8 => "FT8",
+        DigiMode::Ft4 => "FT4",
+        DigiMode::Ft2 => "FT2",
+        DigiMode::Fst4 => "FST4",
+        DigiMode::Fst4w => "FST4W",
+        DigiMode::Q65 => "Q65",
+        DigiMode::Msk144 => "MSK144",
+        DigiMode::Jt65 => "JT65",
+        DigiMode::Wspr => "WSPR",
+    };
     let submode = profile.and_then(|value| value.submode.clone());
     let state = match s.state {
         RuntimeState::Receiving => "RX",
@@ -1039,7 +1146,8 @@ fn station_read_setup(state: State<'_, AppState>) -> Value {
 
 #[tauri::command]
 fn station_configure_logger(state: State<'_, AppState>, profile: Value) -> Value {
-    if !profile.is_object() || serde_json::to_vec(&profile).map_or(true, |bytes| bytes.len() > 4096) {
+    if !profile.is_object() || serde_json::to_vec(&profile).map_or(true, |bytes| bytes.len() > 4096)
+    {
         return json!({"ok":false,"code":"LOGGER_PROFILE_INVALID"});
     }
     state
@@ -1072,31 +1180,60 @@ fn station_configure_radios(state: State<'_, AppState>, profiles: Value) -> Valu
     {
         return json!({"ok":false,"code":"RADIO_PROFILE_INVALID"});
     }
-    state.agent.lock()
+    state
+        .agent
+        .lock()
         .map(|agent| agent.setup_request("radio.configure", json!({"profiles":profiles})))
         .unwrap_or_else(|_| json!({"ok":false,"code":"STATION_SETUP_UNAVAILABLE"}))
 }
 
 #[tauri::command]
-fn station_set_radio_connection(state: State<'_, AppState>, device_id: String, connected: bool) -> Value {
-    if !valid_id(&device_id) { return json!({"ok":false,"code":"RADIO_DEVICE_INVALID"}); }
-    state.agent.lock()
-        .map(|agent| agent.setup_request(if connected { "radio.connect" } else { "radio.disconnect" }, json!({"deviceId":device_id})))
+fn station_set_radio_connection(
+    state: State<'_, AppState>,
+    device_id: String,
+    connected: bool,
+) -> Value {
+    if !valid_id(&device_id) {
+        return json!({"ok":false,"code":"RADIO_DEVICE_INVALID"});
+    }
+    state
+        .agent
+        .lock()
+        .map(|agent| {
+            agent.setup_request(
+                if connected {
+                    "radio.connect"
+                } else {
+                    "radio.disconnect"
+                },
+                json!({"deviceId":device_id}),
+            )
+        })
         .unwrap_or_else(|_| json!({"ok":false,"code":"STATION_SETUP_UNAVAILABLE"}))
 }
 
 #[tauri::command]
-fn station_set_rotator_connection(state: State<'_, AppState>, device_id: String, connected: bool) -> Value {
+fn station_set_rotator_connection(
+    state: State<'_, AppState>,
+    device_id: String,
+    connected: bool,
+) -> Value {
     if !valid_id(&device_id) {
         return json!({"ok":false,"code":"ROTATOR_DEVICE_INVALID"});
     }
     state
         .agent
         .lock()
-        .map(|agent| agent.setup_request(
-            if connected { "rotator.connect" } else { "rotator.disconnect" },
-            json!({"deviceId":device_id}),
-        ))
+        .map(|agent| {
+            agent.setup_request(
+                if connected {
+                    "rotator.connect"
+                } else {
+                    "rotator.disconnect"
+                },
+                json!({"deviceId":device_id}),
+            )
+        })
         .unwrap_or_else(|_| json!({"ok":false,"code":"STATION_SETUP_UNAVAILABLE"}))
 }
 
@@ -1185,6 +1322,19 @@ fn presence_backend(state: &Backend, target: Target) -> Result<Value, String> {
         state,
         RuntimeCommand::Presence,
     )?)?);
+    let lease = state
+        .control_lease
+        .lock()
+        .map_err(|_| "control lease unavailable")?
+        .active();
+    value["snapshot"]["lease"] = match lease {
+        Some(lease) => json!({
+            "state":"HELD",
+            "controlInstanceId":lease.control_instance_id,
+            "expiresUtc":lease.expires_utc.to_rfc3339(),
+        }),
+        None => json!({"state":"NONE","controlInstanceId":null,"expiresUtc":null}),
+    };
     value["runtime"]["browserLocal"] = json!({"state":if state.browser_local_available.load(Ordering::Acquire){"AVAILABLE_APPROVAL_REQUIRED"}else{"UNAVAILABLE"},"origin":"https://shackcq.com","endpoint":"http://127.0.0.1:17654","ipv6":false});
     Ok(value)
 }
@@ -1272,6 +1422,16 @@ fn submit_backend(state: &Backend, frame: CommandFrame) -> Result<CommandReply, 
             ok: false,
             code: "INVALID_OR_EXPIRED_COMMAND".into(),
         });
+    }
+    if matches!(
+        frame.action.as_str(),
+        "digi.control.acquire" | "digi.control.renew" | "digi.control.release"
+    ) {
+        return state
+            .control_lease
+            .lock()
+            .map_err(|_| "control lease unavailable".into())
+            .map(|mut lease| lease.command(&frame.action, &frame.control_instance_id));
     }
     let stop = matches!(frame.action.as_str(), "digi.rx.stop" | "digi.stop");
     if !stop {
@@ -1361,8 +1521,16 @@ fn submit_backend(state: &Backend, frame: CommandFrame) -> Result<CommandReply, 
                 local_grid: get("stationGrid"),
                 remote_callsign: get("remoteCallsign"),
                 remote_grid: get("remoteGrid"),
-                snr_db: frame.parameters.get("snrDb").and_then(Value::as_i64).unwrap_or(-10) as i32,
-                max_slots: frame.parameters.get("maxSlots").and_then(Value::as_u64).unwrap_or(20) as u8,
+                snr_db: frame
+                    .parameters
+                    .get("snrDb")
+                    .and_then(Value::as_i64)
+                    .unwrap_or(-10) as i32,
+                max_slots: frame
+                    .parameters
+                    .get("maxSlots")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(20) as u8,
             })
         }
         "digi.sequence.stop" => RuntimeCommand::StopEmulatedSequence,
@@ -1628,6 +1796,7 @@ fn main() {
                 emergency,
                 browser_local_available: browser_local_available.clone(),
                 agent_state: Mutex::new(agent_state),
+                control_lease: Mutex::new(ControlLeaseState::default()),
                 review,
                 reviewed_operations: Mutex::new(FrozenReviewedOperations::default()),
             });
@@ -1753,7 +1922,8 @@ mod tests {
             "queue encryption key is missing for retained data; the queue was not replaced"
         );
         assert!(persisted_queue_key(Ok("not-a-valid-key".into()), false).is_err());
-        let unavailable = keyring::Error::NoStorageAccess(Box::new(std::io::Error::other("locked")));
+        let unavailable =
+            keyring::Error::NoStorageAccess(Box::new(std::io::Error::other("locked")));
         assert_eq!(
             persisted_queue_key(Err(unavailable), false).unwrap_err(),
             "credential vault is locked, denied, or unavailable; retained data was not replaced"
@@ -1780,6 +1950,30 @@ mod tests {
         let mut emulated = json!({"snapshot":{"ftSequence":{"state":"COMPLETE"}}});
         omit_absent_ft_sequence(&mut emulated, true);
         assert_eq!(emulated["snapshot"]["ftSequence"]["state"], "COMPLETE");
+    }
+
+    #[test]
+    fn native_control_lease_acquires_renews_releases_and_excludes_other_windows() {
+        let mut lease = ControlLeaseState::default();
+        assert!(lease.command("digi.control.acquire", "window-one").ok);
+        assert_eq!(lease.active().unwrap().control_instance_id, "window-one");
+        assert_eq!(
+            lease.command("digi.control.acquire", "window-two").code,
+            "CONTROL_LEASE_HELD"
+        );
+        assert_eq!(
+            lease.command("digi.control.renew", "window-one").code,
+            "CONTROL_LEASE_RENEWED"
+        );
+        assert_eq!(
+            lease.command("digi.control.release", "window-two").code,
+            "CONTROL_LEASE_REQUIRED"
+        );
+        assert_eq!(
+            lease.command("digi.control.release", "window-one").code,
+            "CONTROL_LEASE_RELEASED"
+        );
+        assert!(lease.active().is_none());
     }
 
     #[test]
