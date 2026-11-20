@@ -24,8 +24,8 @@ use thiserror::Error;
 pub use queue::{ContactQueue, QueueError, QueueKey, ReviewedContact};
 
 pub const CONTRACT_VERSION: u16 = 1;
-pub const NEXUS_COMMIT: &str = "7618390658f8f92431dec0ac65979b84f2c0fb76";
-pub const NEXUS_RELEASE: &str = "v1.10.3";
+pub const NEXUS_COMMIT: &str = "12efe3d2970729465add40d62cecd76bbaf5b63f";
+pub const NEXUS_RELEASE: &str = "v1.14.0";
 pub const TX_ENABLED: bool = false;
 pub const EMULATED_TX_ENABLED: bool = true;
 pub const MAX_COMMAND_BYTES: usize = 64 * 1024;
@@ -1043,6 +1043,7 @@ impl StationRuntime {
                 qual: 1.0,
                 rv: None,
                 mode: None,
+                raw: None,
             };
             receiver.observe(&[decode]);
             sender.after_tx();
